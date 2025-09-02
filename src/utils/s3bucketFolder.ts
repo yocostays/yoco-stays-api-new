@@ -1,0 +1,12 @@
+export const STAFF_FOLDER = "staff";
+export const USER_FOLDER = "user";
+export const COMPLAIN_CATEGORY_FOLDER = "complain-category";
+export const HOSTEL_IMAGES = "hostel";
+export const COMPLAIN_FILES = "complain-files";
+export const USER_BULK_UPLOAD_FILES = "user-bulk-files";
+export const MESS_BULK_UPLOAD_FILES = "mess-bulk-files";
+export const SAMPLE_FILE = "sample-files";
+export const LEGAL_DOCUMENTS = "legal-douments";
+export const FOOD_WASTAGE_BULK_UPLOAD_FILES = "food-wastage-bulk-files";
+export const TEMPLATE_FOLDER = "template";
+export const HOSTEL_ROOM_MAP_BULK_UPLOAD_FILES = "hostel-room-map-bulk-file";

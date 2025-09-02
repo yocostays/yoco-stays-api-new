@@ -1,0 +1,12 @@
+# Ignore environment variable files
+.env.local
+
+# Ignore the distribution folder
+dist
+uploads
+
+# Ignore node_modules directory
+node_modules
+
+# Ignore package lock.json directory
+package-lock.json
