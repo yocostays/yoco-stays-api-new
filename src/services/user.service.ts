@@ -208,6 +208,7 @@ class UserService {
       inactiveUserCount: number;
       authorizedUserCount: number;
       leftCoverUserCount: number;
+      userCount: number;
       newUserCount: number;
     };
   }> => {
@@ -304,6 +305,7 @@ class UserService {
         inactiveUserCount,
         authorizedUserCount,
         newUserCount,
+        userCount,
         students,
       ] = await Promise.all([
         User.countDocuments({ ...searchHostel }),
@@ -323,6 +325,7 @@ class UserService {
           createdAt: { $gte: oneYearAgo },
           ...searchHostel,
         }),
+        User.countDocuments({ ...searchParams, ...searchHostel }),
         User.find({ ...searchParams, ...searchHostel })
           .populate([
             { path: "hostelId", select: "name" },
@@ -369,8 +372,8 @@ class UserService {
               ele?.status && ele?.isVerified
                 ? "active"
                 : ele?.status && !ele?.isVerified
-                ? "pending"
-                : "in-active",
+                  ? "pending"
+                  : "in-active",
             status: ele?.status,
             createdBy: (ele?.createdBy as any)?.name ?? null,
             createdAt: ele?.createdAt ?? null,
@@ -387,6 +390,7 @@ class UserService {
           inactiveUserCount,
           authorizedUserCount,
           leftCoverUserCount,
+          userCount,
           newUserCount,
         },
       };
@@ -1048,9 +1052,8 @@ class UserService {
                   email: user.email ?? null,
                   phone: user.phone ?? null,
                   image: user.image ? await getSignedUrl(user.image) : null,
-                  roomDetails: `${mate.roomNumber ?? null}/${
-                    mate.bedNumber ?? null
-                  }`,
+                  roomDetails: `${mate.roomNumber ?? null}/${mate.bedNumber ?? null
+                    }`,
                 };
               }
 
