@@ -73,28 +73,32 @@ const StudentHostelAllocationSchema: Schema<IUserHostelAssignment> =
       },
       bedType: {
         type: Number,
-        required: true,
+        required: false,
       },
       roomNumber: {
         type: Number,
-        required: true,
+        required: false,
+        default:null
       },
       bedNumber: {
         type: String,
-        required: true,
+        required: false,
+        default:null
       },
       floorNumber: {
         type: Number,
-        required: true,
+        required: false,
+        default:null
       },
       securityFee: {
         type: Number,
-        required: true,
+        required: false,
+        default:null
       },
       billingCycle: {
         type: String,
         enum: Object.values(BillingCycleTypes),
-        required: true,
+        required: false,
       },
       billingCycleDetails: [BillingCycleDetailsSchema],
       joiningDate: {

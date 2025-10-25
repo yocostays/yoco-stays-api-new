@@ -621,6 +621,7 @@ class StudentLeaveService {
             description: { $ifNull: ["$description", null] },
             "updatedByUser.name": 1,
             updateLogs: 1,
+            createdAt: { $ifNull: ["$createdAt", null] },
           },
         },
       ]);

@@ -16,6 +16,8 @@ import {
 import { excelToJson } from "../utils/excelToJson";
 import { USER_BULK_UPLOAD_FILES } from "../utils/s3bucketFolder";
 import { uploadFileToCloudStorage } from "../utils/awsUploadService";
+import Joi from "joi";
+import moment from "moment";
 
 const { getStaffById } = StaffService;
 const {
@@ -50,6 +52,100 @@ const {
 } = SUCCESS_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 const { INVALID_ID, REQUIRED_FIELD } = VALIDATION_MESSAGES;
+
+const normalizeFullName = (name: string) => {
+  if (typeof name !== "string") return name;
+  return name
+    .trim()                       // Remove leading & trailing spaces
+    .replace(/\s+/g, " ");
+}
+
+// const excelDateToJSDate = (input: number) => {
+//   let date;
+//   // If it's Excel serial date (number like 45937.000...)
+//   if (typeof input === "number") {
+//     const utc_days = Math.floor(input - 25569);
+//     const utc_value = utc_days * 86400;
+//     date = new Date(utc_value * 1000);
+//   } else {
+//     // If it's a date string like "10/05/2025" or "2025-05-10"
+//     date = new Date(input);
+//   }
+
+//   // Format to DD/MM/YYYY
+//   const day = String(date.getDate()).padStart(2, "0");
+//   const month = String(date.getMonth() + 1).padStart(2, "0");
+//   const year = date.getFullYear();
+
+//   return `${year}-${month}-${day}`;
+// }
+// const excelDateToJSDate = (input: number | string): string => {
+//   let date: Date;
+
+//   if (typeof input === "number") {
+//     // 📘 Excel serial date (days since 1899-12-30)
+//     const utc_days = Math.floor(input - 25569);
+//     const utc_value = utc_days * 86400; // seconds
+//     date = new Date(utc_value * 1000); // milliseconds
+//   } else if (typeof input === "string" && input.includes("/")) {
+//     // 📘 Date string in format "DD/MM/YYYY"
+//     const [day, month, year] = input.split("/").map(Number);
+
+//     if (!day || !month || !year) {
+//       throw new Error("Invalid date string format. Expected DD/MM/YYYY.");
+//     }
+
+//     date = new Date(year, month - 1, day); // month is 0-based
+//   } else {
+//     // 📘 ISO or other standard formats
+//     date = new Date(input);
+
+//     if (isNaN(date.getTime())) {
+//       throw new Error("Invalid date input.");
+//     }
+//   }
+
+//   const day = String(date.getDate()).padStart(2, "0");
+//   const month = String(date.getMonth() + 1).padStart(2, "0");
+//   const year = date.getFullYear();
+
+//   return `${year}-${month}-${day}`;
+// };
+
+
+const excelDateToJSDate = (input: number | string): string => {
+  let momentDate: moment.Moment;
+
+  if (typeof input === "number") {
+    // Excel serial number to JS Date
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const date = new Date(excelEpoch.getTime() + input * msPerDay);
+    momentDate = moment(date);
+  } else if (typeof input === "string") {
+    // Try parsing known formats explicitly
+    momentDate = moment(input, [
+      "YYYY-MM-DD", // ISO
+      "DD-MM-YYYY", // European
+      "DD/MM/YYYY", // Common in exports
+      "MM/DD/YYYY", // US format, optional if needed
+      "D-M-YYYY",
+      "D/M/YYYY",
+      moment.ISO_8601, // fallback for standard formats
+    ], true); // 'true' enables strict parsing
+  } else {
+    throw new Error("Unsupported input type for DOB.");
+  }
+
+  if (!momentDate.isValid()) {
+    throw new Error("Invalid DOB format.");
+  }
+
+  // return momentDate.format("DD/MM/YYYY");/
+  return momentDate.format("YYYY-MM-DD");
+};
+
+
 class UserController {
   //SECTION Controller method to handle user creation
   async registerUserFromApp(
@@ -105,36 +201,36 @@ class UserController {
         const missingField = !name
           ? "Name"
           : !email
-          ? "Email"
-          : !phone
-          ? "Phone"
-          : !enrollmentNumber
-          ? "Enrollment Number"
-          : !dob
-          ? "Date of Birth"
-          : !fatherName
-          ? "Father's Name"
-          : !fatherNumber
-          ? "Father's Number"
-          : !motherName
-          ? "Mother's Name"
-          : !motherNumber
-          ? "Mother's Number"
-          : !adharNumber
-          ? "Adhar Number"
-          : !bloodGroup
-          ? "Blood Group"
-          : !courseName
-          ? "Course Name"
-          : !academicYear
-          ? "Academic Year"
-          : !guardianContactNo
-          ? "Guardian Contact Number"
-          : !category
-          ? "Category"
-          : !hostelId
-          ? "Hostel ID"
-          : "Address";
+            ? "Email"
+            : !phone
+              ? "Phone"
+              : !enrollmentNumber
+                ? "Enrollment Number"
+                : !dob
+                  ? "Date of Birth"
+                  : !fatherName
+                    ? "Father's Name"
+                    : !fatherNumber
+                      ? "Father's Number"
+                      : !motherName
+                        ? "Mother's Name"
+                        : !motherNumber
+                          ? "Mother's Number"
+                          : !adharNumber
+                            ? "Adhar Number"
+                            : !bloodGroup
+                              ? "Blood Group"
+                              : !courseName
+                                ? "Course Name"
+                                : !academicYear
+                                  ? "Academic Year"
+                                  : !guardianContactNo
+                                    ? "Guardian Contact Number"
+                                    : !category
+                                      ? "Category"
+                                      : !hostelId
+                                        ? "Hostel ID"
+                                        : "Address";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -222,6 +318,7 @@ class UserController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
+      
       const hostelId = req.body._valid?.hostelId;
 
       const { page, limit, search, status, dateRange, sort, academicYear } =
@@ -347,14 +444,14 @@ class UserController {
         const missingField = !hostelId
           ? "Hostel ID"
           : !bedType
-          ? "Bed Type"
-          : !roomNumber
-          ? "RoomNumber"
-          : !bedNumber
-          ? "BedNumber"
-          : !studentId
-          ? "Student Id"
-          : "Billing Cycle";
+            ? "Bed Type"
+            : !roomNumber
+              ? "RoomNumber"
+              : !bedNumber
+                ? "BedNumber"
+                : !studentId
+                  ? "Student Id"
+                  : "Billing Cycle";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -693,6 +790,91 @@ class UserController {
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
+    
+
+    const familyDetailsSchema = Joi.object({
+      fatherName: Joi.string().required().messages({
+        'string.base': 'Father name must be a string',
+        'string.empty': 'Father name is required',
+      }),
+      // fatherNumber: Joi.number().min(1000000000).required().messages({
+      //   'number.base': 'Father number must be a number',
+      //   'number.min': 'Father number must be at least 10 digits',
+      //   'any.required': 'Father number is required',
+      // }),
+      // fatherEmail: Joi.string().email({ tlds: { allow: false } }).allow('', null).messages({
+      //   'string.email': 'Father email must be a valid email address',
+      // }),
+      fatherOccuption: Joi.string().allow('', null).messages({
+        'string.base': 'Father occupation must be a string',
+      }),
+
+      motherName: Joi.string().required().messages({
+        'string.empty': 'Mother name is required',
+      }),
+      // motherNumber: Joi.number().min(1000000000).required().messages({
+      //   'number.min': 'Mother number must be at least 10 digits',
+      //   'any.required': 'Mother number is required',
+      // }),
+      // motherEmail: Joi.string().email({ tlds: { allow: false } }).allow('', null).messages({
+      //   'string.email': 'Mother email must be valid',
+      // }),
+
+      guardianName: Joi.string().allow('', null),
+      guardianContactNo: Joi.number().min(1000000000).allow(null).messages({
+        'number.min': 'Guardian contact must be at least 10 digits',
+      }),
+      relationship: Joi.string().allow('', null),
+      occuption: Joi.string().allow('', null),
+      guardianEmail: Joi.string().email({ tlds: { allow: false } }).allow('', null).messages({
+        'string.email': 'Guardian email must be valid',
+      }),
+      address: Joi.string().allow('', null),
+    });
+    const schema = Joi.object({
+      name: Joi.string()
+        .alphanum()
+        .min(3)
+        .max(30)
+        .required(),
+      // image: '',
+      phone: 4242424422,
+      email: Joi.string()
+        .email().optional().allow(null),
+      dob: Joi.date().iso().less('now').required().messages({
+        'date.base': 'DOB must be a valid date',
+        'date.less': 'DOB must be in the past',
+        'any.required': 'DOB is required',
+      }),
+      enrollmentNumber: Joi.string().optional().allow(null),
+      bloodGroup: Joi.string().optional().allow(null),
+      gender: Joi.string()
+        .valid("male", "female", "other")
+        .required()
+        .messages({
+          "any.only": "Gender must be 'male', 'female', or 'other'",
+          "any.required": "Gender is required",
+        }),
+      divyang: Joi.boolean().optional().allow(null),
+      identificationMark: Joi.string().optional().allow(null),
+      medicalIssue: Joi.string().optional().allow(null),
+      allergyProblem: Joi.string().optional().allow(null),
+      // country: { name: 'India', iso2: 'IN', countryId: 101 },
+      country: Joi.object().required(),
+      state: Joi.object().required(),
+      city: Joi.object().required(),
+      cast: Joi.object().required(),
+      permanentAddress: Joi.string().required().messages({
+        'string.base': 'Permanent address must be a text',
+        'string.empty': 'Permanent address is required',
+        'any.required': 'Permanent address is required',
+      }),
+      familiyDetails: familyDetailsSchema.required(),
+      academicDetails: { academicYear: null },
+      vechicleDetails: [],
+      buildingNumber: Joi.number().optional().allow(null),
+      roomNumber: Joi.number().optional().allow(null),
+    })
     try {
       const staffId = req.body._valid._id;
 
@@ -859,14 +1041,17 @@ class UserController {
     }
   }
 
+
   //SECTION Controller method to handle user bulk upload
   async userBulkUpload(
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse> | void> {
     try {
+
       const staffId = req.body._valid._id;
       const hostelId = req.body._valid?.hostelId;
+      // const hostelId = "67a5d1dd04fc1ee23efbe965"
 
       const { universityId } = req.body;
 
@@ -890,25 +1075,36 @@ class UserController {
         statusCode: 200,
         message: FILE_ON_PROCESS,
       });
-
       const fileUrl = await uploadFileToCloudStorage(
         file,
         USER_BULK_UPLOAD_FILES
       );
       const url = fileUrl && fileUrl.Key ? fileUrl?.Key : null;
-
       // Perform file processing after sending response
       const jsonData = await excelToJson(file.buffer);
-
       // Call the function to handle bulk upload of the data
-      await userBulkUpload(jsonData, staffId, hostelId, universityId, url);
+      const data = jsonData.map((item: any) => {
+        return {
+          ...item,
+          "Full Name of Student": normalizeFullName(item["Full Name of Student"]),
+          "Father's Name": normalizeFullName(item["Father's Name"]),
+          "Mother's Name": normalizeFullName(item["Mother's Name"]),
+          "Date of Birth": excelDateToJSDate(item["Date of Birth"]),
+          "Permanent Address": String(item["Permanent Address"]),
+          gender: String(item?.Gender).trim().toLowerCase()
+        }
+      })
+      data.forEach((item: any) => {
+        delete item.Gender; // ✅ This works
+        delete item.Timestamp
+      });
+      await userBulkUpload(data, staffId, hostelId, universityId, url);
     } catch (error: any) {
       const errorMessage = error.message ?? SERVER_ERROR;
       const errorResponse: HttpResponse = {
         statusCode: 400,
         message: errorMessage,
       };
-
       // Return error response in case of failure
       return res.status(400).json(errorResponse);
     }

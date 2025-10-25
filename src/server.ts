@@ -28,15 +28,51 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI || '')
-  .then(() => {
-    console.log('MongoDB connected');
-    // Start the server only after the connection is successful
+// mongoose.connect(process.env.MONGO_URI || '')
+//   .then(() => {
+//     console.log('MongoDB connected');
+//     // Start the server only after the connection is successful
+//     app.listen(PORT, () => {
+//       console.log(`Server is running on http://localhost:${PORT}`);
+//     });
+//   })
+//   .catch(err => {
+//     console.error('MongoDB connection error:', err);
+//     process.exit(1); // Exit the process with failure
+//   });
+
+
+
+import { IndexDescription } from "mongodb";
+
+mongoose
+  .connect(process.env.MONGO_URI as string)
+  .then(async () => {
+    console.log("✅ MongoDB connected");
+
+    // ✅ Drop only unwanted unique indexes safely
+    const db = mongoose.connection.db;
+    if (db) {
+      const indexes: IndexDescription[] = await db.collection("users").indexes();
+
+      for (const index of indexes) {
+        // Check if index is unique + has valid name + not the default _id index
+        if (index.unique && index.name && index.name !== "_id_") {
+          await db.collection("users").dropIndex(index.name);
+          console.log(`🧹 Dropped unique index: ${index.name}`);
+        }
+      }
+    } else {
+      console.warn("⚠️ MongoDB database reference not found.");
+    }
+
+    // ✅ Start server after DB is ready
     app.listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`);
+      console.log(`🚀 Server is running on http://localhost:${PORT}`);
     });
   })
-  .catch(err => {
-    console.error('MongoDB connection error:', err);
-    process.exit(1); // Exit the process with failure
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err);
+    process.exit(1);
   });
+
