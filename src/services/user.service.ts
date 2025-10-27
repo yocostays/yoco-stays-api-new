@@ -169,20 +169,21 @@ class UserService {
       const documents = student?.documents || {};
 
       student.documents = {
+        aadhaarNumber: documents?.aadhaarNumber,
         aadhaarCard: documents?.aadhaarCard
-          ? await getSignedUrl(documents.aadhaarCard)
+          ? await getSignedUrl(documents?.aadhaarCard)
           : null,
         passport: documents?.passport
-          ? await getSignedUrl(documents.passport)
+          ? await getSignedUrl(documents?.passport)
           : null,
         voterCard: documents?.voterCard
-          ? await getSignedUrl(documents.voterCard)
+          ? await getSignedUrl(documents?.voterCard)
           : null,
         drivingLicense: documents?.drivingLicense
-          ? await getSignedUrl(documents.drivingLicense)
+          ? await getSignedUrl(documents?.drivingLicense)
           : null,
         panCard: documents?.panCard
-          ? await getSignedUrl(documents.panCard)
+          ? await getSignedUrl(documents?.panCard)
           : null,
       };
 
@@ -222,13 +223,15 @@ class UserService {
       const searchAsNumber = !isNaN(Number(search)) ? Number(search) : null;
 
       // Initialize search parameters
-      const searchParams: any = {};
+      let searchParams: any = {};
 
       // Set isVerified based on the status
       if (status === UserGetByTypes.ACTIVE) {
-        searchParams.isVerified = true;
+        searchParams.isVerified = true
+        searchParams.status = true;
       } else if (status === UserGetByTypes.INACTIVE) {
-        searchParams.isVerified = false;
+        searchParams.isVerified = true
+        searchParams.status = false;
       } else if (status === UserGetByTypes.ALL) {
         // Do nothing; this includes all verified and unverified users
       } else if (status === UserGetByTypes.AUTHORIZE) {
@@ -511,7 +514,7 @@ class UserService {
           },
         },
       ]);
-      
+
       if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
 
       const uniqueId = await this.generateUniqueYocoId(
@@ -1262,17 +1265,19 @@ class UserService {
     currentAddress: string,
     familiyDetails: {
       fatherName: string;
-      fatherNumber: number;
-      fatherEmail?: string;
-      fatherOccuption?: string;
+      // fatherNumber: number;
+      // fatherEmail?: string;
+      // fatherOccuption?: string;
       motherName?: string;
-      motherNumber?: number;
-      motherEmail?: string;
+      // motherNumber?: number;
+      // motherEmail?: string;
       guardianName?: string;
-      guardianContactNo?: number;
+      // guardianContactNo?: number;
       relationship?: string;
       occuption?: string;
+      // parentEmail
       guardianEmail?: string;
+      parentsContactNo?: number;
       address?: string;
     },
     academicDetails: {
@@ -1282,6 +1287,7 @@ class UserService {
       semester: number;
     },
     documents: {
+      aadhaarNumber?: string;
       aadhaarCard?: string;
       voterCard?: string;
       passport?: string;
@@ -1350,7 +1356,7 @@ class UserService {
           },
         },
       ]);
-
+      console.log(hostel, "hostellllllllllllllllll")
       if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
 
       const uniqueId = await this.generateUniqueYocoId(
@@ -1362,10 +1368,10 @@ class UserService {
       const hashedPassword = await hashPassword("123456789");
 
       // Generate billingCycleDetails based on the billing cycle type
-      const billingDetails = createBillingCycleDetails(
-        hostel.bedDetails[0]?.accommodationFee,
-        billingCycle
-      );
+      // const billingDetails = createBillingCycleDetails(
+      //   hostel.bedDetails[0]?.accommodationFee,
+      //   billingCycle
+      // );
 
       // Step 3: Handle image upload if exists
       if (image && image.includes("base64")) {
@@ -1439,7 +1445,7 @@ class UserService {
         floorNumber,
         securityFee: hostel?.securityFee,
         billingCycle,
-        billingCycleDetails: billingDetails,
+        // billingCycleDetails: billingDetails,
         joiningDate: currentDate,
         createdBy: staffId,
         createdAt: getCurrentISTTime(),
@@ -1447,6 +1453,24 @@ class UserService {
       });
 
       // Step 7: Update the hostel bed mapping
+      //     const host =  await Hostel.findOneAndUpdate(
+      //         { _id: hostelId, "roomMapping.roomNumber": roomNumber },
+      //         {
+      //           $inc: {
+      //             "roomMapping.$.vacant": -1,
+      //             "roomMapping.$.occupied": 1,
+      //           },
+      //           $set: {
+      //             "roomMapping.$.bedNumbers.$[bed].isVacant": false,
+      //           },
+      //         },
+      //         {
+      //           new: true,
+      //           runValidators: true,
+      //           arrayFilters: [{ "bed._id": bedNumber }],
+      //           upsert: true,
+      //         }
+      //       );
       await Hostel.findOneAndUpdate(
         { _id: hostelId, "roomMapping.roomNumber": roomNumber },
         {
@@ -1461,10 +1485,10 @@ class UserService {
         {
           new: true,
           runValidators: true,
-          arrayFilters: [{ "bed._id": bedNumber }],
-          upsert: true,
+          arrayFilters: [{ "bed.bedNumber": bedNumber }],
         }
       );
+
 
       return { uniqueId: newUser.uniqueId };
     } catch (error: any) {
@@ -1520,7 +1544,7 @@ class UserService {
   //     let errorArray: any[] = [];
   //     try {
   //       const validGenders = ["male", "female", "other", "not selected"];
- 
+
   //       const schema = Joi.object({
   //         // Timestamp: Joi.date().timestamp().optional(),
   //         gender: Joi.string().valid(...validGenders).default("not selected"),

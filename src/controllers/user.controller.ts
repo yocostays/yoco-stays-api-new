@@ -318,7 +318,7 @@ class UserController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      
+
       const hostelId = req.body._valid?.hostelId;
 
       const { page, limit, search, status, dateRange, sort, academicYear } =
@@ -790,7 +790,7 @@ class UserController {
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
-    
+    console.log(req.body, "req.body")
 
     const familyDetailsSchema = Joi.object({
       fatherName: Joi.string().required().messages({
@@ -831,6 +831,45 @@ class UserController {
       }),
       address: Joi.string().allow('', null),
     });
+    const vehicleDetails = Joi.array()
+      .items(
+        Joi.object({
+          engineType: Joi.string()
+            .valid("fuel", "electric", "hybrid") // you can add more options
+            .required()
+            .messages({
+              "any.required": "Engine type is required",
+              "any.only": "Engine type must be one of: fuel, electric, hybrid",
+            }),
+
+          modelName: Joi.string().required().messages({
+            "any.required": "Model name is required",
+          }),
+
+          vehicleNumber: Joi.string()
+            .pattern(/^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/i) // e.g. MH49S6439
+            .required()
+            .messages({
+              "string.pattern.base": "Vehicle number must be in valid format (e.g. MH49S6439)",
+              "any.required": "Vehicle number is required",
+            }),
+
+          vehicleType: Joi.string()
+            .valid("car", "bike", "bus", "truck", "other")
+            .required()
+            .messages({
+              "any.required": "Vehicle type is required",
+              "any.only": "Vehicle type must be car, bike, bus, truck, or other",
+            }),
+        })
+      )
+      .optional()
+      .allow(null)
+      .default([])
+      .messages({
+        "array.base": "Vehicle details must be an array",
+      })
+
     const schema = Joi.object({
       name: Joi.string()
         .alphanum()
@@ -838,7 +877,12 @@ class UserController {
         .max(30)
         .required(),
       // image: '',
-      phone: 4242424422,
+      phone: Joi.number().integer().min(1000000000).max(9999999999).required().messages({
+        "string.pattern.base": "Mobile Number must be exactly 10 digits",
+        "any.required": "Mobile Number is required",
+        "number.min": "Mobile Number must be exactly 10 digits",
+        "number.max": "Mobile Number must be exactly 10 digits",
+      }),
       email: Joi.string()
         .email().optional().allow(null),
       dob: Joi.date().iso().less('now').required().messages({
@@ -871,10 +915,19 @@ class UserController {
       }),
       familiyDetails: familyDetailsSchema.required(),
       academicDetails: { academicYear: null },
-      vechicleDetails: [],
+      vechicleDetails: vehicleDetails,
       buildingNumber: Joi.number().optional().allow(null),
       roomNumber: Joi.number().optional().allow(null),
     })
+    const { error, value } = schema.validate(req.body, { abortEarly: false });
+    if (error) {
+      console.log(error, "error")
+      // error.details.forEach((err: any) => {
+      //   const field = err.context.label || err.context.key;
+      //   const message = err.message.replace(/"/g, "");
+      //   errors.push(`${field}: ${message}`);
+      // });
+    }
     try {
       const staffId = req.body._valid._id;
 
@@ -916,39 +969,39 @@ class UserController {
         vechicleDetails,
       } = req.body;
 
-      const requiredFields: Record<string, any> = {
-        Name: name,
-        Email: email,
-        Phone: phone,
-        "Enrollment Number": enrollmentNumber,
-        "Date of Birth": dob,
-        "Blood Group": bloodGroup,
-        Gender: gender,
-        Country: country,
-        State: state,
-        City: city,
-        Category: category,
-        "Hostel ID": hostelId,
-        "Bed Type": bedType,
-        "Building Number": buildingNumber,
-        "Floor Number": floorNumber,
-        "Room Number": roomNumber,
-        "Bed Number": bedNumber,
-        "Billing Cycle": billingCycle,
-      };
+      // const requiredFields: Record<string, any> = {
+      //   Name: name,
+      //   Email: email,
+      //   Phone: phone,
+      //   "Enrollment Number": enrollmentNumber,
+      //   "Date of Birth": dob,
+      //   "Blood Group": bloodGroup,
+      //   Gender: gender,
+      //   Country: country,
+      //   State: state,
+      //   City: city,
+      //   Category: category,
+      //   "Hostel ID": hostelId,
+      //   "Bed Type": bedType,
+      //   "Building Number": buildingNumber,
+      //   "Floor Number": floorNumber,
+      //   "Room Number": roomNumber,
+      //   "Bed Number": bedNumber,
+      //   "Billing Cycle": billingCycle,
+      // };
 
-      // Find the first missing field
-      const missingField = Object.keys(requiredFields).find(
-        (field) => !requiredFields[field]
-      );
+      // // Find the first missing field
+      // const missingField = Object.keys(requiredFields).find(
+      //   (field) => !requiredFields[field]
+      // );
 
-      if (missingField) {
-        const errorResponse: HttpResponse = {
-          statusCode: 400,
-          message: `${missingField} is required`,
-        };
-        return res.status(400).json(errorResponse);
-      }
+      // if (missingField) {
+      //   const errorResponse: HttpResponse = {
+      //     statusCode: 400,
+      //     message: `${missingField} is required`,
+      //   };
+      //   return res.status(400).json(errorResponse);
+      // }
 
       // Call the service to create a new user
       const { uniqueId } = await createUserFromWardenPanel(
@@ -1051,7 +1104,6 @@ class UserController {
 
       const staffId = req.body._valid._id;
       const hostelId = req.body._valid?.hostelId;
-      // const hostelId = "67a5d1dd04fc1ee23efbe965"
 
       const { universityId } = req.body;
 
