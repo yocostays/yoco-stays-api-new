@@ -46,7 +46,7 @@ export interface ICityDetails extends Document {
 }
 
 export interface IFamiliyDetails extends Document {
-  parentsContactNo: number;
+  // parentsContactNo: number;
   fatherName: string;
   fatherNumber: number;
   fatherEmail: string;
@@ -286,10 +286,10 @@ const FamilyDetailsSchema: Schema<IFamiliyDetails> =
       required: false,
       default: null,
     },
-    parentsContactNo: {
-      type: Number,
-      required: true,
-    },
+    // parentsContactNo: {
+    //   type: Number,
+    //   required: true,
+    // },
   });
 
 // Define the User Schema
@@ -342,8 +342,9 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     },
     bloodGroup: {
       type: String,
-      enum: Object.values(BloodGroupType),
+      // enum: Object.values(BloodGroupType),
       required: false,
+      default:null
     },
     divyang: {
       type: Boolean,
@@ -352,7 +353,7 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     gender: {
       type: String,
       enum: Object.values(Gender),
-      required: false,
+      required: true,
       default: Gender.NOT_SELECTED,
     },
     identificationMark: {

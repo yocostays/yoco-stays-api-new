@@ -1958,12 +1958,6 @@ class UserService {
         }),
         "Father's Name": Joi.string().required(),
         "Mother's Name": Joi.string().required(),
-        "Parent's Mobile Number": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
-          "string.pattern.base": "Mobile Number must be exactly 10 digits",
-          "any.required": "Mobile Number is required",
-          "number.min": "Mobile Number must be exactly 10 digits",
-          "number.max": "Mobile Number must be exactly 10 digits",
-        }),
         "Permanent Address": Joi.string().required(),
         "Hostel Name": Joi.string().required(),
         "Aadhaar Number": Joi.number().integer().min(100000000000).max(999999999999).required().messages({
@@ -1975,13 +1969,28 @@ class UserService {
         "Country": Joi.string().required(),
         "State": Joi.string().required(),
         "City": Joi.string().required(),
+        "Mother's Mobile Number": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
+          "string.pattern.base": "Mobile Number must be exactly 10 digits",
+          "any.required": "Mobile Number is required",
+          "number.min": "Mobile Number must be exactly 10 digits",
+          "number.max": "Mobile Number must be exactly 10 digits",
+        }),
+        "Father's Mobile Number": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
+          "string.pattern.base": "Mobile Number must be exactly 10 digits",
+          "any.required": "Mobile Number is required",
+          "number.min": "Mobile Number must be exactly 10 digits",
+          "number.max": "Mobile Number must be exactly 10 digits",
+        }),
+        "Room Number": Joi.number().integer().required(),
+        "Floor Number": Joi.number().integer().required(),
+        "Blood group": Joi.string().required(),
+        "Bed Number": Joi.string().required()
       });
 
 
       // Validate and classify entries
       for (const item of jsonData) {
         let errors: string[] = [];
-
         const { error, value } = schema.validate(item, { abortEarly: false });
         if (error) {
           error.details.forEach((err: any) => {
@@ -1990,6 +1999,7 @@ class UserService {
             errors.push(`${field}: ${message}`);
           });
         }
+
         // Check for duplicate phone
         if (value?.["Mobile Number of Student"]) {
           const phoneExists = await User.findOne({
@@ -2009,14 +2019,85 @@ class UserService {
             errors.push(`Aadhaar Number: Aadhaar number already exists`);
           }
         }
-
+        const [hostel] = await Hostel.aggregate([
+          {
+            $match: { _id: new mongoose.Types.ObjectId(hostelId) }
+          },
+          {
+            $project: {
+              _id: 1,
+              buildingNumber: 1,
+              identifier: 1,
+              securityFee: 1,
+              roomDetails: {
+                $filter: {
+                  input: "$roomMapping",
+                  as: "room",
+                  cond: {
+                    $and: [
+                      { $eq: ["$$room.floorNumber", value["Floor Number"]] },
+                      { $eq: ["$$room.roomNumber", value["Room Number"]] },
+                      {
+                        $gt: [
+                          {
+                            $size: {
+                              $filter: {
+                                input: "$$room.bedNumbers",
+                                as: "bed",
+                                cond: {
+                                  $and: [
+                                    { $eq: ["$$bed.bedNumber", String(value["Bed Number"])] },
+                                    { $eq: ["$$bed.isVacant", true] } // ✅ only vacant beds
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          { $unwind: "$roomDetails" },
+          {
+            $project: {
+              _id: 1,
+              buildingNumber: 1,
+              identifier: 1,
+              securityFee: 1,
+              roomDetails: {
+                floorNumber: 1,
+                roomNumber: 1,
+                bedNumbers: {
+                  $filter: {
+                    input: "$roomDetails.bedNumbers",
+                    as: "bed",
+                    cond: {
+                      $and: [
+                        { $eq: ["$$bed.bedNumber", String(value["Bed Number"])] },
+                        { $eq: ["$$bed.isVacant", true] } // ✅ only return vacant bed
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]);
+        if (!hostel) {
+          errors.push("Bed is already occupied");
+          continue;
+        }
         if (errors.length > 0) {
           errorArray.push({ ...item, errors: errors.join(" | ") });
         } else {
-          successArray.push({ ...item });
+          successArray.push({ ...item, hostel });
         }
       }
-
       // Check university capacity
       const university = await College.findById(universityId);
       if (!university) throw new Error(RECORD_NOT_FOUND("University"));
@@ -2059,10 +2140,17 @@ class UserService {
             "Date of Birth": dobExcel,
             "Permanent Address": permanentAddress,
             "Father's Name": fatherName,
+            "Father's Number": fatherNumber,
             "Mother's Name": motherName,
+            "Mothers's Number": motherNumber,
             "Parent's Mobile Number": parentsContactNo,
             "Aadhaar Number": aadharNumber,
             "Room Number": roomNumber,
+            "Floor Number": floorNumber,
+            "Bed Number": bedNumber,
+            "Blood Group": bloodGroup,
+            hostel: hostel
+            // "Bed Type": bedType
           } = data;
 
           // Double-check phone not taken during save
@@ -2073,17 +2161,8 @@ class UserService {
           }
 
           // Get hostel info
-          const [hostel] = await Hostel.aggregate([
-            { $match: { _id: new mongoose.Types.ObjectId(hostelId) } },
-            {
-              $project: {
-                _id: 1,
-                buildingNumber: 1,
-                identifier: 1,
-                securityFee: 1,
-              },
-            },
-          ]);
+
+
 
           const uniqueId = await this.generateUniqueYocoId(
             hostel?.identifier,
@@ -2096,7 +2175,7 @@ class UserService {
             roleId: role._id,
             uniqueId,
             permanentAddress,
-            parentsContactNo,
+            bloodGroup,
             documents: {
               aadhaarNumber: aadharNumber,
             },
@@ -2112,6 +2191,8 @@ class UserService {
               fatherName,
               parentsContactNo,
               motherName,
+              motherNumber,
+              fatherNumber,
             },
             hostelId: hostel?._id,
             isVerified: true,
@@ -2123,11 +2204,44 @@ class UserService {
 
           await newUser.save();
 
+        const updateHostel =  await Hostel.findOneAndUpdate(
+            {
+              _id: new mongoose.Types.ObjectId(hostelId),
+              "roomMapping.floorNumber": floorNumber,
+              "roomMapping.roomNumber": roomNumber,
+              "roomMapping.bedNumbers": {
+                $elemMatch: { bedNumber: String(bedNumber), isVacant: true }
+              }
+            },
+            {
+              $set: {
+                "roomMapping.$[room].bedNumbers.$[bed].isVacant": false
+              },
+              $inc: {
+                "roomMapping.$[room].vacant": -1,
+                "roomMapping.$[room].occupied": 1
+              }
+            },
+            {
+              arrayFilters: [
+                { "room.floorNumber": floorNumber, "room.roomNumber": roomNumber },
+                { "bed.bedNumber": String(bedNumber) }
+              ],
+              new: true
+            }
+          );
+
+          console.log(updateHostel,"updateHostel")
+
+      
+
           await StudentHostelAllocation.create({
             studentId: newUser._id,
             hostelId: hostel._id,
             buildingNumber: hostel?.buildingNumber,
             roomNumber,
+            bedNumber: hostel.roomDetails?.bedNumbers[0]?.bedNumber,
+            floorNumber: hostel.roomDetails?.floorNumber,
             securityFee: hostel?.securityFee,
             joiningDate: currentDate,
             createdBy: staffId,
@@ -2135,7 +2249,6 @@ class UserService {
             updatedAt: getCurrentISTTime(),
           });
         } catch (error: any) {
-          console.error("Error saving user record:", error.message);
           errorArray.push({ ...data, errors: error.message });
         }
       }

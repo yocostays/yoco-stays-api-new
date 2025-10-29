@@ -200,8 +200,8 @@ class HostelService {
       // Build search parameters based on search input
       const searchParams = search
         ? {
-            $or: [{ name: { $regex: `^${search}`, $options: "i" } }],
-          }
+          $or: [{ name: { $regex: `^${search}`, $options: "i" } }],
+        }
         : {};
 
       // Run both queries in parallel
@@ -615,28 +615,46 @@ class HostelService {
       const user: any = await User.findById(userId).populate([
         { path: "hostelId", select: "name address phone description" },
       ]);
-
       const details = await StudentHostelAllocation.findOne({
         studentId: user._id,
         hostelId: user?.hostelId,
-      }).select("roomNumber bedNumber");
+      }).select("roomNumber bedNumber floorNumber");
 
       const roomMates = await User.find({
         hostelId: user.hostelId,
-        roomNumber: details?.roomNumber,
         _id: { $ne: user._id },
         uniqueId: { $ne: null },
         isVerified: true,
-      }).select("name");
+      }).select("name phone hostelId");
 
+      const roomMatesData = await Promise.all(
+        roomMates.map(async (data: any) => {
+          const roomDetails = await StudentHostelAllocation.findOne({
+            studentId: data._id,
+            hostelId: data.hostelId,
+          })
+            .select("roomNumber bedNumber")
+            .sort({ createdAt: -1 })
+            .lean();
+          if (roomDetails?.roomNumber === details?.roomNumber) {
+            return {
+              _id: data._id,
+              name: data.name ?? null,
+            };
+          }
+          return null;
+        })
+      );
+      const filteredRoomMatesData = roomMatesData.filter(Boolean)
       const hostel = {
         _id: user?.hostelId?._id,
         name: user?.hostelId?.name ?? null,
         address: user?.hostelId?.address ?? null,
         description: user?.hostelId?.description ?? null,
-        phone: user?.hostelId?.phone ?? null,
-        guardianContactNo: user?.familiyDetails?.guardianContactNo ?? null,
-        roomMates: roomMates.map((ele) => ele?.name ?? null),
+        phone: user?.phone ?? null,
+        guardianContactNo: (user?.familiyDetails?.fatherNumber || user?.familyDetails?.motherNumber) ?? null,
+        roomMates: filteredRoomMatesData.map((ele) => ele?.name ?? null),
+        floorNumber: details?.floorNumber ?? null,
         bedDetails: details
           ? `${details.roomNumber ?? null}/${details?.bedNumber ?? null}`
           : null,
@@ -745,12 +763,12 @@ class HostelService {
           $project: {
             roomMapping: bedType
               ? {
-                  $filter: {
-                    input: "$roomMapping",
-                    as: "room",
-                    cond: { $eq: ["$$room.bedType", bedType] },
-                  },
-                }
+                $filter: {
+                  input: "$roomMapping",
+                  as: "room",
+                  cond: { $eq: ["$$room.bedType", bedType] },
+                },
+              }
               : "$roomMapping",
           },
         },
