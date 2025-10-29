@@ -23,6 +23,7 @@ export interface IKycDocumentDetails extends Document {
   passport: string;
   drivingLicense: string;
   panCard: string;
+  aadhaarNumber: string;
 }
 
 // Define CountryDetails Interface
@@ -45,6 +46,7 @@ export interface ICityDetails extends Document {
 }
 
 export interface IFamiliyDetails extends Document {
+  // parentsContactNo: number;
   fatherName: string;
   fatherNumber: number;
   fatherEmail: string;
@@ -70,13 +72,16 @@ export interface IAcademicDetails extends Document {
 // Define the user interface
 export interface IUser extends Document {
   uniqueId: string;
+  nationality: string | null;
+  bulkState: string | null;
+  bulkCity: string | null;
   roleId: mongoose.Types.ObjectId;
   name: string;
   image: string;
   password: string;
   phone: number;
-  email: string;
-  dob: Date;
+  email: string | null;
+  dob: Date | null;
   enrollmentNumber: string;
   bloodGroup: BloodGroupType;
   divyang: boolean;
@@ -160,6 +165,11 @@ const VechicleDetailsSchema: Schema<IVechicleDetails> =
 // Define the Documnet Schema
 const KycDocumentDetails: Schema<IKycDocumentDetails> =
   new Schema<IKycDocumentDetails>({
+    aadhaarNumber: {
+      type: String,
+      required: false,
+      default: null
+    },
     aadhaarCard: {
       type: String,
       required: false,
@@ -219,7 +229,8 @@ const FamilyDetailsSchema: Schema<IFamiliyDetails> =
     },
     fatherNumber: {
       type: Number,
-      required: true,
+      required: false,
+      default: null
     },
     fatherEmail: {
       type: String,
@@ -275,6 +286,10 @@ const FamilyDetailsSchema: Schema<IFamiliyDetails> =
       required: false,
       default: null,
     },
+    // parentsContactNo: {
+    //   type: Number,
+    //   required: true,
+    // },
   });
 
 // Define the User Schema
@@ -311,9 +326,9 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     },
     email: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
-      unique: true,
+      unique: false,
       match: [/^\S+@\S+\.\S+$/, INVALID_EMAIL],
     },
     dob: {
@@ -322,13 +337,14 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     },
     enrollmentNumber: {
       type: String,
-      required: true,
+      required: false,
       unique: true,
     },
     bloodGroup: {
       type: String,
-      enum: Object.values(BloodGroupType),
-      required: true,
+      // enum: Object.values(BloodGroupType),
+      required: false,
+      default:null
     },
     divyang: {
       type: Boolean,
@@ -337,7 +353,7 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     gender: {
       type: String,
       enum: Object.values(Gender),
-      required: false,
+      required: true,
       default: Gender.NOT_SELECTED,
     },
     identificationMark: {
@@ -356,15 +372,27 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
       default: null,
     },
     country: { type: CountrySchema, required: false, default: null },
+    nationality: {
+      type: String,
+      requried: false
+    },
     state: {
       type: StateSchema,
       required: false,
       default: null,
     },
+    bulkState: {
+      type: String,
+      requried: false
+    },
     city: {
       type: CitySchema,
       required: false,
       default: null,
+    },
+    bulkCity: {
+      type: String,
+      requried: false
     },
     category: {
       type: String,
@@ -389,11 +417,11 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     },
     familiyDetails: {
       type: FamilyDetailsSchema,
-      required: true,
+      required: false,
     },
     academicDetails: {
       type: AcademicDetailsSchema,
-      required: true,
+      required: false,
     },
     documents: {
       type: KycDocumentDetails,
@@ -403,7 +431,7 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     hostelId: {
       type: Schema.Types.ObjectId,
       ref: "Hostel",
-      required: true,
+      required: false,
     },
 
     vechicleDetails: {

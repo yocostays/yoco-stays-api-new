@@ -50,6 +50,8 @@ import {
 } from "../utils/awsUploadService";
 import Course from "../models/course.model";
 import { sendPushNotificationToUser } from "../utils/commonService/pushNotificationService";
+import moment from "moment";
+import Joi from "joi";
 
 const { getRoleByName } = RoleService;
 const { checkTemplateExist } = TemplateService;
@@ -167,20 +169,21 @@ class UserService {
       const documents = student?.documents || {};
 
       student.documents = {
+        aadhaarNumber: documents?.aadhaarNumber,
         aadhaarCard: documents?.aadhaarCard
-          ? await getSignedUrl(documents.aadhaarCard)
+          ? await getSignedUrl(documents?.aadhaarCard)
           : null,
         passport: documents?.passport
-          ? await getSignedUrl(documents.passport)
+          ? await getSignedUrl(documents?.passport)
           : null,
         voterCard: documents?.voterCard
-          ? await getSignedUrl(documents.voterCard)
+          ? await getSignedUrl(documents?.voterCard)
           : null,
         drivingLicense: documents?.drivingLicense
-          ? await getSignedUrl(documents.drivingLicense)
+          ? await getSignedUrl(documents?.drivingLicense)
           : null,
         panCard: documents?.panCard
-          ? await getSignedUrl(documents.panCard)
+          ? await getSignedUrl(documents?.panCard)
           : null,
       };
 
@@ -220,13 +223,15 @@ class UserService {
       const searchAsNumber = !isNaN(Number(search)) ? Number(search) : null;
 
       // Initialize search parameters
-      const searchParams: any = {};
+      let searchParams: any = {};
 
       // Set isVerified based on the status
       if (status === UserGetByTypes.ACTIVE) {
-        searchParams.isVerified = true;
+        searchParams.isVerified = true
+        searchParams.status = true;
       } else if (status === UserGetByTypes.INACTIVE) {
-        searchParams.isVerified = false;
+        searchParams.isVerified = true
+        searchParams.status = false;
       } else if (status === UserGetByTypes.ALL) {
         // Do nothing; this includes all verified and unverified users
       } else if (status === UserGetByTypes.AUTHORIZE) {
@@ -533,7 +538,7 @@ class UserService {
           { studentId, status: true }, // Find the existing allocation for the student
           {
             hostelId,
-            bedType,
+            bedType: 4,
             roomNumber,
             bedNumber,
             securityFee: hostel?.securityFee,
@@ -1260,17 +1265,19 @@ class UserService {
     currentAddress: string,
     familiyDetails: {
       fatherName: string;
-      fatherNumber: number;
-      fatherEmail?: string;
-      fatherOccuption?: string;
+      // fatherNumber: number;
+      // fatherEmail?: string;
+      // fatherOccuption?: string;
       motherName?: string;
-      motherNumber?: number;
-      motherEmail?: string;
+      // motherNumber?: number;
+      // motherEmail?: string;
       guardianName?: string;
-      guardianContactNo?: number;
+      // guardianContactNo?: number;
       relationship?: string;
       occuption?: string;
+      // parentEmail
       guardianEmail?: string;
+      parentsContactNo?: number;
       address?: string;
     },
     academicDetails: {
@@ -1280,6 +1287,7 @@ class UserService {
       semester: number;
     },
     documents: {
+      aadhaarNumber?: string;
       aadhaarCard?: string;
       voterCard?: string;
       passport?: string;
@@ -1348,7 +1356,7 @@ class UserService {
           },
         },
       ]);
-
+      console.log(hostel, "hostellllllllllllllllll")
       if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
 
       const uniqueId = await this.generateUniqueYocoId(
@@ -1360,10 +1368,10 @@ class UserService {
       const hashedPassword = await hashPassword("123456789");
 
       // Generate billingCycleDetails based on the billing cycle type
-      const billingDetails = createBillingCycleDetails(
-        hostel.bedDetails[0]?.accommodationFee,
-        billingCycle
-      );
+      // const billingDetails = createBillingCycleDetails(
+      //   hostel.bedDetails[0]?.accommodationFee,
+      //   billingCycle
+      // );
 
       // Step 3: Handle image upload if exists
       if (image && image.includes("base64")) {
@@ -1437,7 +1445,7 @@ class UserService {
         floorNumber,
         securityFee: hostel?.securityFee,
         billingCycle,
-        billingCycleDetails: billingDetails,
+        // billingCycleDetails: billingDetails,
         joiningDate: currentDate,
         createdBy: staffId,
         createdAt: getCurrentISTTime(),
@@ -1445,6 +1453,24 @@ class UserService {
       });
 
       // Step 7: Update the hostel bed mapping
+      //     const host =  await Hostel.findOneAndUpdate(
+      //         { _id: hostelId, "roomMapping.roomNumber": roomNumber },
+      //         {
+      //           $inc: {
+      //             "roomMapping.$.vacant": -1,
+      //             "roomMapping.$.occupied": 1,
+      //           },
+      //           $set: {
+      //             "roomMapping.$.bedNumbers.$[bed].isVacant": false,
+      //           },
+      //         },
+      //         {
+      //           new: true,
+      //           runValidators: true,
+      //           arrayFilters: [{ "bed._id": bedNumber }],
+      //           upsert: true,
+      //         }
+      //       );
       await Hostel.findOneAndUpdate(
         { _id: hostelId, "roomMapping.roomNumber": roomNumber },
         {
@@ -1459,10 +1485,10 @@ class UserService {
         {
           new: true,
           runValidators: true,
-          arrayFilters: [{ "bed._id": bedNumber }],
-          upsert: true,
+          arrayFilters: [{ "bed.bedNumber": bedNumber }],
         }
       );
+
 
       return { uniqueId: newUser.uniqueId };
     } catch (error: any) {
@@ -1506,23 +1532,576 @@ class UserService {
     }
   };
 
-  //SECTION: Method to bulk upload user
+  //   //SECTION: Method to bulk upload user
+  //   userBulkUpload = async (
+  //     jsonData: any[],
+  //     staffId: string,
+  //     hostelId: string,
+  //     universityId: string,
+  //     url?: any
+  //   ) => {
+  //     let successArray: any[] = [];
+  //     let errorArray: any[] = [];
+  //     try {
+  //       const validGenders = ["male", "female", "other", "not selected"];
+
+  //       const schema = Joi.object({
+  //         // Timestamp: Joi.date().timestamp().optional(),
+  //         gender: Joi.string().valid(...validGenders).default("not selected"),
+  //         "Date of Birth": Joi.date()
+  //           .required()
+  //           .messages({
+  //             "any.required": "Date of Birth is required",
+  //             "date.base": "Invalid Date format for Date of Birth",
+  //           }),
+  //         "Full Name of Student": Joi.string().required(),
+  //         "Mobile Number of Student": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
+  //           "string.pattern.base": "Mobile Number must be exactly 10 digits",
+  //           "any.required": "Mobile Number is required",
+  //           "number.min": "Mobile Number must be exactly 10 digits",
+  //           "number.max": "Mobile Number must be exactly 10 digits",
+  //         }),
+  //         "Father's Name": Joi.string().required(),
+  //         "Mother's Name": Joi.string().required(),
+  //         "Parent's Mobile Number": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
+  //           "string.pattern.base": "Mobile Number must be exactly 10 digits",
+  //           "any.required": "Mobile Number is required",
+  //           "number.min": "Mobile Number must be exactly 10 digits",
+  //           "number.max": "Mobile Number must be exactly 10 digits",
+  //         }),
+  //         "Permanent Address": Joi.string().required(),
+  //         "Hostel Name": Joi.string().required(),
+  //         "Aadhaar Number": Joi.number().integer().min(100000000000).max(999999999999).required().messages({
+  //           "string.pattern.base": "Aadhaar Number must be exactly 12 digits",
+  //           "any.required": "Aadhaar Number is required",
+  //           "number.min": "Aadhaar Number must be exactly 12 digits",
+  //           "number.max": "Aadhaar Number must be exactly 12 digits",
+  //         }),
+  //         "Country": Joi.string().required(),
+  //         "State": Joi.string().required(),
+  //         "City": Joi.string().required(),
+  //       });
+
+
+  //       for (const item of jsonData) {
+  //         let errors: string[] = [];
+
+  //         // ✅ STEP 1: Joi Validation (Collect All Errors)
+  //         const { error, value } = schema.validate(item, { abortEarly: false });
+  //         if (error) {
+  //           error.details.forEach((err: any) => {
+  //             const field = err.context.label || err.context.key;
+  //             const message = err.message.replace(/"/g, "");
+  //             errors.push(`${field}: ${message}`);
+  //           });
+  //         }
+
+  //         // ✅ STEP 2: DB Validation - Check Phone Exists
+  //         if (value?.["Mobile Number of Student"]) {
+  //           const phoneExists = await User.findOne({
+  //             phone: value["Mobile Number of Student"],
+  //           });
+  //           if (phoneExists) {
+  //             errors.push(`Mobile Number of Student: Phone number already exists`);
+  //           }
+  //         }
+
+
+  //         // ✅ STEP 3: Push to Correct Array (No Duplicate Rows)
+  //         if (errors.length > 0) {
+  //           errorArray.push({
+  //             ...item,
+  //             errors: errors.join(" | "), // 👉 Excel Friendly Format
+  //           });
+  //         } else {
+  //           successArray.push({
+  //             ...item,
+  //             errors: null,
+  //           });
+  //         }
+  //       }
+
+
+  //       //NOTE - get university capacity
+  //       const university = await College.findById(universityId);
+
+  //       if (!university) throw new Error(RECORD_NOT_FOUND("University"));
+
+  //       // Get the user count for the current university
+  //       const userCount = await User.countDocuments({
+  //         "academicDetails.universityId": university._id,
+  //       });
+
+  //       if (userCount >= university.totalCapacity)
+  //         throw new Error(TOTAL_CAPACITY_ISSUES);
+
+  //       const currentDate = new Date();
+  //       currentDate.setUTCHours(0, 0, 0, 0);
+
+  //       //NOTE - get role
+  //       const { role } = await getRoleByName("student");
+
+  //       // Create an entry in the bulk upload table
+  //       const bulkUpload = await BulkUpload.create({
+  //         originalFile: url,
+  //         createdBy: staffId,
+  //         createdAt: getCurrentISTTime(),
+  //         updatedAt: getCurrentISTTime(),
+  //       });
+
+  //       for (let data of successArray) {
+  //         try {
+  //           const {
+  //             "Full Name of Student": name,
+  //             "Mobile Number of Student": phone,
+  //             Gender: gender,
+  //             Nationality: nationality,
+  //             State: state,
+  //             City: city,
+  //             "Date of Birth": dobExcel,
+  //             "Permanent Address": permanentAddress,
+  //             "Father's Name": fatherName,
+  //             "Mother's Name": motherName,
+  //             "Parent's Mobile Number": parentsContactNo,
+  //             "Aadhaar Number": aadharNumber,
+  //             "Room Number": roomNumber,
+  //             // "Bed Number": bedNumber,
+  //             // "Billing Cycle": billingCycle,
+  //           } = data;
+
+  //           // Validate mandatory fields (e.g., email, phone)
+  //           // if (phone) {
+  //           //   errorArray.push({
+  //           //     ...data,
+  //           //     error: "phone number already exist",
+  //           //   });
+  //           //   continue;
+  //           // }
+
+  //           // Check if email or phone already exists
+  //           // const existingUser = await User.findOne({
+  //           //   $or: [{ email }, { phone }, { enrollmentNumber }],
+  //           // });
+  //           // const existingUser = await User.findOne({
+  //           //   $or: [{ phone }],
+  //           // });
+  //           const existingUser = await User.findOne({ phone: phone })
+  //           if (existingUser) {
+  //             continue
+  //           }
+  //           // if (existingUser) {
+  //           //   errorArray.push({
+  //           //     ...data,
+  //           //     error: "Email or phone or enrollmentNumber already exists",
+  //           //   });
+  //           //   continue;
+  //           // }
+
+  //           // if (existingUser) {
+  //           //   errorArray.push({
+  //           //     ...data,
+  //           //     error: "User/Phone No. already exists",
+  //           //   });
+  //           //   continue;
+  //           // }
+  //           //NOTE - find the course id based on the name
+  //           // const course = await Course.findOne({
+  //           //   name: { $regex: courseName, $options: "i" },
+  //           // });
+
+  //           // if (!course) {
+  //           //   errorArray.push({ ...data, error: "Course not found." });
+  //           //   continue;
+  //           // }
+
+  //           // If the course is found, check if it's in the College
+  //           // const college = await College.findOne({
+  //           //   _id: university._id,
+  //           //   courseIds: { $elemMatch: { $eq: course._id } },
+  //           // });
+
+  //           // if (!college) {
+  //           //   errorArray.push({
+  //           //     ...data,
+  //           //     error: "Course not associated with the College.",
+  //           //   });
+  //           //   continue;
+  //           // }
+  //           // Convert Excel date to JavaScript date
+  //           // const dob = new Date((dobExcel - 25569) * 86400 * 1000);
+  //           // const dob = new Date(dobExcel)
+  //           // Get the student's hostel information
+  //           const [hostel] = await Hostel.aggregate([
+  //             { $match: { _id: new mongoose.Types.ObjectId(hostelId) } },
+  //             {
+  //               $project: {
+  //                 _id: 1,
+  //                 buildingNumber: 1,
+  //                 identifier: 1,
+  //                 securityFee: 1,
+  //                 // bedDetails: {
+  //                 //   $filter: {
+  //                 //     input: "$bedDetails",
+  //                 //     as: "bedDetail",
+  //                 //     cond: { $eq: ["$$bedDetail.bedType", bedType] },
+  //                 //   },
+  //                 // },
+  //                 // roomDetails: {
+  //                 //   $filter: {
+  //                 //     input: "$roomMapping",
+  //                 //     as: "room",
+  //                 //     cond: {
+  //                 //       $and: [
+  //                 //         { $eq: ["$$room.roomNumber", roomNumber] },
+  //                 //         {
+  //                 //           $gt: [
+  //                 //             {
+  //                 //               $size: {
+  //                 //                 $filter: {
+  //                 //                   input: "$$room.bedNumbers",
+  //                 //                   as: "bed",
+  //                 //                   cond: {
+  //                 //                     $eq: ["$$bed.bedNumber", String(bedNumber)],
+  //                 //                   },
+  //                 //                 },
+  //                 //               },
+  //                 //             },
+  //                 //             0,
+  //                 //           ],
+  //                 //         },
+  //                 //       ],
+  //                 //     },
+  //                 //   },
+  //                 // },
+  //               },
+  //             },
+  //             // { $unwind: "$roomDetails" },
+  //             // {
+  //             //   $project: {
+  //             //     _id: 1,
+  //             //     buildingNumber: 1,
+  //             //     identifier: 1,
+  //             //     securityFee: 1,
+  //             //     // bedDetails: 1,
+  //             //     // roomDetails: {
+  //             //     //   roomNumber: 1,
+  //             //     //   floorNumber: 1,
+  //             //     //   bedNumbers: {
+  //             //     //     $filter: {
+  //             //     //       input: "$roomDetails.bedNumbers",
+  //             //     //       as: "bed",
+  //             //     //       cond: { $eq: ["$$bed.bedNumber", String(bedNumber)] },
+  //             //     //     },
+  //             //     //   },
+  //             //     // },
+  //             //   },
+  //             // },
+  //           ]);
+  //           // if (!hostel) {
+  //           //   errorArray.push({ ...data, error: "Hostel not found" });
+  //           //   continue;
+  //           // }
+
+  //           // Generate a unique ID for the student
+  //           const uniqueId = await this.generateUniqueYocoId(
+  //             hostel?.identifier,
+  //             hostel?._id
+  //           );
+
+  //           // Hash a default password for the user
+  //           const hashedPassword = await hashPassword("123456789");
+
+  //           // // Generate billing cycle details
+  //           // const billingDetails = createBillingCycleDetails(
+  //           //   hostel.bedDetails[0]?.accommodationFee,
+  //           //   billingCycle
+  //           // );
+
+  //           // Create the new user
+
+  //           const newUser = new User({
+  //             roleId: role._id,
+  //             uniqueId,
+  //             permanentAddress,
+  //             parentsContactNo,
+  //             documents: {
+  //               aadhaarNumber: String(aadharNumber)
+  //             },
+  //             name: name.toUpperCase(),
+  //             password: hashedPassword,
+  //             phone,
+  //             dob: dobExcel,
+  //             gender: gender,
+  //             nationality: nationality,
+  //             bulkState: state,
+  //             bulkCity: city,
+  //             familiyDetails: {
+  //               fatherName,
+  //               parentsContactNo,
+  //               motherName,
+  //             },
+  //             hostelId: hostel?._id,
+  //             isVerified: true,
+  //             verifiedBy: staffId,
+  //             createdAt: getCurrentISTTime(),
+  //             updatedAt: getCurrentISTTime(),
+  //             createdBy: staffId,
+  //           });
+
+  //           await newUser.save();
+  //           // Allocate the student to the hostel
+  //           await StudentHostelAllocation.create({
+  //             studentId: newUser._id,
+  //             hostelId: hostel._id,
+  //             buildingNumber: hostel?.buildingNumber,
+  //             roomNumber,
+  //             // bedNumber: hostel.roomDetails?.bedNumbers[0]._id,
+  //             // floorNumber: hostel.roomDetails?.floorNumber,
+  //             securityFee: hostel?.securityFee,
+  //             // billingCycle: billingCycle.toLowerCase(),
+  //             joiningDate: currentDate,
+  //             createdBy: staffId,
+  //             createdAt: getCurrentISTTime(),
+  //             updatedAt: getCurrentISTTime(),
+  //           });
+
+  //           //NOTE - update in hostel
+  //           // await Hostel.findOneAndUpdate(
+  //           //   { _id: hostelId, "roomMapping.roomNumber": roomNumber },
+  //           //   {
+  //           //     $inc: {
+  //           //       "roomMapping.$.vacant": -1,
+  //           //       "roomMapping.$.occupied": 1,
+  //           //     },
+  //           //     $set: { "roomMapping.$.bedNumbers.$[bed].isVacant": false },
+  //           //   },
+  //           //   {
+  //           //     new: true,
+  //           //     runValidators: true,
+  //           //     arrayFilters: [{ "bed.bedNumber": bedNumber }],
+  //           //   }
+  //           // );
+
+  //           // Push success details (add the full original data to the success array)
+  //           // successArray.push(data);
+  //           // console.log(successArray, errorArray, "errrr")
+  //         } catch (error: any) {
+  //           // Catch errors for individual student data and push to errorArray
+  //           errorArray.push({ ...data, error: error.message });
+  //         }
+  //       }
+  //       // If there are successes or errors, generate CSV/Excel files and upload them to AWS S3
+  //       let successFileUrl = null;
+  //       let errorFileUrl = null;
+  //       if (successArray.length > 0) {
+  //         const successFilePath = await pushToS3Bucket(
+  //           successArray,
+  //           process.env.S3_BUCKET_NAME as string,
+  //           USER_BULK_UPLOAD_FILES
+  //         );
+  //         successFileUrl = successFilePath;
+  //       }
+  //       if (errorArray.length > 0) {
+  //         const errorFilePath = await pushToS3Bucket(
+  //           errorArray,
+  //           process.env.S3_BUCKET_NAME as string,
+  //           USER_BULK_UPLOAD_FILES
+  //         );
+  //         errorFileUrl = errorFilePath;
+  //       }
+
+  //       console.log(successArray,errorArray,"error")
+  //       console.log(successFileUrl,errorFileUrl,"file")
+  //       //NOTE - update bulk upload
+  //       await BulkUpload.findByIdAndUpdate(bulkUpload._id, {
+  //         $set: {
+  //           successFile: successFileUrl,
+  //           errorFile: errorFileUrl,
+  //           updatedAt: getCurrentISTTime(),
+  //         },
+  //       });
+
+  //       return FILE_UPLOADED;
+  //     } catch (error: any) {
+  //       throw new Error(`${error.message}`);
+  //     }
+  //   };
+  // SECTION: Method to bulk upload user
   userBulkUpload = async (
     jsonData: any[],
     staffId: string,
     hostelId: string,
     universityId: string,
     url?: any
-  ): Promise<string> => {
-    const successArray: any[] = [];
-    const errorArray: any[] = [];
-    try {
-      //NOTE - get university capacity
-      const university = await College.findById(universityId);
+  ) => {
+    let successArray: any[] = [];
+    let errorArray: any[] = [];
 
+    try {
+      const validGenders = ["male", "female", "other", "not selected"];
+      // Schema Validation
+      const schema = Joi.object({
+        // Timestamp: Joi.date().timestamp().optional(),
+        gender: Joi.string().valid(...validGenders).default("not selected"),
+        "Date of Birth": Joi.date()
+          .required()
+          .messages({
+            "any.required": "Date of Birth is required",
+            "date.base": "Invalid Date format for Date of Birth",
+          }),
+        "Full Name of Student": Joi.string().required(),
+        "Mobile Number of Student": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
+          "string.pattern.base": "Mobile Number must be exactly 10 digits",
+          "any.required": "Mobile Number is required",
+          "number.min": "Mobile Number must be exactly 10 digits",
+          "number.max": "Mobile Number must be exactly 10 digits",
+        }),
+        "Father's Name": Joi.string().required(),
+        "Mother's Name": Joi.string().required(),
+        "Permanent Address": Joi.string().required(),
+        "Hostel Name": Joi.string().required(),
+        "Aadhaar Number": Joi.number().integer().min(100000000000).max(999999999999).required().messages({
+          "string.pattern.base": "Aadhaar Number must be exactly 12 digits",
+          "any.required": "Aadhaar Number is required",
+          "number.min": "Aadhaar Number must be exactly 12 digits",
+          "number.max": "Aadhaar Number must be exactly 12 digits",
+        }),
+        "Country": Joi.string().required(),
+        "State": Joi.string().required(),
+        "City": Joi.string().required(),
+        "Mother's Mobile Number": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
+          "string.pattern.base": "Mobile Number must be exactly 10 digits",
+          "any.required": "Mobile Number is required",
+          "number.min": "Mobile Number must be exactly 10 digits",
+          "number.max": "Mobile Number must be exactly 10 digits",
+        }),
+        "Father's Mobile Number": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
+          "string.pattern.base": "Mobile Number must be exactly 10 digits",
+          "any.required": "Mobile Number is required",
+          "number.min": "Mobile Number must be exactly 10 digits",
+          "number.max": "Mobile Number must be exactly 10 digits",
+        }),
+        "Room Number": Joi.number().integer().required(),
+        "Floor Number": Joi.number().integer().required(),
+        "Blood group": Joi.string().required(),
+        "Bed Number": Joi.string().required()
+      });
+
+
+      // Validate and classify entries
+      for (const item of jsonData) {
+        let errors: string[] = [];
+        const { error, value } = schema.validate(item, { abortEarly: false });
+        if (error) {
+          error.details.forEach((err: any) => {
+            const field = err.context.label || err.context.key;
+            const message = err.message.replace(/"/g, "");
+            errors.push(`${field}: ${message}`);
+          });
+        }
+
+        // Check for duplicate phone
+        if (value?.["Mobile Number of Student"]) {
+          const phoneExists = await User.findOne({
+            phone: value["Mobile Number of Student"],
+          });
+          if (phoneExists) {
+            errors.push(`Mobile Number of Student: Phone number already exists`);
+          }
+        }
+
+        // Check for duplicate Aadhaar
+        if (value?.["Aadhaar Number"]) {
+          const aadhaarExists = await User.findOne({
+            "documents.aadhaarNumber": String(value["Aadhaar Number"]),
+          });
+          if (aadhaarExists) {
+            errors.push(`Aadhaar Number: Aadhaar number already exists`);
+          }
+        }
+        const [hostel] = await Hostel.aggregate([
+          {
+            $match: { _id: new mongoose.Types.ObjectId(hostelId) }
+          },
+          {
+            $project: {
+              _id: 1,
+              buildingNumber: 1,
+              identifier: 1,
+              securityFee: 1,
+              roomDetails: {
+                $filter: {
+                  input: "$roomMapping",
+                  as: "room",
+                  cond: {
+                    $and: [
+                      { $eq: ["$$room.floorNumber", value["Floor Number"]] },
+                      { $eq: ["$$room.roomNumber", value["Room Number"]] },
+                      {
+                        $gt: [
+                          {
+                            $size: {
+                              $filter: {
+                                input: "$$room.bedNumbers",
+                                as: "bed",
+                                cond: {
+                                  $and: [
+                                    { $eq: ["$$bed.bedNumber", String(value["Bed Number"])] },
+                                    { $eq: ["$$bed.isVacant", true] } // ✅ only vacant beds
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          { $unwind: "$roomDetails" },
+          {
+            $project: {
+              _id: 1,
+              buildingNumber: 1,
+              identifier: 1,
+              securityFee: 1,
+              roomDetails: {
+                floorNumber: 1,
+                roomNumber: 1,
+                bedNumbers: {
+                  $filter: {
+                    input: "$roomDetails.bedNumbers",
+                    as: "bed",
+                    cond: {
+                      $and: [
+                        { $eq: ["$$bed.bedNumber", String(value["Bed Number"])] },
+                        { $eq: ["$$bed.isVacant", true] } // ✅ only return vacant bed
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]);
+        if (!hostel) {
+          errors.push("Bed is already occupied");
+          continue;
+        }
+        if (errors.length > 0) {
+          errorArray.push({ ...item, errors: errors.join(" | ") });
+        } else {
+          successArray.push({ ...item, hostel });
+        }
+      }
+      // Check university capacity
+      const university = await College.findById(universityId);
       if (!university) throw new Error(RECORD_NOT_FOUND("University"));
 
-      // Get the user count for the current university
       const userCount = await User.countDocuments({
         "academicDetails.universityId": university._id,
       });
@@ -1533,222 +2112,89 @@ class UserService {
       const currentDate = new Date();
       currentDate.setUTCHours(0, 0, 0, 0);
 
-      //NOTE - get role
       const { role } = await getRoleByName("student");
 
-      // Create an entry in the bulk upload table
-      const bulkUpload = await BulkUpload.create({
-        originalFile: url,
-        createdBy: staffId,
-        createdAt: getCurrentISTTime(),
-        updatedAt: getCurrentISTTime(),
-      });
+      // Create Bulk Upload Entry
+      let bulkUpload;
+      try {
+        bulkUpload = await BulkUpload.create({
+          originalFile: url,
+          createdBy: staffId,
+          createdAt: getCurrentISTTime(),
+          updatedAt: getCurrentISTTime(),
+        });
+      } catch (er) {
+        throw new Error("Failed to create bulk upload entry.");
+      }
 
-      for (const data of jsonData) {
+      // Process valid entries
+      for (let data of successArray) {
         try {
           const {
-            Name: name,
-            Phone: phone,
-            Email: email,
-            "Enrollment No- Registration No": enrollmentNumber,
-            Category: category,
-            Cast: cast,
+            "Full Name of Student": name,
+            "Mobile Number of Student": phone,
             Gender: gender,
+            Country: nationality,
+            State: state,
+            City: city,
             "Date of Birth": dobExcel,
-            "Blood Group": bloodGroup,
-            "Physically Challenged(Yes/No)": divyang,
-            "Father Name": fatherName,
-            "Father Email": fatherEmail,
-            "Father phone": fatherNumber,
-            "Mother Name": motherName,
-            "Mother Phone": motherNumber,
-            "Mother Email": motherEmail,
-            "Gaurdian Name": guardianName,
-            "Guardian Phone": guardianContactNo,
-            Relationship: relationship,
-            "Guardian Email": guardianEmail,
-            "Guardian Address": address,
-            "Course Name": courseName,
-            "Academic Year": academicYear,
-            Semester: semester,
-            "Bed Type": bedType,
+            "Permanent Address": permanentAddress,
+            "Father's Name": fatherName,
+            "Father's Number": fatherNumber,
+            "Mother's Name": motherName,
+            "Mothers's Number": motherNumber,
+            "Parent's Mobile Number": parentsContactNo,
+            "Aadhaar Number": aadharNumber,
             "Room Number": roomNumber,
+            "Floor Number": floorNumber,
             "Bed Number": bedNumber,
-            "Billing Cycle": billingCycle,
+            "Blood Group": bloodGroup,
+            hostel: hostel
+            // "Bed Type": bedType
           } = data;
 
-          // Validate mandatory fields (e.g., email, phone)
-          if (!email || !phone || !enrollmentNumber) {
-            errorArray.push({
-              ...data,
-              error: "Missing email or phone or enrollmentNumber",
-            });
-            continue;
-          }
-
-          // Check if email or phone already exists
-          const existingUser = await User.findOne({
-            $or: [{ email }, { phone }, { enrollmentNumber }],
-          });
-
+          // Double-check phone not taken during save
+          const existingUser = await User.findOne({ phone });
           if (existingUser) {
-            errorArray.push({
-              ...data,
-              error: "Email or phone or enrollmentNumber already exists",
-            });
+            errorArray.push({ ...data, errors: "Mobile number already exists during save" });
             continue;
           }
 
-          //NOTE - find the course id based on the name
-          const course = await Course.findOne({
-            name: { $regex: courseName, $options: "i" },
-          });
+          // Get hostel info
 
-          if (!course) {
-            errorArray.push({ ...data, error: "Course not found." });
-            continue;
-          }
 
-          // If the course is found, check if it's in the College
-          const college = await College.findOne({
-            _id: university._id,
-            courseIds: { $elemMatch: { $eq: course._id } },
-          });
 
-          if (!college) {
-            errorArray.push({
-              ...data,
-              error: "Course not associated with the College.",
-            });
-            continue;
-          }
-          // Convert Excel date to JavaScript date
-          const dob = new Date((dobExcel - 25569) * 86400 * 1000);
-
-          // Get the student's hostel information
-          const [hostel] = await Hostel.aggregate([
-            { $match: { _id: new mongoose.Types.ObjectId(hostelId) } },
-            {
-              $project: {
-                _id: 1,
-                buildingNumber: 1,
-                identifier: 1,
-                securityFee: 1,
-                bedDetails: {
-                  $filter: {
-                    input: "$bedDetails",
-                    as: "bedDetail",
-                    cond: { $eq: ["$$bedDetail.bedType", bedType] },
-                  },
-                },
-                roomDetails: {
-                  $filter: {
-                    input: "$roomMapping",
-                    as: "room",
-                    cond: {
-                      $and: [
-                        { $eq: ["$$room.roomNumber", roomNumber] },
-                        {
-                          $gt: [
-                            {
-                              $size: {
-                                $filter: {
-                                  input: "$$room.bedNumbers",
-                                  as: "bed",
-                                  cond: {
-                                    $eq: ["$$bed.bedNumber", String(bedNumber)],
-                                  },
-                                },
-                              },
-                            },
-                            0,
-                          ],
-                        },
-                      ],
-                    },
-                  },
-                },
-              },
-            },
-            { $unwind: "$roomDetails" },
-            {
-              $project: {
-                _id: 1,
-                buildingNumber: 1,
-                identifier: 1,
-                securityFee: 1,
-                bedDetails: 1,
-                roomDetails: {
-                  roomNumber: 1,
-                  floorNumber: 1,
-                  bedNumbers: {
-                    $filter: {
-                      input: "$roomDetails.bedNumbers",
-                      as: "bed",
-                      cond: { $eq: ["$$bed.bedNumber", String(bedNumber)] },
-                    },
-                  },
-                },
-              },
-            },
-          ]);
-
-          if (!hostel) {
-            errorArray.push({ ...data, error: "Hostel not found" });
-            continue;
-          }
-
-          // Generate a unique ID for the student
           const uniqueId = await this.generateUniqueYocoId(
             hostel?.identifier,
             hostel?._id
           );
 
-          // Hash a default password for the user
           const hashedPassword = await hashPassword("123456789");
 
-          // Generate billing cycle details
-          const billingDetails = createBillingCycleDetails(
-            hostel.bedDetails[0]?.accommodationFee,
-            billingCycle
-          );
-
-          // Create the new user
           const newUser = new User({
             roleId: role._id,
             uniqueId,
-            name,
-            password: hashedPassword,
-            email,
-            phone,
-            enrollmentNumber,
-            dob,
+            permanentAddress,
             bloodGroup,
-            divyang: divyang === "Yes" ? true : false,
-            gender: gender.toLowerCase(),
-            category: category.toLowerCase(),
-            cast,
+            documents: {
+              aadhaarNumber: aadharNumber,
+            },
+            name: name.toUpperCase(),
+            password: hashedPassword,
+            phone,
+            dob: dobExcel,
+            gender,
+            nationality,
+            bulkState: state,
+            bulkCity: city,
             familiyDetails: {
               fatherName,
-              fatherNumber,
-              fatherEmail: fatherEmail ?? null,
+              parentsContactNo,
               motherName,
               motherNumber,
-              motherEmail: motherEmail ?? null,
-              guardianName,
-              guardianContactNo,
-              relationship,
-              occuption: null,
-              guardianEmail,
-              address,
+              fatherNumber,
             },
-            academicDetails: {
-              universityId,
-              courseId: course._id,
-              academicYear,
-              semester,
-            },
-            hostelId: hostel._id,
+            hostelId: hostel?._id,
             isVerified: true,
             verifiedBy: staffId,
             createdAt: getCurrentISTTime(),
@@ -1758,85 +2204,99 @@ class UserService {
 
           await newUser.save();
 
-          // Allocate the student to the hostel
+        const updateHostel =  await Hostel.findOneAndUpdate(
+            {
+              _id: new mongoose.Types.ObjectId(hostelId),
+              "roomMapping.floorNumber": floorNumber,
+              "roomMapping.roomNumber": roomNumber,
+              "roomMapping.bedNumbers": {
+                $elemMatch: { bedNumber: String(bedNumber), isVacant: true }
+              }
+            },
+            {
+              $set: {
+                "roomMapping.$[room].bedNumbers.$[bed].isVacant": false
+              },
+              $inc: {
+                "roomMapping.$[room].vacant": -1,
+                "roomMapping.$[room].occupied": 1
+              }
+            },
+            {
+              arrayFilters: [
+                { "room.floorNumber": floorNumber, "room.roomNumber": roomNumber },
+                { "bed.bedNumber": String(bedNumber) }
+              ],
+              new: true
+            }
+          );
+
+          console.log(updateHostel,"updateHostel")
+
+      
+
           await StudentHostelAllocation.create({
             studentId: newUser._id,
             hostelId: hostel._id,
             buildingNumber: hostel?.buildingNumber,
-            bedType,
             roomNumber,
-            bedNumber: hostel.roomDetails?.bedNumbers[0]._id,
+            bedNumber: hostel.roomDetails?.bedNumbers[0]?.bedNumber,
             floorNumber: hostel.roomDetails?.floorNumber,
             securityFee: hostel?.securityFee,
-            billingCycle: billingCycle.toLowerCase(),
-            billingCycleDetails: billingDetails,
             joiningDate: currentDate,
             createdBy: staffId,
             createdAt: getCurrentISTTime(),
             updatedAt: getCurrentISTTime(),
           });
-
-          //NOTE - update in hostel
-          await Hostel.findOneAndUpdate(
-            { _id: hostelId, "roomMapping.roomNumber": roomNumber },
-            {
-              $inc: {
-                "roomMapping.$.vacant": -1,
-                "roomMapping.$.occupied": 1,
-              },
-              $set: { "roomMapping.$.bedNumbers.$[bed].isVacant": false },
-            },
-            {
-              new: true,
-              runValidators: true,
-              arrayFilters: [{ "bed.bedNumber": bedNumber }],
-            }
-          );
-
-          // Push success details (add the full original data to the success array)
-          successArray.push(data);
         } catch (error: any) {
-          // Catch errors for individual student data and push to errorArray
-          errorArray.push({ ...data, error: error.message });
+          errorArray.push({ ...data, errors: error.message });
         }
       }
 
-      // If there are successes or errors, generate CSV/Excel files and upload them to AWS S3
-      let successFileUrl = null;
-      let errorFileUrl = null;
 
-      if (successArray.length > 0) {
-        const successFilePath = await pushToS3Bucket(
-          successArray,
-          process.env.S3_BUCKET_NAME as string,
-          USER_BULK_UPLOAD_FILES
-        );
-        successFileUrl = successFilePath;
+      try {
+        let successFileUrl: string | null = null;
+        let errorFileUrl: string | null = null;
+
+        if (successArray.length > 0) {
+          successFileUrl = await pushToS3Bucket(
+            successArray,
+            process.env.S3_BUCKET_NAME!,
+            USER_BULK_UPLOAD_FILES
+          );
+        }
+
+        if (errorArray.length > 0) {
+          errorFileUrl = await pushToS3Bucket(
+            errorArray,
+            process.env.S3_BUCKET_NAME!,
+            USER_BULK_UPLOAD_FILES
+          );
+        }
+
+
+        if (bulkUpload?._id && (successFileUrl || errorFileUrl)) {
+          await BulkUpload.findByIdAndUpdate(bulkUpload._id, {
+            $set: {
+              ...(successFileUrl && { successFile: successFileUrl }),
+              ...(errorFileUrl && { errorFile: errorFileUrl }),
+              updatedAt: getCurrentISTTime(),
+            },
+          });
+        } else {
+          console.warn("⚠️ No file URLs generated or _id missing — skipping update");
+        }
+      } catch (err) {
+        console.error("🚨 Error during file generation/upload:", err);
       }
-
-      if (errorArray.length > 0) {
-        const errorFilePath = await pushToS3Bucket(
-          errorArray,
-          process.env.S3_BUCKET_NAME as string,
-          USER_BULK_UPLOAD_FILES
-        );
-        errorFileUrl = errorFilePath;
-      }
-
-      //NOTE - update bulk upload
-      await BulkUpload.findByIdAndUpdate(bulkUpload._id, {
-        $set: {
-          successFile: successFileUrl,
-          errorFile: errorFileUrl,
-          updatedAt: getCurrentISTTime(),
-        },
-      });
 
       return FILE_UPLOADED;
     } catch (error: any) {
+      console.error("Bulk upload failed:", error.message);
       throw new Error(`${error.message}`);
     }
   };
+
 
   //SECTION: Method to delete user Vehicle details
   deleteVehicle = async (
