@@ -1938,11 +1938,11 @@ class UserService {
     let errorArray: any[] = [];
 
     try {
+     
       const validGenders = ["male", "female", "other", "not selected"];
       // Schema Validation
       const schema = Joi.object({
-        // Timestamp: Joi.date().timestamp().optional(),
-        gender: Joi.string().valid(...validGenders).default("not selected"),
+        Gender: Joi.string().valid(...validGenders).default("not selected"),
         "Date of Birth": Joi.date()
           .required()
           .messages({
@@ -1983,7 +1983,7 @@ class UserService {
         }),
         "Room Number": Joi.number().integer().required(),
         "Floor Number": Joi.number().integer().required(),
-        "Blood group": Joi.string().required(),
+        "Blood Group": Joi.string().required(),
         "Bed Number": Joi.string().required()
       });
 
@@ -2019,84 +2019,13 @@ class UserService {
             errors.push(`Aadhaar Number: Aadhaar number already exists`);
           }
         }
-        const [hostel] = await Hostel.aggregate([
-          {
-            $match: { _id: new mongoose.Types.ObjectId(hostelId) }
-          },
-          {
-            $project: {
-              _id: 1,
-              buildingNumber: 1,
-              identifier: 1,
-              securityFee: 1,
-              roomDetails: {
-                $filter: {
-                  input: "$roomMapping",
-                  as: "room",
-                  cond: {
-                    $and: [
-                      { $eq: ["$$room.floorNumber", value["Floor Number"]] },
-                      { $eq: ["$$room.roomNumber", value["Room Number"]] },
-                      {
-                        $gt: [
-                          {
-                            $size: {
-                              $filter: {
-                                input: "$$room.bedNumbers",
-                                as: "bed",
-                                cond: {
-                                  $and: [
-                                    { $eq: ["$$bed.bedNumber", String(value["Bed Number"])] },
-                                    { $eq: ["$$bed.isVacant", true] } // ✅ only vacant beds
-                                  ]
-                                }
-                              }
-                            }
-                          },
-                          0
-                        ]
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          { $unwind: "$roomDetails" },
-          {
-            $project: {
-              _id: 1,
-              buildingNumber: 1,
-              identifier: 1,
-              securityFee: 1,
-              roomDetails: {
-                floorNumber: 1,
-                roomNumber: 1,
-                bedNumbers: {
-                  $filter: {
-                    input: "$roomDetails.bedNumbers",
-                    as: "bed",
-                    cond: {
-                      $and: [
-                        { $eq: ["$$bed.bedNumber", String(value["Bed Number"])] },
-                        { $eq: ["$$bed.isVacant", true] } // ✅ only return vacant bed
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        ]);
-        if (!hostel) {
-          errors.push("Bed is already occupied");
-          continue;
-        }
+
         if (errors.length > 0) {
           errorArray.push({ ...item, errors: errors.join(" | ") });
         } else {
-          successArray.push({ ...item, hostel });
+          successArray.push({ ...item });
         }
+
       }
       // Check university capacity
       const university = await College.findById(universityId);
@@ -2128,7 +2057,9 @@ class UserService {
       }
 
       // Process valid entries
-      for (let data of successArray) {
+      for (let i = 0; i < successArray.length; i++) {
+        const data = successArray[i];
+        console.log(i,"iiii")
         try {
           const {
             "Full Name of Student": name,
@@ -2140,114 +2071,175 @@ class UserService {
             "Date of Birth": dobExcel,
             "Permanent Address": permanentAddress,
             "Father's Name": fatherName,
-            "Father's Number": fatherNumber,
+            "Father's Mobile Number": fatherNumber,
             "Mother's Name": motherName,
-            "Mothers's Number": motherNumber,
-            "Parent's Mobile Number": parentsContactNo,
+            "Mother's Mobile Number": motherNumber,
+            // "Parent's Mobile Number": parentsContactNo,
             "Aadhaar Number": aadharNumber,
             "Room Number": roomNumber,
             "Floor Number": floorNumber,
             "Bed Number": bedNumber,
             "Blood Group": bloodGroup,
-            hostel: hostel
-            // "Bed Type": bedType
           } = data;
 
-          // Double-check phone not taken during save
-          const existingUser = await User.findOne({ phone });
-          if (existingUser) {
-            errorArray.push({ ...data, errors: "Mobile number already exists during save" });
-            continue;
+         
+          let uniqueId
+          // Get hostel info
+          const [hostel] = await Hostel.aggregate([
+            {
+              $match: { _id: new mongoose.Types.ObjectId(hostelId) }
+            },
+            {
+              $project: {
+                _id: 1,
+                buildingNumber: 1,
+                identifier: 1,
+                securityFee: 1,
+                roomDetails: {
+                  $filter: {
+                    input: "$roomMapping",
+                    as: "room",
+                    cond: {
+                      $and: [
+                        { $eq: ["$$room.floorNumber", floorNumber] },
+                        { $eq: ["$$room.roomNumber", roomNumber] },
+                        {
+                          $gt: [
+                            {
+                              $size: {
+                                $filter: {
+                                  input: "$$room.bedNumbers",
+                                  as: "bed",
+                                  cond: {
+                                    $and: [
+                                      { $eq: ["$$bed.bedNumber", bedNumber] },
+                                      { $eq: ["$$bed.isVacant", true] } // ✅ only vacant beds
+                                    ]
+                                  }
+                                }
+                              }
+                            },
+                            0
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            { $unwind: "$roomDetails" },
+            {
+              $project: {
+                _id: 1,
+                buildingNumber: 1,
+                identifier: 1,
+                securityFee: 1,
+                roomDetails: {
+                  floorNumber: 1,
+                  roomNumber: 1,
+                  bedNumbers: {
+                    $filter: {
+                      input: "$roomDetails.bedNumbers",
+                      as: "bed",
+                      cond: {
+                        $and: [
+                          { $eq: ["$$bed.bedNumber", bedNumber] },
+                          { $eq: ["$$bed.isVacant", true] } // ✅ only return vacant bed
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]);
+          if (!hostel) {
+            errorArray.push({ ...data, errors: "Bed already occupied" });
+            successArray.splice(i, 1);
+          } else {
+            uniqueId = await this.generateUniqueYocoId(
+              hostel?.identifier,
+              hostel?._id
+            );
+
+            const hashedPassword = await hashPassword("123456789");
+
+            const newUser = new User({
+              roleId: role._id,
+              uniqueId,
+              permanentAddress,
+              bloodGroup,
+              documents: {
+                aadhaarNumber: aadharNumber,
+              },
+              name: name.toUpperCase(),
+              password: hashedPassword,
+              phone,
+              dob: dobExcel,
+              gender,
+              nationality,
+              bulkState: state,
+              bulkCity: city,
+              familiyDetails: {
+                fatherName,
+                // parentsContactNo,
+                motherName,
+                motherNumber,
+                fatherNumber,
+              },
+              hostelId: hostel?._id,
+              isVerified: true,
+              verifiedBy: staffId,
+              createdAt: getCurrentISTTime(),
+              updatedAt: getCurrentISTTime(),
+              createdBy: staffId,
+            });
+
+            await newUser.save();
+
+            await Hostel.findOneAndUpdate(
+              {
+                _id: new mongoose.Types.ObjectId(hostelId),
+                "roomMapping.floorNumber": floorNumber,
+                "roomMapping.roomNumber": roomNumber,
+                "roomMapping.bedNumbers": {
+                  $elemMatch: { bedNumber: String(bedNumber), isVacant: true }
+                }
+              },
+              {
+                $set: {
+                  "roomMapping.$[room].bedNumbers.$[bed].isVacant": false
+                },
+                $inc: {
+                  "roomMapping.$[room].vacant": -1,
+                  "roomMapping.$[room].occupied": 1
+                }
+              },
+              {
+                arrayFilters: [
+                  { "room.floorNumber": floorNumber, "room.roomNumber": roomNumber },
+                  { "bed.bedNumber": String(bedNumber) }
+                ],
+                new: true
+              }
+            ),
+
+              await StudentHostelAllocation.create({
+                studentId: newUser._id,
+                hostelId: hostel._id,
+                buildingNumber: hostel?.buildingNumber,
+                roomNumber,
+                bedNumber: hostel.roomDetails?.bedNumbers[0]?.bedNumber,
+                floorNumber: hostel.roomDetails?.floorNumber,
+                securityFee: hostel?.securityFee,
+                joiningDate: currentDate,
+                createdBy: staffId,
+                createdAt: getCurrentISTTime(),
+                updatedAt: getCurrentISTTime(),
+              });
           }
 
-          // Get hostel info
-
-
-
-          const uniqueId = await this.generateUniqueYocoId(
-            hostel?.identifier,
-            hostel?._id
-          );
-
-          const hashedPassword = await hashPassword("123456789");
-
-          const newUser = new User({
-            roleId: role._id,
-            uniqueId,
-            permanentAddress,
-            bloodGroup,
-            documents: {
-              aadhaarNumber: aadharNumber,
-            },
-            name: name.toUpperCase(),
-            password: hashedPassword,
-            phone,
-            dob: dobExcel,
-            gender,
-            nationality,
-            bulkState: state,
-            bulkCity: city,
-            familiyDetails: {
-              fatherName,
-              parentsContactNo,
-              motherName,
-              motherNumber,
-              fatherNumber,
-            },
-            hostelId: hostel?._id,
-            isVerified: true,
-            verifiedBy: staffId,
-            createdAt: getCurrentISTTime(),
-            updatedAt: getCurrentISTTime(),
-            createdBy: staffId,
-          });
-
-          await newUser.save();
-
-        const updateHostel =  await Hostel.findOneAndUpdate(
-            {
-              _id: new mongoose.Types.ObjectId(hostelId),
-              "roomMapping.floorNumber": floorNumber,
-              "roomMapping.roomNumber": roomNumber,
-              "roomMapping.bedNumbers": {
-                $elemMatch: { bedNumber: String(bedNumber), isVacant: true }
-              }
-            },
-            {
-              $set: {
-                "roomMapping.$[room].bedNumbers.$[bed].isVacant": false
-              },
-              $inc: {
-                "roomMapping.$[room].vacant": -1,
-                "roomMapping.$[room].occupied": 1
-              }
-            },
-            {
-              arrayFilters: [
-                { "room.floorNumber": floorNumber, "room.roomNumber": roomNumber },
-                { "bed.bedNumber": String(bedNumber) }
-              ],
-              new: true
-            }
-          );
-
-          console.log(updateHostel,"updateHostel")
-
-      
-
-          await StudentHostelAllocation.create({
-            studentId: newUser._id,
-            hostelId: hostel._id,
-            buildingNumber: hostel?.buildingNumber,
-            roomNumber,
-            bedNumber: hostel.roomDetails?.bedNumbers[0]?.bedNumber,
-            floorNumber: hostel.roomDetails?.floorNumber,
-            securityFee: hostel?.securityFee,
-            joiningDate: currentDate,
-            createdBy: staffId,
-            createdAt: getCurrentISTTime(),
-            updatedAt: getCurrentISTTime(),
-          });
         } catch (error: any) {
           errorArray.push({ ...data, errors: error.message });
         }
@@ -2275,20 +2267,21 @@ class UserService {
         }
 
 
-        if (bulkUpload?._id && (successFileUrl || errorFileUrl)) {
-          await BulkUpload.findByIdAndUpdate(bulkUpload._id, {
-            $set: {
-              ...(successFileUrl && { successFile: successFileUrl }),
-              ...(errorFileUrl && { errorFile: errorFileUrl }),
-              updatedAt: getCurrentISTTime(),
-            },
-          });
-        } else {
-          console.warn("⚠️ No file URLs generated or _id missing — skipping update");
-        }
+        // if (bulkUpload?._id && (successFileUrl || errorFileUrl)) {
+        await BulkUpload.findByIdAndUpdate(bulkUpload._id, {
+          $set: {
+            ...(successFileUrl && { successFile: successFileUrl }),
+            ...(errorFileUrl && { errorFile: errorFileUrl }),
+            updatedAt: getCurrentISTTime(),
+          },
+        });
+        // } else {
+        //   console.warn("⚠️ No file URLs generated or _id missing — skipping update");
+        // }
       } catch (err) {
         console.error("🚨 Error during file generation/upload:", err);
       }
+      /** ------------------ SAVE RESULT FILES ------------------ */
 
       return FILE_UPLOADED;
     } catch (error: any) {
@@ -2296,7 +2289,6 @@ class UserService {
       throw new Error(`${error.message}`);
     }
   };
-
 
   //SECTION: Method to delete user Vehicle details
   deleteVehicle = async (
@@ -2795,9 +2787,10 @@ class UserService {
         { hostelId, uniqueId: { $ne: null } },
         { uniqueId: 1 }
       )
-        .sort({ uniqueId: -1 })
-        .exec();
-
+        .sort({ createdAt: -1 }) // safer than string sorting
+        .lean();
+      // .sort({ uniqueId: -1 })
+      // .exec();
       // Default uniqueId if no previous user is found
       let newUniqueId = `${prefix}-001`;
 
@@ -2807,7 +2800,6 @@ class UserService {
           lastUser.uniqueId.substring(lastUser.uniqueId.lastIndexOf("-") + 1),
           10
         );
-
         // Check if parsing was successful
         if (!isNaN(lastIdNumber)) {
           const incrementedId = lastIdNumber + 1;
@@ -2818,7 +2810,6 @@ class UserService {
           throw new Error("Failed to parse last uniqueId number.");
         }
       }
-
       return newUniqueId;
     } catch (error) {
       throw new Error(UNIQUE_GENERATE_FAILED);

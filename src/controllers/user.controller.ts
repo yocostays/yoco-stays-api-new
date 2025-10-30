@@ -1136,7 +1136,6 @@ class UserController {
       const jsonData = await excelToJson(file.buffer);
       // Call the function to handle bulk upload of the data
       const data = jsonData.map((item: any) => {
-        
         return {
           ...item,
           "Full Name of Student": normalizeFullName(item["Full Name of Student"]),
@@ -1144,11 +1143,12 @@ class UserController {
           "Mother's Name": normalizeFullName(item["Mother's Name"]),
           "Date of Birth": excelDateToJSDate(item["Date of Birth"]),
           "Permanent Address": String(item["Permanent Address"]),
-          gender: String(item?.Gender).trim().toLowerCase()
+          "Aadhaar Number": Number(item["Aadhaar Number"]),
+          "Blood Group": String(item["Blood Group"].trim()),
+          Gender: String(item?.Gender).trim().toLowerCase()
         }
       })
       data.forEach((item: any) => {
-        delete item.Gender; 
         delete item.Timestamp
       });
       await userBulkUpload(data, staffId, hostelId, universityId, url);
