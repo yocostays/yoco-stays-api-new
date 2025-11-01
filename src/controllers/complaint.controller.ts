@@ -168,6 +168,7 @@ class ComplainController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
+      
       const userId = req.body._valid._id;
       if (!mongoose.isValidObjectId(userId)) {
         throw new Error(INVALID_ID);
@@ -180,7 +181,7 @@ class ComplainController {
         throw new Error(RECORD_NOT_FOUND("Staff"));
       }
 
-      const { staffId, complaintId, remark } = req.body;
+      const { staffId, complaintId, remark,usersId } = req.body;
 
       if (!staffId || !complaintId || !remark) {
         const missingFields = [];
@@ -197,7 +198,7 @@ class ComplainController {
       }
 
       // Call the service to assign staff
-      await allocateStaffToComplaint(userId, staffId, complaintId, remark);
+      await allocateStaffToComplaint(usersId, staffId, complaintId, remark);
 
       const successResponse: HttpResponse = {
         statusCode: 200,

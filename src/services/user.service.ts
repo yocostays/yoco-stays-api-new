@@ -1938,7 +1938,7 @@ class UserService {
     let errorArray: any[] = [];
 
     try {
-     
+
       const validGenders = ["male", "female", "other", "not selected"];
       // Schema Validation
       const schema = Joi.object({
@@ -2059,7 +2059,7 @@ class UserService {
       // Process valid entries
       for (let i = 0; i < successArray.length; i++) {
         const data = successArray[i];
-        console.log(i,"iiii")
+
         try {
           const {
             "Full Name of Student": name,
@@ -2082,7 +2082,7 @@ class UserService {
             "Blood Group": bloodGroup,
           } = data;
 
-         
+
           let uniqueId
           // Get hostel info
           const [hostel] = await Hostel.aggregate([
@@ -2535,10 +2535,12 @@ class UserService {
     let isPlayedNoticeCreated = true;
     let log: Pick<INotificationLog, "templateType" | "reason">;
     try {
+
       // NOTE: Retrieve student details
       student = await User.findById(studentId).select(
         "oneSignalWebId oneSignalAndoridId oneSignalIosId hostelId"
       );
+     
       if (!student) {
         log = {
           templateType: templateTypes,
@@ -2552,7 +2554,7 @@ class UserService {
           log,
         };
       }
-
+      console.log(templateTypes, "templatesTypes")
       // NOTE: Check playerIds is available
       const playerIds: any = [
         student.oneSignalWebId,
