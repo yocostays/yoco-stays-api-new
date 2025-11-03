@@ -1999,7 +1999,7 @@ class UserService {
             }
 
             // Check length 8 to 18 digits
-            if (str.length === 12) {
+            if (str.length !== 12) {
               return helpers.error("number.length");
             }
 

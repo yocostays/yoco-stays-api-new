@@ -142,14 +142,12 @@ const excelDateToJSDate = (input: number | string): { success: boolean; date?: s
         ],
         true
       );
-      console.log(momentDate, "momentDdddddddddddddddddddddddd")
       if (!momentDate.isValid()) {
         return { success: false, error: "Invalid DOB format." };
       }
     } else {
       return { success: false, error: "Unsupported DOB format." };
     }
-    console.log(momentDate, "momentDate")
     if (!momentDate.isValid()) {
       return { success: false, error: "Invalid DOB format." };
     }
@@ -855,7 +853,6 @@ class UserController {
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
-    console.log(req.body, "req.body")
 
     const familyDetailsSchema = Joi.object({
       fatherName: Joi.string().required().messages({
@@ -1199,7 +1196,6 @@ class UserController {
       const url = fileUrl && fileUrl.Key ? fileUrl?.Key : null;
       // Perform file processing after sending response
       const jsonData = await excelToJson(file.buffer);
-      console.log(jsonData, "jsonData")
       // Call the function to handle bulk upload of the data
       const data = jsonData.map((item: any) => {
 
@@ -1218,7 +1214,6 @@ class UserController {
         }
       })
       data.forEach((item: any) => {
-        console.log(item, "item")
         delete item.Timestamp,
           item["Aadhaar Number"] = item["Aadhaar Number"] ? item["Aadhaar Number"] : ""
       });
