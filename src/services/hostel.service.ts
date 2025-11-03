@@ -534,7 +534,10 @@ class HostelService {
         roomNumber: ele?.roomNumber,
         floorNumber: ele?.floorNumber,
         totalBeds: ele?.bedType,
-        bedNumbers: ele?.bedNumbers,
+        bedNumbers: ele?.bedNumbers?.map((b: IBedNumberDetails) => ({
+          ...b,
+          bedNumber: b.bedNumber.trim()
+        })),
         vacant: ele?.occupied ? ele?.bedType - ele?.occupied : ele?.bedType - 0,
         occupied: ele?.occupied ?? 0,
         maintenanceStatus: ele?.maintenanceStatus,
@@ -542,7 +545,7 @@ class HostelService {
         occupancyType: ele?.occupancyType,
         washroomType: ele?.washroomType,
       }));
-
+      console.log(roomDetailsData, "roomDetails")
       //NOTE - update the room details
       await Hostel.findByIdAndUpdate(hostelId, {
         $set: {
