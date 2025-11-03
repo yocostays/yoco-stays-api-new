@@ -1356,7 +1356,6 @@ class UserService {
           },
         },
       ]);
-      console.log(hostel, "hostellllllllllllllllll")
       if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
 
       const uniqueId = await this.generateUniqueYocoId(
@@ -1938,7 +1937,6 @@ class UserService {
     let errorArray: any[] = [];
 
     try {
-      console.log(jsonData, "jsonData")
       const validGenders = ["male", "female", "other", "not selected"];
       // Schema Validation
       const schema = Joi.object({
@@ -1989,7 +1987,7 @@ class UserService {
           }),
         "Permanent Address": Joi.string().required(),
         "Hostel Name": Joi.string().required(),
-        "Aadhaar Number": Joi.number()
+        "Aadhaar Number": Joi.number().allow("", null) // allow empty
           .integer()
           .required()
           .custom((value, helpers) => {
@@ -2106,6 +2104,12 @@ class UserService {
             errors.push(`Aadhaar Number: Aadhaar number already exists`);
           }
         }
+      
+        const dob = value["Date of Birth"];
+
+        if (moment(dob).isAfter(moment(), "day")) {
+          errors.push("Invalid DOB: Date cannot be in the future.")
+        }
 
         if (errors.length > 0) {
           errorArray.push({ ...item, errors: errors.join(" | ") });
@@ -2114,8 +2118,7 @@ class UserService {
         }
 
       }
-      console.log(errorArray, "errorArray")
-      console.log(successArray, "successArray")
+    
       // Check university capacity
       const university = await College.findById(universityId);
       if (!university) throw new Error(RECORD_NOT_FOUND("University"));
@@ -2244,7 +2247,6 @@ class UserService {
               }
             }
           ]);
-          console.log(hostel, "hostellllllllllllllllll")
           if (!hostel) {
             errorArray.push({ ...data, errors: "Bed already occupied" });
             successArray.splice(i, 1);
@@ -2288,7 +2290,6 @@ class UserService {
             });
 
             await newUser.save();
-            console.log(newUser, "newUser")
             await Hostel.findOneAndUpdate(
               {
                 _id: new mongoose.Types.ObjectId(hostelId),
@@ -2377,7 +2378,6 @@ class UserService {
 
       return FILE_UPLOADED;
     } catch (error: any) {
-      console.error("Bulk upload failed:", error);
       throw new Error(`${error.message}`);
     }
   };
@@ -2646,7 +2646,6 @@ class UserService {
           log,
         };
       }
-      console.log(templateTypes, "templatesTypes")
       // NOTE: Check playerIds is available
       const playerIds: any = [
         student.oneSignalWebId,

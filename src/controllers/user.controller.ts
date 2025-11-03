@@ -114,48 +114,55 @@ const normalizeFullName = (name: string) => {
 
 //   return `${year}-${month}-${day}`;
 // };
-const excelDateToJSDate = (input: number | string): string => {
+const excelDateToJSDate = (input: number | string): { success: boolean; date?: string; error?: string } => {
   let momentDate: moment.Moment;
 
-  if (typeof input === "number") {
-    // If value looks like a year (1000–9999), reject it
-    if (input >= 1000 && input <= 9999) {
-      throw new Error("Invalid DOB: year only is not allowed. Provide full date.");
+  try {
+    if (typeof input === "number") {
+      if (input >= 1000 && input <= 9999) {
+        return { success: false, error: "Invalid DOB: year only is not allowed." };
+      }
+
+      const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const date = new Date(excelEpoch.getTime() + input * msPerDay);
+      momentDate = moment(date);
+    } else if (typeof input === "string") {
+
+      momentDate = moment(
+        input,
+        [
+          "YYYY-MM-DD",
+          "DD-MM-YYYY",
+          "DD/MM/YYYY",
+          "MM/DD/YYYY",
+          "D-M-YYYY",
+          "D/M/YYYY",
+          // moment.ISO_8601,
+        ],
+        true
+      );
+      console.log(momentDate, "momentDdddddddddddddddddddddddd")
+      if (!momentDate.isValid()) {
+        return { success: false, error: "Invalid DOB format." };
+      }
+    } else {
+      return { success: false, error: "Unsupported DOB format." };
     }
-
-    // Excel serial date
-    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const date = new Date(excelEpoch.getTime() + input * msPerDay);
-    momentDate = moment(date);
-  } 
-  else if (typeof input === "string") {
-    momentDate = moment(
-      input,
-      [
-        "YYYY-MM-DD",
-        "DD-MM-YYYY",
-        "DD/MM/YYYY",
-        "MM/DD/YYYY",
-        "D-M-YYYY",
-        "D/M/YYYY",
-        moment.ISO_8601,
-      ],
-      true
-    );
-  } 
-  else {
-    console.log('invAlidddd')
-    throw new Error("Unsupported input type for DOB.");
+    console.log(momentDate, "momentDate")
+    if (!momentDate.isValid()) {
+      return { success: false, error: "Invalid DOB format." };
+    }
+    // if (momentDate.isAfter(moment(), "day")) {
+    //   return { success: false, error: "Invalid DOB: Date cannot be in the future." };
+    // }
+    return { success: true, date: momentDate.format("YYYY-MM-DD") };
+  } catch {
+    return { success: false, error: "DOB parsing error." };
   }
-
-  if (!momentDate.isValid()) {
-    console.log('invaliddddddddddddddddddddddddddddd')
-    throw new Error("Invalid DOB format.");
-  }
-
-  return momentDate.format("YYYY-MM-DD");
 };
+
+
 
 
 // const excelDateToJSDate = (input: number | string): string => {
@@ -1192,6 +1199,7 @@ class UserController {
       const url = fileUrl && fileUrl.Key ? fileUrl?.Key : null;
       // Perform file processing after sending response
       const jsonData = await excelToJson(file.buffer);
+      console.log(jsonData, "jsonData")
       // Call the function to handle bulk upload of the data
       const data = jsonData.map((item: any) => {
 
@@ -1200,21 +1208,19 @@ class UserController {
           "Full Name of Student": normalizeFullName(item["Full Name of Student"]),
           "Father's Name": normalizeFullName(item["Father's Name"]),
           "Mother's Name": normalizeFullName(item["Mother's Name"]),
-          // "Date of Birth": excelDateToJSDate(item["Date of Birth"]),
-          "Date of Birth": excelDateToJSDate('2002'),
+          "Date of Birth": excelDateToJSDate(item["Date of Birth"])?.success === true ? excelDateToJSDate(item["Date of Birth"])?.date : excelDateToJSDate(item["Date of Birth"])?.error,
+          // "Date of Birth": excelDateToJSDate('2002'),
           "Permanent Address": String(item["Permanent Address"]),
           "Aadhaar Number": Number(item["Aadhaar Number"]),
           "Blood Group": String(item["Blood Group"].trim()),
-          "Mobile Number of Student" : String(item["Mobile Number of Student"]),
+          "Mobile Number of Student": String(item["Mobile Number of Student"]),
           Gender: String(item?.Gender).trim().toLowerCase()
         }
       })
       data.forEach((item: any) => {
-        console.log(item,"item")
-        delete item.Timestamp
-          // item["Mobile Number of Student"] = /^[0-9]+$/.test(String(item["Mobile Number of Student"]).trim())
-          //   ? Number(item["Mobile Number of Student"])
-          //   : NaN;
+        console.log(item, "item")
+        delete item.Timestamp,
+          item["Aadhaar Number"] = item["Aadhaar Number"] ? item["Aadhaar Number"] : ""
       });
       await userBulkUpload(data, staffId, hostelId, universityId, url);
     } catch (error: any) {
