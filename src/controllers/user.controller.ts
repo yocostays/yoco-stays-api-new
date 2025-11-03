@@ -53,12 +53,15 @@ const {
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 const { INVALID_ID, REQUIRED_FIELD } = VALIDATION_MESSAGES;
 
+
 const normalizeFullName = (name: string) => {
   if (typeof name !== "string") return name;
+
   return name
-    .trim()                       // Remove leading & trailing spaces
-    .replace(/\s+/g, " ");
-}
+    .trim()                     // Remove leading & trailing spaces
+    .replace(/[^a-zA-Z\s]/g, "") // Remove special characters & numbers
+    .replace(/\s+/g, " ");      // Replace multiple spaces with one
+};
 
 // const excelDateToJSDate = (input: number) => {
 //   let date;
@@ -111,39 +114,94 @@ const normalizeFullName = (name: string) => {
 
 //   return `${year}-${month}-${day}`;
 // };
-
-
 const excelDateToJSDate = (input: number | string): string => {
   let momentDate: moment.Moment;
 
   if (typeof input === "number") {
-    // Excel serial number to JS Date
+    // If value looks like a year (1000–9999), reject it
+    if (input >= 1000 && input <= 9999) {
+      throw new Error("Invalid DOB: year only is not allowed. Provide full date.");
+    }
+
+    // Excel serial date
     const excelEpoch = new Date(Date.UTC(1899, 11, 30));
     const msPerDay = 24 * 60 * 60 * 1000;
     const date = new Date(excelEpoch.getTime() + input * msPerDay);
     momentDate = moment(date);
-  } else if (typeof input === "string") {
-    // Try parsing known formats explicitly
-    momentDate = moment(input, [
-      "YYYY-MM-DD", // ISO
-      "DD-MM-YYYY", // European
-      "DD/MM/YYYY", // Common in exports
-      "MM/DD/YYYY", // US format, optional if needed
-      "D-M-YYYY",
-      "D/M/YYYY",
-      moment.ISO_8601, // fallback for standard formats
-    ], true); // 'true' enables strict parsing
-  } else {
+  } 
+  else if (typeof input === "string") {
+    momentDate = moment(
+      input,
+      [
+        "YYYY-MM-DD",
+        "DD-MM-YYYY",
+        "DD/MM/YYYY",
+        "MM/DD/YYYY",
+        "D-M-YYYY",
+        "D/M/YYYY",
+        moment.ISO_8601,
+      ],
+      true
+    );
+  } 
+  else {
+    console.log('invAlidddd')
     throw new Error("Unsupported input type for DOB.");
   }
 
   if (!momentDate.isValid()) {
+    console.log('invaliddddddddddddddddddddddddddddd')
     throw new Error("Invalid DOB format.");
   }
 
-  // return momentDate.format("DD/MM/YYYY");/
   return momentDate.format("YYYY-MM-DD");
 };
+
+
+// const excelDateToJSDate = (input: number | string): string => {
+//   let momentDate: moment.Moment;
+
+//   if (typeof input === "number") {
+//     // If the number is less than 10000, assume it's a year only
+//     if (input < 10000) {
+//       // Convert year-only into a date e.g. "2002-01-01"
+//       momentDate = moment(`${input}`, "YYYY", true);
+//       if (!momentDate.isValid()) throw new Error("Invalid year format");
+//     } else {
+//       // Excel serial number → JS Date
+//       const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+//       const msPerDay = 24 * 60 * 60 * 1000;
+//       const date = new Date(excelEpoch.getTime() + input * msPerDay);
+//       momentDate = moment(date);
+//     }
+//   } 
+//   else if (typeof input === "string") {
+//     momentDate = moment(
+//       input,
+//       [
+//         "YYYY-MM-DD",
+//         "DD-MM-YYYY",
+//         "DD/MM/YYYY",
+//         "MM/DD/YYYY",
+//         "D-M-YYYY",
+//         "D/M/YYYY",
+//         moment.ISO_8601,
+//       ],
+//       true
+//     );
+//   } 
+//   else {
+//     throw new Error("Unsupported input type for DOB.");
+//   }
+
+//   if (!momentDate.isValid()){
+//     console.log("error dob")
+//     throw new Error("Invalid DOB format");
+//   } 
+
+//   return momentDate.format("YYYY-MM-DD");
+// };
+
 
 
 class UserController {
@@ -1136,20 +1194,27 @@ class UserController {
       const jsonData = await excelToJson(file.buffer);
       // Call the function to handle bulk upload of the data
       const data = jsonData.map((item: any) => {
+
         return {
           ...item,
           "Full Name of Student": normalizeFullName(item["Full Name of Student"]),
           "Father's Name": normalizeFullName(item["Father's Name"]),
           "Mother's Name": normalizeFullName(item["Mother's Name"]),
-          "Date of Birth": excelDateToJSDate(item["Date of Birth"]),
+          // "Date of Birth": excelDateToJSDate(item["Date of Birth"]),
+          "Date of Birth": excelDateToJSDate('2002'),
           "Permanent Address": String(item["Permanent Address"]),
           "Aadhaar Number": Number(item["Aadhaar Number"]),
           "Blood Group": String(item["Blood Group"].trim()),
+          "Mobile Number of Student" : String(item["Mobile Number of Student"]),
           Gender: String(item?.Gender).trim().toLowerCase()
         }
       })
       data.forEach((item: any) => {
+        console.log(item,"item")
         delete item.Timestamp
+          // item["Mobile Number of Student"] = /^[0-9]+$/.test(String(item["Mobile Number of Student"]).trim())
+          //   ? Number(item["Mobile Number of Student"])
+          //   : NaN;
       });
       await userBulkUpload(data, staffId, hostelId, universityId, url);
     } catch (error: any) {

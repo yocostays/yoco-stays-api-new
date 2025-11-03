@@ -1938,7 +1938,7 @@ class UserService {
     let errorArray: any[] = [];
 
     try {
-
+      console.log(jsonData, "jsonData")
       const validGenders = ["male", "female", "other", "not selected"];
       // Schema Validation
       const schema = Joi.object({
@@ -1949,38 +1949,121 @@ class UserService {
             "any.required": "Date of Birth is required",
             "date.base": "Invalid Date format for Date of Birth",
           }),
-        "Full Name of Student": Joi.string().required(),
-        "Mobile Number of Student": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
-          "string.pattern.base": "Mobile Number must be exactly 10 digits",
-          "any.required": "Mobile Number is required",
-          "number.min": "Mobile Number must be exactly 10 digits",
-          "number.max": "Mobile Number must be exactly 10 digits",
-        }),
-        "Father's Name": Joi.string().required(),
-        "Mother's Name": Joi.string().required(),
+        "Full Name of Student": Joi.string()
+          .max(70)
+          .required()
+          .messages({
+            "string.max": "Full Name must not exceed 70 characters",
+            "any.required": "Full Name is required",
+          }),
+        "Mobile Number of Student": Joi.string()
+          .trim()
+          .custom((value, helpers) => {
+            if (!/^\d+$/.test(value)) {
+              return helpers.error("any.invalid");
+            }
+            if (value.length < 8 || value.length > 15) {
+              return helpers.error("number.length");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "any.invalid": "Mobile Number must contain digits only",
+            "number.length": "Mobile Number must be between 8 to 15 digits",
+            "any.required": "Mobile Number is required",
+          }),
+        "Father's Name": Joi.string()
+          .max(70)
+          .required()
+          .messages({
+            "string.max": "Full Name must not exceed 70 characters",
+            "any.required": "Full Name is required",
+          }),
+        "Mother's Name": Joi.string()
+          .max(70)
+          .required()
+          .messages({
+            "string.max": "Full Name must not exceed 70 characters",
+            "any.required": "Full Name is required",
+          }),
         "Permanent Address": Joi.string().required(),
         "Hostel Name": Joi.string().required(),
-        "Aadhaar Number": Joi.number().integer().min(100000000000).max(999999999999).required().messages({
-          "string.pattern.base": "Aadhaar Number must be exactly 12 digits",
-          "any.required": "Aadhaar Number is required",
-          "number.min": "Aadhaar Number must be exactly 12 digits",
-          "number.max": "Aadhaar Number must be exactly 12 digits",
-        }),
+        "Aadhaar Number": Joi.number()
+          .integer()
+          .required()
+          .custom((value, helpers) => {
+            const str = String(value);
+
+            // Must be only digits
+            if (!/^\d+$/.test(str)) {
+              return helpers.error("any.invalid");
+            }
+
+            // Check length 8 to 18 digits
+            if (str.length === 12) {
+              return helpers.error("number.length");
+            }
+
+            return value;
+          })
+          .messages({
+            "any.invalid": "Aadhaar Number must contain digits only",
+            "number.length": "Aadhaar Number must be exactly 12 digits",
+            // "any.required": "Aadhaar Number is required",
+            "number.base": "Aadhaar Number must be a number",
+          }),
         "Country": Joi.string().required(),
         "State": Joi.string().required(),
         "City": Joi.string().required(),
-        "Mother's Mobile Number": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
-          "string.pattern.base": "Mobile Number must be exactly 10 digits",
-          "any.required": "Mobile Number is required",
-          "number.min": "Mobile Number must be exactly 10 digits",
-          "number.max": "Mobile Number must be exactly 10 digits",
-        }),
-        "Father's Mobile Number": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
-          "string.pattern.base": "Mobile Number must be exactly 10 digits",
-          "any.required": "Mobile Number is required",
-          "number.min": "Mobile Number must be exactly 10 digits",
-          "number.max": "Mobile Number must be exactly 10 digits",
-        }),
+        "Mother's Mobile Number": Joi.number()
+          .integer()
+          .required()
+          .custom((value, helpers) => {
+            const str = String(value);
+
+            // Must be only digits
+            if (!/^\d+$/.test(str)) {
+              return helpers.error("any.invalid");
+            }
+
+            // Check length 8 to 18 digits
+            if (str.length < 8 || str.length > 15) {
+              return helpers.error("number.length");
+            }
+
+            return value;
+          })
+          .messages({
+            "any.invalid": "Mother's Mobile Number must contain digits only",
+            "number.length": "Mother's Mobile Number must be between 8 to 15 digits",
+            "any.required": "Mother's Mobile Number is required",
+            "number.base": "Mother's Mobile Number must be a number",
+          }),
+        "Father's Mobile Number": Joi.number()
+          .integer()
+          .required()
+          .custom((value, helpers) => {
+            const str = String(value);
+
+            // Must be only digits
+            if (!/^\d+$/.test(str)) {
+              return helpers.error("any.invalid");
+            }
+
+            // Check length 8 to 18 digits
+            if (str.length < 8 || str.length > 15) {
+              return helpers.error("number.length");
+            }
+
+            return value;
+          })
+          .messages({
+            "any.invalid": "Father's Mobile Number must contain digits only",
+            "number.length": "Father's Mobile Number must be between 8 to 15 digits",
+            "any.required": "Father's Mobile Number is required",
+            "number.base": "Father's Mobile Number must be a number",
+          }),
         "Room Number": Joi.number().integer().required(),
         "Floor Number": Joi.number().integer().required(),
         "Blood Group": Joi.string().required(),
@@ -1991,7 +2074,10 @@ class UserService {
       // Validate and classify entries
       for (const item of jsonData) {
         let errors: string[] = [];
-        const { error, value } = schema.validate(item, { abortEarly: false });
+        const { error, value } = schema.validate(item, {
+          abortEarly: false,   // collect all errors
+        });
+
         if (error) {
           error.details.forEach((err: any) => {
             const field = err.context.label || err.context.key;
@@ -1999,11 +2085,12 @@ class UserService {
             errors.push(`${field}: ${message}`);
           });
         }
-
+        const phoneStr = value?.["Mobile Number of Student"];
         // Check for duplicate phone
-        if (value?.["Mobile Number of Student"]) {
+        if (phoneStr && /^[0-9]+$/.test(phoneStr)) {
+          const phoneNum = Number(phoneStr);
           const phoneExists = await User.findOne({
-            phone: value["Mobile Number of Student"],
+            phone: phoneNum,
           });
           if (phoneExists) {
             errors.push(`Mobile Number of Student: Phone number already exists`);
@@ -2027,6 +2114,8 @@ class UserService {
         }
 
       }
+      console.log(errorArray, "errorArray")
+      console.log(successArray, "successArray")
       // Check university capacity
       const university = await College.findById(universityId);
       if (!university) throw new Error(RECORD_NOT_FOUND("University"));
@@ -2138,6 +2227,7 @@ class UserService {
                 roomDetails: {
                   floorNumber: 1,
                   roomNumber: 1,
+                  bedType: 1,
                   bedNumbers: {
                     $filter: {
                       input: "$roomDetails.bedNumbers",
@@ -2154,6 +2244,7 @@ class UserService {
               }
             }
           ]);
+          console.log(hostel, "hostellllllllllllllllll")
           if (!hostel) {
             errorArray.push({ ...data, errors: "Bed already occupied" });
             successArray.splice(i, 1);
@@ -2197,7 +2288,7 @@ class UserService {
             });
 
             await newUser.save();
-
+            console.log(newUser, "newUser")
             await Hostel.findOneAndUpdate(
               {
                 _id: new mongoose.Types.ObjectId(hostelId),
@@ -2230,6 +2321,7 @@ class UserService {
                 hostelId: hostel._id,
                 buildingNumber: hostel?.buildingNumber,
                 roomNumber,
+                bedType: hostel.roomDetails?.bedType,
                 bedNumber: hostel.roomDetails?.bedNumbers[0]?.bedNumber,
                 floorNumber: hostel.roomDetails?.floorNumber,
                 securityFee: hostel?.securityFee,
@@ -2285,7 +2377,7 @@ class UserService {
 
       return FILE_UPLOADED;
     } catch (error: any) {
-      console.error("Bulk upload failed:", error.message);
+      console.error("Bulk upload failed:", error);
       throw new Error(`${error.message}`);
     }
   };
@@ -2540,7 +2632,7 @@ class UserService {
       student = await User.findById(studentId).select(
         "oneSignalWebId oneSignalAndoridId oneSignalIosId hostelId"
       );
-     
+
       if (!student) {
         log = {
           templateType: templateTypes,
@@ -2820,3 +2912,7 @@ class UserService {
 }
 
 export default new UserService();
+function typeOf(arg0: number): any {
+  throw new Error("Function not implemented.");
+}
+
