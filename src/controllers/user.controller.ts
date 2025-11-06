@@ -120,7 +120,7 @@ const excelDateToJSDate = (input: number | string): { success: boolean; date?: s
   try {
     if (typeof input === "number") {
       if (input >= 1000 && input <= 9999) {
-        return { success: false, error: "Invalid DOB: year only is not allowed.",date:input };
+        return { success: false, error: "Invalid DOB: year only is not allowed.", date: input };
       }
 
       const excelEpoch = new Date(Date.UTC(1899, 11, 30));
@@ -143,18 +143,18 @@ const excelDateToJSDate = (input: number | string): { success: boolean; date?: s
         true
       );
       if (!momentDate.isValid()) {
-        return { success: false, error: "Invalid DOB format." ,date:input};
+        return { success: false, error: "Invalid DOB format.", date: input };
       }
     } else {
-      return { success: false, error: "Unsupported DOB format." ,date:input};
+      return { success: false, error: "Unsupported DOB format.", date: input };
     }
     if (!momentDate.isValid()) {
-      return { success: false, error: "Invalid DOB format.", date:input};
+      return { success: false, error: "Invalid DOB format.", date: input };
     }
-  
+
     return { success: true, date: momentDate.format("YYYY-MM-DD") };
   } catch {
-    return { success: false, error: "DOB parsing error.",date :input };
+    return { success: false, error: "DOB parsing error.", date: input };
   }
 };
 
@@ -1304,7 +1304,11 @@ class UserController {
         academicDetails,
         documents,
         vechicleDetails,
+        floorNumber,
+        roomNumber,
+        bedNumber
       } = req.body;
+      
 
       // Call the service to update a user
       await updateUserFromWardenPanel(
@@ -1332,7 +1336,10 @@ class UserController {
         documents,
         vechicleDetails,
         staffId,
-        image
+        image,
+        floorNumber,
+        roomNumber,
+        bedNumber
       );
 
       const successResponse: HttpResponse = {

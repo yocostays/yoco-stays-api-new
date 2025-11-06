@@ -1909,7 +1909,7 @@ class UserService {
   //         errorFileUrl = errorFilePath;
   //       }
 
- 
+
   //       //NOTE - update bulk upload
   //       await BulkUpload.findByIdAndUpdate(bulkUpload._id, {
   //         $set: {
@@ -2501,7 +2501,11 @@ class UserService {
       modelName?: string;
     },
     staffId: string,
-    image?: string
+    image?: string,
+    floorNumber?: number,
+    roomNumber?: number,
+    bedNumber?: string,
+    hostelId?: string
   ): Promise<string> => {
     try {
       // Step 1: Validate and fetch existing student
@@ -2561,6 +2565,9 @@ class UserService {
         medicalIssue,
         allergyProblem,
         country,
+        nationality:country?.name,
+        bulkState:state?.name,
+        bulkCity:city?.name,
         state,
         city,
         category,
@@ -2574,8 +2581,46 @@ class UserService {
         updatedAt: getCurrentISTTime(),
         updatedBy: staffId,
       };
-
+   
       await User.findByIdAndUpdate(studentId, { $set: updatedUserData });
+      const hostelAlloc = await StudentHostelAllocation.findOne({studentId})
+      await Hostel.findOneAndUpdate(
+        {
+          _id: new mongoose.Types.ObjectId(hostelId),
+          "roomMapping.floorNumber": Number(hostelAlloc?.floorNumber),
+          "roomMapping.roomNumber": Number(hostelAlloc?.roomNumber),
+          "roomMapping.bedNumbers": {
+            $elemMatch: { bedNumber: String(hostelAlloc?.bedNumber), isVacant: false }
+          }
+        },
+        {
+          $set: {
+            "roomMapping.$[room].bedNumbers.$[bed].isVacant": true
+          },
+          $inc: {
+            "roomMapping.$[room].vacant": 1,     // increase vacant count
+            "roomMapping.$[room].occupied": -1   // decrease occupied count
+          }
+        },
+        {
+          arrayFilters: [
+            { "room.floorNumber":Number(hostelAlloc?.floorNumber), "room.roomNumber": Number(hostelAlloc?.roomNumber) },
+            { "bed.bedNumber": String(hostelAlloc?.bedNumber) }
+          ],
+          new: true
+        }
+      );
+      await StudentHostelAllocation.findOneAndUpdate(
+        { studentId: new mongoose.Types.ObjectId(studentId) },
+        {
+          $set: {
+            floorNumber: Number(floorNumber),
+            roomNumber: Number(roomNumber),
+            bedNumber: String(bedNumber)
+          }
+        },
+        { new: true } // returns updated doc
+      );
 
       return UPDATE_DATA;
     } catch (error: any) {
