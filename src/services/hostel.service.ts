@@ -812,7 +812,7 @@ class HostelService {
                     as: "room",
                     cond: {
                       $and: [
-                        { $eq: ["$$room.bedType", bedType] },
+                        { $eq: ["$$room.floorNumber", bedType] },
                         { $eq: ["$$room.roomNumber", roomNumber] },
                       ],
                     },
@@ -1281,6 +1281,69 @@ class HostelService {
       throw new Error(error.message);
     }
   };
+
+
+  fetchFloorRooms = async (
+    hostelId: string,
+  ): Promise<{ floorRooms: any[] }> => {
+    try {
+     
+      const result = await Hostel.aggregate([
+        { $match: { _id: new mongoose.Types.ObjectId(hostelId) } },
+
+        // Unwind roomMapping
+        { $unwind: "$roomMapping" },
+
+        // Only rooms with vacant beds
+        { $match: { "roomMapping.vacant": { $gt: 0 } } },
+
+        // Filter only vacant bedNumbers
+        {
+          $addFields: {
+            "roomMapping.bedNumbers": {
+              $filter: {
+                input: "$roomMapping.bedNumbers",
+                as: "bed",
+                cond: { $eq: ["$$bed.isVacant", true] }
+              }
+            }
+          }
+        },
+
+        // Group by floorNumber
+        {
+          $group: {
+            _id: "$roomMapping.floorNumber",
+            rooms: {
+              $push: {
+                roomNumber: "$roomMapping.roomNumber",
+                bedType: "$roomMapping.bedType",
+                bedNumbers: "$roomMapping.bedNumbers"
+              }
+            },
+            buildingNumber: { $first: "$buildingNumber" }
+          }
+        },
+
+        // Rename _id → floorNumber
+        {
+          $project: {
+            _id: 0,
+            floorNumber: "$_id",
+            rooms: 1,
+            buildingNumber:1
+          }
+        },
+
+        // Optional: sort by floorNumber
+        { $sort: { floorNumber: 1 } }
+      ]);
+      return { floorRooms: result };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  };
+
 }
 
 export default new HostelService();

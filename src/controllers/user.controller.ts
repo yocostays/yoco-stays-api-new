@@ -114,13 +114,13 @@ const normalizeFullName = (name: string) => {
 
 //   return `${year}-${month}-${day}`;
 // };
-const excelDateToJSDate = (input: number | string): { success: boolean; date?: string; error?: string } => {
+const excelDateToJSDate = (input: number | string): { success: boolean; date?: string | number; error?: string } => {
   let momentDate: moment.Moment;
 
   try {
     if (typeof input === "number") {
       if (input >= 1000 && input <= 9999) {
-        return { success: false, error: "Invalid DOB: year only is not allowed." };
+        return { success: false, error: "Invalid DOB: year only is not allowed.",date:input };
       }
 
       const excelEpoch = new Date(Date.UTC(1899, 11, 30));
@@ -143,20 +143,18 @@ const excelDateToJSDate = (input: number | string): { success: boolean; date?: s
         true
       );
       if (!momentDate.isValid()) {
-        return { success: false, error: "Invalid DOB format." };
+        return { success: false, error: "Invalid DOB format." ,date:input};
       }
     } else {
-      return { success: false, error: "Unsupported DOB format." };
+      return { success: false, error: "Unsupported DOB format." ,date:input};
     }
     if (!momentDate.isValid()) {
-      return { success: false, error: "Invalid DOB format." };
+      return { success: false, error: "Invalid DOB format.", date:input};
     }
-    // if (momentDate.isAfter(moment(), "day")) {
-    //   return { success: false, error: "Invalid DOB: Date cannot be in the future." };
-    // }
+  
     return { success: true, date: momentDate.format("YYYY-MM-DD") };
   } catch {
-    return { success: false, error: "DOB parsing error." };
+    return { success: false, error: "DOB parsing error.",date :input };
   }
 };
 
@@ -1204,11 +1202,12 @@ class UserController {
           "Full Name of Student": normalizeFullName(item["Full Name of Student"]),
           "Father's Name": normalizeFullName(item["Father's Name"]),
           "Mother's Name": normalizeFullName(item["Mother's Name"]),
-          "Date of Birth": excelDateToJSDate(item["Date of Birth"])?.success === true ? excelDateToJSDate(item["Date of Birth"])?.date : excelDateToJSDate(item["Date of Birth"])?.error,
-          // "Date of Birth": excelDateToJSDate('2002'),
+          "Date of Birth": excelDateToJSDate(item["Date of Birth"])?.success === true ? excelDateToJSDate(item["Date of Birth"])?.date : excelDateToJSDate(item["Date of Birth"]),
           "Permanent Address": String(item["Permanent Address"]),
           "Aadhaar Number": Number(item["Aadhaar Number"]),
-          "Blood Group": String(item["Blood Group"].trim()),
+          "Blood Group": String(item["Blood Group"])
+            .replace(/\s+/g, "") // remove all spaces inside string
+            .toUpperCase(), // optional normalize case => B+
           "Mobile Number of Student": String(item["Mobile Number of Student"]),
           Gender: String(item?.Gender).trim().toLowerCase()
         }

@@ -1909,8 +1909,7 @@ class UserService {
   //         errorFileUrl = errorFilePath;
   //       }
 
-  //       console.log(successArray,errorArray,"error")
-  //       console.log(successFileUrl,errorFileUrl,"file")
+ 
   //       //NOTE - update bulk upload
   //       await BulkUpload.findByIdAndUpdate(bulkUpload._id, {
   //         $set: {
@@ -1935,12 +1934,39 @@ class UserService {
   ) => {
     let successArray: any[] = [];
     let errorArray: any[] = [];
-
+    const allowedDomains = [
+      "gmail.com",
+      "yahoo.com",
+      "outlook.com",
+      "hotmail.com",
+      "live.com",
+      "icloud.com",
+      "aol.com",
+      "zoho.com"
+    ];
     try {
-      const validGenders = ["male", "female", "other", "not selected"];
+      // const validGenders = ["male", "female", "other", "not selected"];
       // Schema Validation
       const schema = Joi.object({
-        Gender: Joi.string().valid(...validGenders).default("not selected"),
+        Gender: Joi.string().required().messages({
+          "any.required": "Gender is required",
+        }),
+        email: Joi.string()
+          .email({ tlds: { allow: false } })
+          .custom((value, helpers) => {
+            const domain = value.split("@")[1];
+
+            if (!allowedDomains.includes(domain)) {
+              return helpers.error("any.invalid");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "string.email": "Invalid email format",
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
+            "any.required": "Email is required"
+          }),
         "Date of Birth": Joi.date()
           .required()
           .messages({
@@ -2068,7 +2094,6 @@ class UserService {
         "Bed Number": Joi.string().required()
       });
 
-
       // Validate and classify entries
       for (const item of jsonData) {
         let errors: string[] = [];
@@ -2083,6 +2108,9 @@ class UserService {
             errors.push(`${field}: ${message}`);
           });
         }
+        if ((value?.["Date of Birth"])?.success === false) {
+          item["Date of Birth"] = value["Date of Birth"]?.date
+        }
         const phoneStr = value?.["Mobile Number of Student"];
         // Check for duplicate phone
         if (phoneStr && /^[0-9]+$/.test(phoneStr)) {
@@ -2096,6 +2124,16 @@ class UserService {
         }
 
         // Check for duplicate Aadhaar
+        if (value?.email) {
+          const emailExist = await User.findOne({
+            email: value?.email
+          });
+          if (emailExist) {
+            errors.push(`Email: Email already exists`);
+          }
+        }
+
+        // Check for duplicate Aadhaar
         if (value?.["Aadhaar Number"]) {
           const aadhaarExists = await User.findOne({
             "documents.aadhaarNumber": String(value["Aadhaar Number"]),
@@ -2104,7 +2142,7 @@ class UserService {
             errors.push(`Aadhaar Number: Aadhaar number already exists`);
           }
         }
-      
+
         const dob = value["Date of Birth"];
 
         if (moment(dob).isAfter(moment(), "day")) {
@@ -2118,7 +2156,7 @@ class UserService {
         }
 
       }
-    
+
       // Check university capacity
       const university = await College.findById(universityId);
       if (!university) throw new Error(RECORD_NOT_FOUND("University"));
@@ -2166,12 +2204,12 @@ class UserService {
             "Father's Mobile Number": fatherNumber,
             "Mother's Name": motherName,
             "Mother's Mobile Number": motherNumber,
-            // "Parent's Mobile Number": parentsContactNo,
             "Aadhaar Number": aadharNumber,
             "Room Number": roomNumber,
             "Floor Number": floorNumber,
             "Bed Number": bedNumber,
             "Blood Group": bloodGroup,
+            email: email
           } = data;
 
 
@@ -2263,6 +2301,7 @@ class UserService {
               uniqueId,
               permanentAddress,
               bloodGroup,
+              email,
               documents: {
                 aadhaarNumber: aadharNumber,
               },

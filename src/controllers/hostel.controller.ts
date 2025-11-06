@@ -36,6 +36,7 @@ const {
   fetchPaymentOptionsByHostel,
   roomsByMultipleFloorNumbers,
   uploadRoomMappingInBulk,
+  fetchFloorRooms,
 } = HostelService;
 
 //NOTE - all messages
@@ -957,6 +958,28 @@ class HostelController {
         createdById,
         url as string
       );
+    } catch (error: any) {
+      const errorMessage = error.message ?? SERVER_ERROR;
+      const errorResponse: HttpResponse = {
+        statusCode: 400,
+        message: errorMessage,
+      };
+
+      return res.status(400).json(errorResponse);
+    }
+  }
+
+   async fetchFloorsRooms(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse> | void> {
+    try {
+
+      const { hostelId } = req.body?._valid;
+     
+      console.log(hostelId,"hostelId")
+     const {floorRooms} = await fetchFloorRooms(hostelId)
+      res.json({floorRooms})
     } catch (error: any) {
       const errorMessage = error.message ?? SERVER_ERROR;
       const errorResponse: HttpResponse = {
