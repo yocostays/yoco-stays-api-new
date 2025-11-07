@@ -2565,9 +2565,9 @@ class UserService {
         medicalIssue,
         allergyProblem,
         country,
-        nationality:country?.name,
-        bulkState:state?.name,
-        bulkCity:city?.name,
+        nationality: country?.name,
+        bulkState: state?.name,
+        bulkCity: city?.name,
         state,
         city,
         category,
@@ -2581,9 +2581,19 @@ class UserService {
         updatedAt: getCurrentISTTime(),
         updatedBy: staffId,
       };
-   
-      await User.findByIdAndUpdate(studentId, { $set: updatedUserData });
-      const hostelAlloc = await StudentHostelAllocation.findOne({studentId})
+
+      // await User.findByIdAndUpdate(studentId, { $set: updatedUserData });
+      await User.findByIdAndUpdate(
+        studentId,
+        {
+          $set: {
+            ...updatedUserData,
+            vechicleDetails: vechicleDetails || [],
+          },
+        },
+        { new: true }
+      );
+      const hostelAlloc = await StudentHostelAllocation.findOne({ studentId })
       await Hostel.findOneAndUpdate(
         {
           _id: new mongoose.Types.ObjectId(hostelId),
@@ -2604,7 +2614,7 @@ class UserService {
         },
         {
           arrayFilters: [
-            { "room.floorNumber":Number(hostelAlloc?.floorNumber), "room.roomNumber": Number(hostelAlloc?.roomNumber) },
+            { "room.floorNumber": Number(hostelAlloc?.floorNumber), "room.roomNumber": Number(hostelAlloc?.roomNumber) },
             { "bed.bedNumber": String(hostelAlloc?.bedNumber) }
           ],
           new: true
