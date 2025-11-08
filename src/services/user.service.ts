@@ -2465,7 +2465,7 @@ class UserService {
     category: CategoryTypes,
     cast: string,
     permanentAddress: string,
-    currentAddress: string,
+    // currentAddress: string,
     familiyDetails: {
       fatherName: string;
       fatherNumber: number;
@@ -2514,6 +2514,7 @@ class UserService {
 
       // Step 2: Validate university
       const university = await College.findById(academicDetails?.universityId);
+
       if (!university) throw new Error(RECORD_NOT_FOUND("University"));
 
       // Step 3: Validate staff details
@@ -2573,7 +2574,7 @@ class UserService {
         category,
         cast,
         permanentAddress,
-        currentAddress,
+        // currentAddress,
         familiyDetails,
         academicDetails,
         documents: updatedDocuments,
@@ -2584,7 +2585,7 @@ class UserService {
 
       // await User.findByIdAndUpdate(studentId, { $set: updatedUserData });
       await User.findByIdAndUpdate(
-        studentId,
+        { _id: studentId },
         {
           $set: {
             ...updatedUserData,
@@ -2594,43 +2595,63 @@ class UserService {
         { new: true }
       );
       const hostelAlloc = await StudentHostelAllocation.findOne({ studentId })
-      await Hostel.findOneAndUpdate(
-        {
-          _id: new mongoose.Types.ObjectId(hostelId),
-          "roomMapping.floorNumber": Number(hostelAlloc?.floorNumber),
-          "roomMapping.roomNumber": Number(hostelAlloc?.roomNumber),
-          "roomMapping.bedNumbers": {
-            $elemMatch: { bedNumber: String(hostelAlloc?.bedNumber), isVacant: false }
-          }
-        },
-        {
-          $set: {
-            "roomMapping.$[room].bedNumbers.$[bed].isVacant": true
+      if (hostelAlloc) {
+
+        await Hostel.findOneAndUpdate(
+          {
+            _id: hostelAlloc?.hostelId,
           },
-          $inc: {
-            "roomMapping.$[room].vacant": 1,     // increase vacant count
-            "roomMapping.$[room].occupied": -1   // decrease occupied count
+          {
+            $set: {
+              "roomMapping.$[room].bedNumbers.$[bed].isVacant": true,
+            },
+            $inc: {
+              "roomMapping.$[room].vacant": 1,
+              "roomMapping.$[room].occupied": -1,
+            },
+          },
+          {
+            arrayFilters: [
+              { "room.floorNumber": Number(hostelAlloc?.floorNumber), "room.roomNumber": Number(hostelAlloc?.roomNumber) },
+              { "bed.bedNumber": String(hostelAlloc?.bedNumber) },
+            ],
+            new: true,
           }
-        },
-        {
-          arrayFilters: [
-            { "room.floorNumber": Number(hostelAlloc?.floorNumber), "room.roomNumber": Number(hostelAlloc?.roomNumber) },
-            { "bed.bedNumber": String(hostelAlloc?.bedNumber) }
-          ],
-          new: true
-        }
-      );
-      await StudentHostelAllocation.findOneAndUpdate(
-        { studentId: new mongoose.Types.ObjectId(studentId) },
-        {
-          $set: {
-            floorNumber: Number(floorNumber),
-            roomNumber: Number(roomNumber),
-            bedNumber: String(bedNumber)
+        );
+
+        await StudentHostelAllocation.findOneAndUpdate(
+          { studentId: new mongoose.Types.ObjectId(studentId) },
+          {
+            $set: {
+              floorNumber: Number(floorNumber),
+              roomNumber: Number(roomNumber),
+              bedNumber: String(bedNumber),
+            }
+          },
+          { new: true } // returns updated doc
+        );
+         await Hostel.findOneAndUpdate(
+          {
+            _id: hostelAlloc?.hostelId,
+          },
+          {
+            $set: {
+              "roomMapping.$[room].bedNumbers.$[bed].isVacant": false,
+            },
+            $inc: {
+              "roomMapping.$[room].vacant": -1,
+              "roomMapping.$[room].occupied": 1,
+            },
+          },
+          {
+            arrayFilters: [
+              { "room.floorNumber": Number(floorNumber), "room.roomNumber": Number(roomNumber) },
+              { "bed.bedNumber": String(bedNumber) },
+            ],
+            new: true,
           }
-        },
-        { new: true } // returns updated doc
-      );
+        );
+      }
 
       return UPDATE_DATA;
     } catch (error: any) {

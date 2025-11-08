@@ -1282,33 +1282,34 @@ class UserController {
       if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
 
       const {
-        name,//
+        name,
         image,
-        phone,//
-        email,//
-        dob,//
-        enrollmentNumber,//
-        bloodGroup,//
-        divyang,//
-        gender,//
-        identificationMark,//
-        medicalIssue,//
-        allergyProblem,//
-        country,//
-        state,//
-        city,//
-        category,//
-        cast,//
-        permanentAddress,//
+        phone,
+        email,
+        dob,
+        enrollmentNumber,
+        bloodGroup,
+        divyang,
+        gender,
+        identificationMark,
+        medicalIssue,
+        allergyProblem,
+        country,
+        state,
+        city,
+        category,
+        cast,
+        permanentAddress,
         // currentAddress,
-        aadharNumber,//
-        familiyDetails,//
-        academicDetails,//
-        documents,//
-        vechicleDetails,//
-        floorNumber,//
-        roomNumber,//
-        bedNumber
+        aadharNumber,
+        familiyDetails,
+        academicDetails,
+        documents,
+        vechicleDetails,
+        floorNumber,
+        roomNumber,
+        bedNumber,
+        hostelId
       } = req.body;
 
       const allowedDomains = [
@@ -1324,7 +1325,7 @@ class UserController {
       let data = {
         ...req?.body,
       }
-        delete data._valid
+      delete data._valid
 
       const vechicleDetailsSchema = Joi.object({
         vechicleType: Joi.string()
@@ -1463,11 +1464,11 @@ class UserController {
       };
       const schema = Joi.object({
         image: Joi.any().allow("", null),
-        hostelId:Joi.string().required().allow('',null),
+        hostelId: Joi.string().required().allow('', null),
         name: Joi.string().required().messages({
           "any.required": "Student Name is required",
         }),
-        buildingNumber:Joi.string().required().allow('',null),
+        buildingNumber: Joi.string().required().allow('', null),
         gender: Joi.string().required(),
         divyang: Joi.boolean().allow(null),
         enrollmentNumber: Joi.string().allow('', null),
@@ -1613,10 +1614,14 @@ class UserController {
       const { error } = schema.validate(data, {
         abortEarly: false,   // collect all errors
       });
-      if(error){
-        return res.status(200).json(error?.details);
+      if (error) {
+        //   const errorResponse: HttpResponse = {
+        //   statusCode: 400,
+        //   message: error?.details,
+        // };
+        return res.status(400).json(error?.details);
+        // return res.status(400).json(error?.details);
       }
-      
 
       // Call the service to update a user
       await updateUserFromWardenPanel(
@@ -1648,14 +1653,14 @@ class UserController {
         floorNumber,
         roomNumber,
         bedNumber,
-        aadharNumber
+        aadharNumber,
       );
 
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: UPDATE_DATA,
       };
-       return res.status(200).json(successResponse);
+      return res.status(200).json(successResponse);
     } catch (error: any) {
       const errorMessage = error.message ?? SERVER_ERROR;
       const errorResponse: HttpResponse = {

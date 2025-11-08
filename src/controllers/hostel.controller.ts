@@ -977,7 +977,6 @@ class HostelController {
 
       const { hostelId } = req.body?._valid;
      
-      console.log(hostelId,"hostelId")
      const {floorRooms} = await fetchFloorRooms(hostelId)
       res.json({floorRooms})
     } catch (error: any) {
