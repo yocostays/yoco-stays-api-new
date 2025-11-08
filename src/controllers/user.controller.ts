@@ -40,6 +40,7 @@ const {
   updateUserFromWardenPanel,
   usersBasedOnHostelAndAcademic,
   updateUserStatus,
+  deleteStudent
 } = UserService;
 
 const {
@@ -1385,7 +1386,6 @@ class UserController {
       const academicDetailsSchema = {
         universityId: Joi.string()
           .pattern(/^[0-9a-fA-F]{24}$/)
-          .required()
           .messages({
             "string.pattern.base": "University ID must be a valid ObjectId",
             "any.required": "University ID is required",
@@ -1393,14 +1393,12 @@ class UserController {
 
         courseId: Joi.string()
           .pattern(/^[0-9a-fA-F]{24}$/)
-          .required()
           .messages({
             "string.pattern.base": "Course ID must be a valid ObjectId",
             "any.required": "Course ID is required",
           }).allow('', null),
 
         academicYear: Joi.string()
-          .required()
           .messages({
             "any.required": "Academic Year is required",
           }).allow('', null),
@@ -1606,21 +1604,24 @@ class UserController {
             "array.base": "Vehicle details must be an array",
           }),
         documents: Joi.object(documentsSchema).required(),
-        academicDetails: Joi.object(academicDetailsSchema).required(),
+        academicDetails: Joi.object(academicDetailsSchema).optional(),
         familiyDetails: Joi.object(familyDetailsSchema).required()
       });
-
 
       const { error } = schema.validate(data, {
         abortEarly: false,   // collect all errors
       });
+      console.log(error, "erroooooooooooor")
+
       if (error) {
         //   const errorResponse: HttpResponse = {
         //   statusCode: 400,
         //   message: error?.details,
         // };
-        return res.status(400).json(error?.details);
-        // return res.status(400).json(error?.details);
+        return res.status(400).json({
+          statusCode: 400,
+          message: error?.details.map((item: any) => item?.message)
+        });
       }
 
       // Call the service to update a user
@@ -1743,6 +1744,34 @@ class UserController {
       return res.status(400).json(errorResponse);
     }
   }
+
+  //SECTION: Controller Method to delete user status.
+  async deleteUsers(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const { id } = req?.params
+      if (!mongoose.isValidObjectId(id)) {
+        throw new Error(INVALID_ID);
+      }
+      await deleteStudent(id)
+      const successResponse: HttpResponse = {
+        statusCode: 200,
+        message: DELETE_DATA,
+      };
+      return res.status(200).json(successResponse);
+    } catch (error: any) {
+      const errorMessage = error.message ?? SERVER_ERROR;
+      const errorResponse: HttpResponse = {
+        statusCode: 400,
+        message: errorMessage,
+      };
+      return res.status(400).json(errorResponse);
+    }
+  }
 }
+
+
 
 export default new UserController();

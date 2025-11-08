@@ -2513,9 +2513,12 @@ class UserService {
       if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
 
       // Step 2: Validate university
-      const university = await College.findById(academicDetails?.universityId);
+      if (academicDetails.universityId) {
+        const university = await College.findById(academicDetails?.universityId);
 
-      if (!university) throw new Error(RECORD_NOT_FOUND("University"));
+        if (!university) throw new Error(RECORD_NOT_FOUND("University"));
+      }
+
 
       // Step 3: Validate staff details
       await this.validateUser({ email, phone, enrollmentNumber, studentId });
@@ -2630,7 +2633,7 @@ class UserService {
           },
           { new: true } // returns updated doc
         );
-         await Hostel.findOneAndUpdate(
+        await Hostel.findOneAndUpdate(
           {
             _id: hostelAlloc?.hostelId,
           },
@@ -3021,6 +3024,51 @@ class UserService {
       return newUniqueId;
     } catch (error) {
       throw new Error(UNIQUE_GENERATE_FAILED);
+    }
+  };
+
+  deleteStudent = async (
+    id: string | mongoose.Types.ObjectId
+  ): Promise<string> => {
+    try {
+      const hostel = await StudentHostelAllocation.findOne({ studentId: id })
+      await Hostel.findOneAndUpdate(
+        {
+          _id: new mongoose.Types.ObjectId(hostel?.hostelId),
+          "roomMapping.floorNumber": hostel?.floorNumber,
+          "roomMapping.roomNumber": hostel?.roomNumber,
+          "roomMapping.bedNumbers": {
+            $elemMatch: { bedNumber: String(hostel?.bedNumber), isVacant: false }
+          }
+        },
+        {
+          $set: {
+            "roomMapping.$[room].bedNumbers.$[bed].isVacant": true
+          },
+          $inc: {
+            "roomMapping.$[room].vacant": 1,
+            "roomMapping.$[room].occupied": -1
+          }
+        },
+        {
+          arrayFilters: [
+            { "room.floorNumber": hostel?.floorNumber, "room.roomNumber": hostel?.roomNumber },
+            { "bed.bedNumber": String(hostel?.bedNumber) }
+          ],
+          new: true
+        }
+      )
+
+      const userExist = await User.findOneAndDelete({ _id: id });
+      if (userExist) {
+        await StudentHostelAllocation.findOneAndDelete({ studentId: id })
+
+        return DELETE_DATA;
+      } else {
+        throw new Error(RECORD_NOT_FOUND("User"));
+      }
+    } catch (error) {
+      throw new Error(RECORD_NOT_FOUND("User"));
     }
   };
 }

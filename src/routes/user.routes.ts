@@ -23,6 +23,7 @@ const {
   updateUserFromWardenPanel,
   fetchUsersBasedOnHostelAndAcademic,
   updateUserStatus,
+  deleteUsers,
 } = UserController;
 
 const userRouter = Router();
@@ -80,5 +81,5 @@ userRouter.post(
   fetchUsersBasedOnHostelAndAcademic
 ); //TODO - use in warden panel for fetch users
 userRouter.post("/update-status", validateToken, updateUserStatus);
-
+userRouter.delete("/:id",validateToken,deleteUsers)
 export default userRouter;
