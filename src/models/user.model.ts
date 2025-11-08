@@ -326,9 +326,9 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     },
     email: {
       type: String,
-      required: false,
+      required: true,
       trim: true,
-      unique: false,
+      unique: true,
       match: [/^\S+@\S+\.\S+$/, INVALID_EMAIL],
     },
     dob: {

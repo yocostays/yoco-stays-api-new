@@ -40,6 +40,7 @@ const {
   updateUserFromWardenPanel,
   usersBasedOnHostelAndAcademic,
   updateUserStatus,
+  deleteStudent
 } = UserService;
 
 const {
@@ -53,12 +54,15 @@ const {
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 const { INVALID_ID, REQUIRED_FIELD } = VALIDATION_MESSAGES;
 
+
 const normalizeFullName = (name: string) => {
   if (typeof name !== "string") return name;
+
   return name
-    .trim()                       // Remove leading & trailing spaces
-    .replace(/\s+/g, " ");
-}
+    .trim()                     // Remove leading & trailing spaces
+    .replace(/[^a-zA-Z\s]/g, "") // Remove special characters & numbers
+    .replace(/\s+/g, " ");      // Replace multiple spaces with one
+};
 
 // const excelDateToJSDate = (input: number) => {
 //   let date;
@@ -111,39 +115,97 @@ const normalizeFullName = (name: string) => {
 
 //   return `${year}-${month}-${day}`;
 // };
-
-
-const excelDateToJSDate = (input: number | string): string => {
+const excelDateToJSDate = (input: number | string): { success: boolean; date?: string | number; error?: string } => {
   let momentDate: moment.Moment;
 
-  if (typeof input === "number") {
-    // Excel serial number to JS Date
-    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const date = new Date(excelEpoch.getTime() + input * msPerDay);
-    momentDate = moment(date);
-  } else if (typeof input === "string") {
-    // Try parsing known formats explicitly
-    momentDate = moment(input, [
-      "YYYY-MM-DD", // ISO
-      "DD-MM-YYYY", // European
-      "DD/MM/YYYY", // Common in exports
-      "MM/DD/YYYY", // US format, optional if needed
-      "D-M-YYYY",
-      "D/M/YYYY",
-      moment.ISO_8601, // fallback for standard formats
-    ], true); // 'true' enables strict parsing
-  } else {
-    throw new Error("Unsupported input type for DOB.");
-  }
+  try {
+    if (typeof input === "number") {
+      if (input >= 1000 && input <= 9999) {
+        return { success: false, error: "Invalid DOB: year only is not allowed.", date: input };
+      }
 
-  if (!momentDate.isValid()) {
-    throw new Error("Invalid DOB format.");
-  }
+      const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const date = new Date(excelEpoch.getTime() + input * msPerDay);
+      momentDate = moment(date);
+    } else if (typeof input === "string") {
 
-  // return momentDate.format("DD/MM/YYYY");/
-  return momentDate.format("YYYY-MM-DD");
+      momentDate = moment(
+        input,
+        [
+          "YYYY-MM-DD",
+          "DD-MM-YYYY",
+          "DD/MM/YYYY",
+          "MM/DD/YYYY",
+          "D-M-YYYY",
+          "D/M/YYYY",
+          // moment.ISO_8601,
+        ],
+        true
+      );
+      if (!momentDate.isValid()) {
+        return { success: false, error: "Invalid DOB format.", date: input };
+      }
+    } else {
+      return { success: false, error: "Unsupported DOB format.", date: input };
+    }
+    if (!momentDate.isValid()) {
+      return { success: false, error: "Invalid DOB format.", date: input };
+    }
+
+    return { success: true, date: momentDate.format("YYYY-MM-DD") };
+  } catch {
+    return { success: false, error: "DOB parsing error.", date: input };
+  }
 };
+
+
+
+
+// const excelDateToJSDate = (input: number | string): string => {
+//   let momentDate: moment.Moment;
+
+//   if (typeof input === "number") {
+//     // If the number is less than 10000, assume it's a year only
+//     if (input < 10000) {
+//       // Convert year-only into a date e.g. "2002-01-01"
+//       momentDate = moment(`${input}`, "YYYY", true);
+//       if (!momentDate.isValid()) throw new Error("Invalid year format");
+//     } else {
+//       // Excel serial number → JS Date
+//       const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+//       const msPerDay = 24 * 60 * 60 * 1000;
+//       const date = new Date(excelEpoch.getTime() + input * msPerDay);
+//       momentDate = moment(date);
+//     }
+//   } 
+//   else if (typeof input === "string") {
+//     momentDate = moment(
+//       input,
+//       [
+//         "YYYY-MM-DD",
+//         "DD-MM-YYYY",
+//         "DD/MM/YYYY",
+//         "MM/DD/YYYY",
+//         "D-M-YYYY",
+//         "D/M/YYYY",
+//         moment.ISO_8601,
+//       ],
+//       true
+//     );
+//   } 
+//   else {
+//     throw new Error("Unsupported input type for DOB.");
+//   }
+
+//   if (!momentDate.isValid()){
+//     console.log("error dob")
+//     throw new Error("Invalid DOB format");
+//   } 
+
+//   return momentDate.format("YYYY-MM-DD");
+// };
+
 
 
 class UserController {
@@ -178,6 +240,7 @@ class UserController {
         oneSignalAndoridId,
         oneSignalIosId,
       } = req.body;
+
 
       if (
         !name ||
@@ -790,7 +853,6 @@ class UserController {
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
-    console.log(req.body, "req.body")
 
     const familyDetailsSchema = Joi.object({
       fatherName: Joi.string().required().messages({
@@ -1136,20 +1198,25 @@ class UserController {
       const jsonData = await excelToJson(file.buffer);
       // Call the function to handle bulk upload of the data
       const data = jsonData.map((item: any) => {
-        
+
         return {
           ...item,
           "Full Name of Student": normalizeFullName(item["Full Name of Student"]),
           "Father's Name": normalizeFullName(item["Father's Name"]),
           "Mother's Name": normalizeFullName(item["Mother's Name"]),
-          "Date of Birth": excelDateToJSDate(item["Date of Birth"]),
+          "Date of Birth": excelDateToJSDate(item["Date of Birth"])?.success === true ? excelDateToJSDate(item["Date of Birth"])?.date : excelDateToJSDate(item["Date of Birth"]),
           "Permanent Address": String(item["Permanent Address"]),
-          gender: String(item?.Gender).trim().toLowerCase()
+          "Aadhaar Number": Number(item["Aadhaar Number"]),
+          "Blood Group": String(item["Blood Group"])
+            .replace(/\s+/g, "") // remove all spaces inside string
+            .toUpperCase(), // optional normalize case => B+
+          "Mobile Number of Student": String(item["Mobile Number of Student"]),
+          Gender: String(item?.Gender).trim().toLowerCase()
         }
       })
       data.forEach((item: any) => {
-        delete item.Gender; 
-        delete item.Timestamp
+        delete item.Timestamp,
+          item["Aadhaar Number"] = item["Aadhaar Number"] ? item["Aadhaar Number"] : ""
       });
       await userBulkUpload(data, staffId, hostelId, universityId, url);
     } catch (error: any) {
@@ -1234,12 +1301,328 @@ class UserController {
         category,
         cast,
         permanentAddress,
-        currentAddress,
+        // currentAddress,
+        aadharNumber,
         familiyDetails,
         academicDetails,
         documents,
         vechicleDetails,
+        floorNumber,
+        roomNumber,
+        bedNumber,
+        hostelId
       } = req.body;
+
+      const allowedDomains = [
+        "gmail.com",
+        "yahoo.com",
+        "outlook.com",
+        "hotmail.com",
+        "live.com",
+        "icloud.com",
+        "aol.com",
+        "zoho.com"
+      ];
+      let data = {
+        ...req?.body,
+      }
+      delete data._valid
+
+      const vechicleDetailsSchema = Joi.object({
+        vechicleType: Joi.string()
+          .valid("bicycle", "bike", "car")
+          .required()
+          .messages({
+            "any.only": "Vehicle type must be one of 'bicycle', 'bike', or 'car'",
+            "any.required": "Vehicle type is required",
+          }),
+
+        engineType: Joi.string()
+          .required()
+          .messages({
+            "string.base": "Engine type must be a string",
+            "any.required": "Engine type is required",
+          }),
+
+        vechicleNumber: Joi.string()
+          .allow("", null)
+          .messages({
+            "string.base": "Vehicle number must be a string",
+          }),
+        modelName: Joi.string()
+          .required()
+          .messages({
+            "string.base": "Model name must be a string",
+            "any.required": "Model name is required",
+          }),
+      });
+      const documentsSchema = {
+        aadharNumber: Joi.string()
+          .allow("", null)
+          .when(Joi.string().min(1), {
+            then: Joi.string()
+              .pattern(/^\d{12}$/)
+              .messages({
+                "string.pattern.base": "Aadhaar Number must be exactly 12 digits",
+              }),
+          }),
+        aadhaarCard: Joi.string().uri().optional().messages({
+          "string.uri": "Aadhaar Card must be a valid URL",
+        }).allow('', null),
+        voterCard: Joi.string().uri().optional().messages({
+          "string.uri": "Voter Card must be a valid URL",
+        }).allow('', null),
+        passport: Joi.string().uri().optional().messages({
+          "string.uri": "Passport must be a valid URL",
+        }).allow('', null),
+        drivingLicense: Joi.string().uri().optional().messages({
+          "string.uri": "Driving License must be a valid URL",
+        }).allow('', null),
+        panCard: Joi.string().uri().optional().messages({
+          "string.uri": "PAN Card must be a valid URL",
+        }).allow('', null),
+      };
+
+      const academicDetailsSchema = {
+        universityId: Joi.string()
+          .pattern(/^[0-9a-fA-F]{24}$/)
+          .messages({
+            "string.pattern.base": "University ID must be a valid ObjectId",
+            "any.required": "University ID is required",
+          }).allow('', null),
+
+        courseId: Joi.string()
+          .pattern(/^[0-9a-fA-F]{24}$/)
+          .messages({
+            "string.pattern.base": "Course ID must be a valid ObjectId",
+            "any.required": "Course ID is required",
+          }).allow('', null),
+
+        academicYear: Joi.string()
+          .messages({
+            "any.required": "Academic Year is required",
+          }).allow('', null),
+
+        semester: Joi.number()
+          .valid(1, 2, 3, 4, 5, 6, 7, 8)
+          .allow("", null)
+          .messages({
+            "any.only": "Semester must be one of 1, 2, 3, 4, 5, 6, 7, or 8",
+            "number.base": "Semester must be a number",
+          })
+      };
+
+      const familyDetailsSchema = {
+        fatherName: Joi.string().max(70).required().messages({
+          "any.required": "Father's Name is required",
+          "string.base": "Father's Name must be a string",
+        }),
+        fatherNumber: Joi.string()
+          .trim()
+          .custom((value, helpers) => {
+            if (!/^\d+$/.test(value)) {
+              return helpers.error("any.invalid");
+            }
+            if (value.length < 8 || value.length > 15) {
+              return helpers.error("number.length");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "any.invalid": "Father's Mobile Number must contain digits only",
+            "number.length": "Father's Mobile Number must be between 8 to 15 digits",
+            "any.required": "Father's Mobile Number is required",
+          }),
+        motherName: Joi.string().max(70).required().messages({
+          "any.required": "Mother's Name is required",
+          "string.base": "Mother's Name must be a string",
+        }),
+        motherNumber: Joi.string()
+          .trim()
+          .custom((value, helpers) => {
+            if (!/^\d+$/.test(value)) {
+              return helpers.error("any.invalid");
+            }
+            if (value.length < 8 || value.length > 15) {
+              return helpers.error("number.length");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "any.invalid": "Mother's Mobile Number must contain digits only",
+            "number.length": "Mother's Mobile Number must be between 8 to 15 digits",
+            "any.required": "Mother's Mobile Number is required",
+          }),
+        guardianName: Joi.string().max(70).optional().allow('', null),
+        relationship: Joi.string().max(100).optional().allow('', null),
+        occuption: Joi.string().max(70).optional().allow('', null),
+        address: Joi.string().optional().allow('', null),
+      };
+      const schema = Joi.object({
+        image: Joi.any().allow("", null),
+        hostelId: Joi.string().required().allow('', null),
+        name: Joi.string().required().messages({
+          "any.required": "Student Name is required",
+        }),
+        buildingNumber: Joi.string().required().allow('', null),
+        gender: Joi.string().required(),
+        divyang: Joi.boolean().allow(null),
+        enrollmentNumber: Joi.string().allow('', null),
+        identificationMark: Joi.string().allow('', null),
+        medicalIssue: Joi.string().allow('', null),
+        allergyProblem: Joi.string().allow('', null),
+        category: Joi.string().allow('', null),
+        cast: Joi.string().allow('', null),
+        email: Joi.string()
+          .email({ tlds: { allow: false } })
+          .custom((value, helpers) => {
+            const domain = value.split("@")[1];
+
+            if (!allowedDomains.includes(domain)) {
+              return helpers.error("any.invalid");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "string.email": "Invalid email format",
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
+            "any.required": "Email is required"
+          }),
+        dob: Joi.date()
+          .required()
+          .messages({
+            "any.required": "Date of Birth is required",
+            "date.base": "Invalid Date format for Date of Birth",
+          }),
+        phone: Joi.string()
+          .trim()
+          .custom((value, helpers) => {
+            if (!/^\d+$/.test(value)) {
+              return helpers.error("any.invalid");
+            }
+            if (value.length < 8 || value.length > 15) {
+              return helpers.error("number.length");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "any.invalid": "Mobile Number must contain digits only",
+            "number.length": "Mobile Number must be between 8 to 15 digits",
+            "any.required": "Mobile Number is required",
+          }),
+        permanentAddress: Joi.string().required(),
+        country: Joi.object({
+          name: Joi.string().required().messages({
+            "string.base": "Country name must be a string",
+            "any.required": "Country name is required",
+          }),
+
+          iso2: Joi.string()
+            .length(2)
+            .uppercase()
+            .required()
+            .messages({
+              "string.length": "ISO2 code must be exactly 2 characters",
+              "string.base": "ISO2 code must be a string",
+              "any.required": "ISO2 code is required",
+            }),
+
+          countryId: Joi.number().integer().required().messages({
+            "number.base": "Country ID must be a number",
+            "any.required": "Country ID is required",
+          }),
+        })
+          .required()
+          .messages({
+            "object.base": "Country must be an object",
+            "any.required": "Country is required",
+          }),
+        state: Joi.object({
+          stateId: Joi.number()
+            .integer()
+            .required()
+            .messages({
+              "number.base": "State ID must be a number",
+              "any.required": "State ID is required",
+            }),
+
+          name: Joi.string()
+            .required()
+            .messages({
+              "string.base": "State name must be a string",
+              "any.required": "State name is required",
+            }),
+
+          iso2: Joi.string()
+            .length(2)
+            .uppercase()
+            .required()
+            .messages({
+              "string.length": "State ISO2 code must be exactly 2 uppercase letters",
+              "string.base": "State ISO2 code must be a string",
+              "any.required": "State ISO2 code is required",
+            }),
+        })
+          .required()
+          .messages({
+            "object.base": "State must be an object",
+            "any.required": "State is  required",
+          }),
+        city: Joi.object({
+          cityId: Joi.number()
+            .integer()
+            .required()
+            .messages({
+              "number.base": "City ID must be a number",
+              "any.required": "City ID is required",
+            }),
+
+          name: Joi.string()
+            .required()
+            .messages({
+              "string.base": "City name must be a string",
+              "any.required": "City name is required",
+            }),
+        })
+          .required()
+          .messages({
+            "object.base": "City must be an object",
+            "any.required": "City is required",
+          }),
+        roomNumber: Joi.number().integer().required(),
+        floorNumber: Joi.number().integer().required(),
+        bedNumber: Joi.string().required(),
+        bloodGroup: Joi.string().required(),
+        vechicleDetails: Joi.array()
+          .items(vechicleDetailsSchema)
+          .optional()
+          .messages({
+            "array.base": "Vehicle details must be an array",
+          }),
+        documents: Joi.object(documentsSchema).required(),
+        academicDetails: Joi.object(academicDetailsSchema).optional(),
+        familiyDetails: Joi.object(familyDetailsSchema).required()
+      });
+
+      const { error } = schema.validate(data, {
+        abortEarly: false,   // collect all errors
+      });
+      console.log(error, "erroooooooooooor")
+
+      if (error) {
+        //   const errorResponse: HttpResponse = {
+        //   statusCode: 400,
+        //   message: error?.details,
+        // };
+        return res.status(400).json({
+          statusCode: 400,
+          message: error?.details.map((item: any) => item?.message)
+        });
+      }
 
       // Call the service to update a user
       await updateUserFromWardenPanel(
@@ -1261,13 +1644,17 @@ class UserController {
         category,
         cast,
         permanentAddress,
-        currentAddress,
+        // currentAddress,
         familiyDetails,
         academicDetails,
         documents,
         vechicleDetails,
         staffId,
-        image
+        image,
+        floorNumber,
+        roomNumber,
+        bedNumber,
+        aadharNumber,
       );
 
       const successResponse: HttpResponse = {
@@ -1357,6 +1744,34 @@ class UserController {
       return res.status(400).json(errorResponse);
     }
   }
+
+  //SECTION: Controller Method to delete user status.
+  async deleteUsers(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const { id } = req?.params
+      if (!mongoose.isValidObjectId(id)) {
+        throw new Error(INVALID_ID);
+      }
+      await deleteStudent(id)
+      const successResponse: HttpResponse = {
+        statusCode: 200,
+        message: DELETE_DATA,
+      };
+      return res.status(200).json(successResponse);
+    } catch (error: any) {
+      const errorMessage = error.message ?? SERVER_ERROR;
+      const errorResponse: HttpResponse = {
+        statusCode: 400,
+        message: errorMessage,
+      };
+      return res.status(400).json(errorResponse);
+    }
+  }
 }
+
+
 
 export default new UserController();
