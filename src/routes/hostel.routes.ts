@@ -23,6 +23,7 @@ const {
   fetchUserDetailsOfRoom,
   fetchPaymentOptionsByHostel,
   fetchRoomsByMulipleFloorNumbers,
+  fetchFloorsRooms,
   uploadRoomMappingInBulk,
 } = HostelController;
 
@@ -74,4 +75,9 @@ hostelRouter.post(
   validateToken,
   uploadRoomMappingInBulk
 );
+
+hostelRouter.post("/floors-rooms",
+  validateToken,
+  fetchFloorsRooms
+)
 export default hostelRouter;

@@ -90,32 +90,32 @@ class StaffController {
         const missingField = !roleId
           ? "Role Id"
           : !name
-          ? "Name"
-          : !userName
-          ? "Username"
-          : !email
-          ? "Email"
-          : !phone
-          ? "Phone"
-          : !gender
-          ? "Gender"
-          : !image
-          ? "Image"
-          : !dob
-          ? "Date of Birth"
-          : !bloodGroup
-          ? "Blood Group"
-          : !vechicles
-          ? "Vehicle Details"
-          : !kycDocuments
-          ? "KYC Documents"
-          : !joiningDate
-          ? "Joining Date"
-          : !shiftStartTime
-          ? "Shift start Time"
-          : !shiftEndTime
-          ? "Shift end Time"
-          : "Unknown Field";
+            ? "Name"
+            : !userName
+              ? "Username"
+              : !email
+                ? "Email"
+                : !phone
+                  ? "Phone"
+                  : !gender
+                    ? "Gender"
+                    : !image
+                      ? "Image"
+                      : !dob
+                        ? "Date of Birth"
+                        : !bloodGroup
+                          ? "Blood Group"
+                          : !vechicles
+                            ? "Vehicle Details"
+                            : !kycDocuments
+                              ? "KYC Documents"
+                              : !joiningDate
+                                ? "Joining Date"
+                                : !shiftStartTime
+                                  ? "Shift start Time"
+                                  : !shiftEndTime
+                                    ? "Shift end Time"
+                                    : "Unknown Field";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -414,32 +414,32 @@ class StaffController {
         const missingField = !roleId
           ? "Role Id"
           : !name
-          ? "Name"
-          : !userName
-          ? "Username"
-          : !email
-          ? "Email"
-          : !phone
-          ? "Phone"
-          : !gender
-          ? "Gender"
-          : !image
-          ? "Image"
-          : !dob
-          ? "Date of Birth"
-          : !bloodGroup
-          ? "Blood Group"
-          : !vechicles
-          ? "Vehicle Details"
-          : !kycDocuments
-          ? "KYC Documents"
-          : !joiningDate
-          ? "Joining Date"
-          : !shiftStartTime
-          ? "Shift start Time"
-          : !shiftEndTime
-          ? "Shift end Time"
-          : "Unknown Field";
+            ? "Name"
+            : !userName
+              ? "Username"
+              : !email
+                ? "Email"
+                : !phone
+                  ? "Phone"
+                  : !gender
+                    ? "Gender"
+                    : !image
+                      ? "Image"
+                      : !dob
+                        ? "Date of Birth"
+                        : !bloodGroup
+                          ? "Blood Group"
+                          : !vechicles
+                            ? "Vehicle Details"
+                            : !kycDocuments
+                              ? "KYC Documents"
+                              : !joiningDate
+                                ? "Joining Date"
+                                : !shiftStartTime
+                                  ? "Shift start Time"
+                                  : !shiftEndTime
+                                    ? "Shift end Time"
+                                    : "Unknown Field";
         const errorResponse: HttpResponse = {
           statusCode: 400,
           message: `${missingField} is required`,
@@ -495,6 +495,7 @@ class StaffController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
+
       const staffId = req.body._valid._id;
       const hostelId = req.body._valid?.hostelId;
 
@@ -503,14 +504,17 @@ class StaffController {
       // Call the service to retrieve staff
       const { staff } = await getStaffById(staffId);
 
+
       if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
 
       const { compaintId, categoryType } = req.body;
+      
       const { staffs } = await maintanceStaffs(
         compaintId,
         categoryType,
         hostelId
       );
+
 
       const successResponse: HttpResponse = {
         statusCode: 200,

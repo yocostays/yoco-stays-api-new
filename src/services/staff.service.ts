@@ -139,12 +139,12 @@ class StaffService {
       // Build search parameters
       const searchParams = search
         ? {
-            $or: [
-              { name: { $regex: `^${search}`, $options: "i" } },
-              { email: { $regex: `^${search}`, $options: "i" } },
-              ...(searchAsNumber ? [{ phone: searchAsNumber }] : []),
-            ],
-          }
+          $or: [
+            { name: { $regex: `^${search}`, $options: "i" } },
+            { email: { $regex: `^${search}`, $options: "i" } },
+            ...(searchAsNumber ? [{ phone: searchAsNumber }] : []),
+          ],
+        }
         : {};
 
       const statusParams: any = {};
@@ -170,17 +170,17 @@ class StaffService {
       // Build role query
       const searchRoleQuery = roles
         ? {
-            roleId: {
-              $in: roles.includes(",")
-                ? roles
-                    .split(",")
-                    .map((role) =>
-                      mongoose.isValidObjectId(role.trim()) ? role.trim() : null
-                    )
-                    .filter(Boolean)
-                : [mongoose.isValidObjectId(roles) ? roles.trim() : null],
-            },
-          }
+          roleId: {
+            $in: roles.includes(",")
+              ? roles
+                .split(",")
+                .map((role) =>
+                  mongoose.isValidObjectId(role.trim()) ? role.trim() : null
+                )
+                .filter(Boolean)
+              : [mongoose.isValidObjectId(roles) ? roles.trim() : null],
+          },
+        }
         : {};
 
       // Build hostel filter
@@ -238,18 +238,19 @@ class StaffService {
           .populate([
             { path: "roleId", select: "name" },
             { path: "createdBy", select: "name" },
+            { path: "categoryId",select:"name" },
           ])
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
           .select("-password"),
       ]);
-
       // Fetch room details and map the staff data
       const result = await Promise.all(
         staffs.map(async (ele) => {
           return {
             _id: ele._id,
+            category:ele?.categoryId ?? null,
             name: ele?.name ?? null,
             image: ele?.image ?? null,
             email: ele?.email ?? null,
@@ -388,11 +389,11 @@ class StaffService {
                     $cond: {
                       if: hostelId
                         ? {
-                            $eq: [
-                              "$_id",
-                              new mongoose.Types.ObjectId(hostelId),
-                            ],
-                          }
+                          $eq: [
+                            "$_id",
+                            new mongoose.Types.ObjectId(hostelId),
+                          ],
+                        }
                         : false,
                       then: true,
                       else: false,
@@ -612,7 +613,7 @@ class StaffService {
     try {
       //NOTE - get complain details by id
       const compaint = await Complaint.findById(compaintId);
-      if (!compaint) throw new Error(RECORD_NOT_FOUND("Compaint"));
+      if (!compaint) throw new Error(RECORD_NOT_FOUND("Complaint"));
 
       // Get the Maintenance role case-insensitively
       const roles = await Role.find({ categoryType }).lean();
@@ -623,7 +624,7 @@ class StaffService {
       const roleIds = roles.map((role) => role._id);
 
       const hostelObjectId = new mongoose.Types.ObjectId(hostelId);
-
+      
       // Find staff matching the role and category
       const staffs = await Staff.find({
         roleId: { $in: roleIds },
@@ -754,9 +755,8 @@ class StaffService {
                   phone: user.phone ?? null,
                   userName: user.userName ?? null,
                   image: user.image ? await getSignedUrl(user.image) : null,
-                  roomDetails: `${mate.roomNumber ?? null}/${
-                    mate.bedNumber ?? null
-                  }`,
+                  roomDetails: `${mate.roomNumber ?? null}/${mate.bedNumber ?? null
+                    }`,
                 };
               }
 
@@ -894,12 +894,12 @@ class StaffService {
       // Build search parameters
       const searchParams = search
         ? {
-            $or: [
-              { name: { $regex: `^${search}`, $options: "i" } },
-              { email: { $regex: `^${search}`, $options: "i" } },
-              ...(searchAsNumber ? [{ phone: searchAsNumber }] : []),
-            ],
-          }
+          $or: [
+            { name: { $regex: `^${search}`, $options: "i" } },
+            { email: { $regex: `^${search}`, $options: "i" } },
+            ...(searchAsNumber ? [{ phone: searchAsNumber }] : []),
+          ],
+        }
         : {};
 
       // Build hostel filter
