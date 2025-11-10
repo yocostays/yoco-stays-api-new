@@ -2965,7 +2965,7 @@ class UserService {
 
     // Check if a user exists with the same email, phone, or enrollment number
     const checkUser = await User.findOne(query);
-
+    console.log(checkUser,enrollmentNumber,"userrrrrrrrrrrrrr")
     if (checkUser) {
       if (
         checkUser.email === email &&

@@ -1611,13 +1611,9 @@ class UserController {
       const { error } = schema.validate(data, {
         abortEarly: false,   // collect all errors
       });
-      console.log(error, "erroooooooooooor")
+    
 
       if (error) {
-        //   const errorResponse: HttpResponse = {
-        //   statusCode: 400,
-        //   message: error?.details,
-        // };
         return res.status(400).json({
           statusCode: 400,
           message: error?.details.map((item: any) => item?.message)
