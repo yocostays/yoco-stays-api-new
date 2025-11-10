@@ -338,7 +338,9 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     enrollmentNumber: {
       type: String,
       required: false,
+      sparse: true,
       unique: true,
+      default:null,
     },
     bloodGroup: {
       type: String,

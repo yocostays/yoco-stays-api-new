@@ -2301,6 +2301,7 @@ class UserService {
             const newUser = new User({
               roleId: role._id,
               uniqueId,
+              enrollmentNumber:null,
               permanentAddress,
               bloodGroup,
               email: data?.Email,
@@ -2331,6 +2332,7 @@ class UserService {
             });
 
             await newUser.save();
+            console.log(newUser,"newuser")
             await Hostel.findOneAndUpdate(
               {
                 _id: new mongoose.Types.ObjectId(hostelId),
@@ -2379,7 +2381,8 @@ class UserService {
         }
       }
 
-
+      console.log(errorArray,"error")
+      console.log(successArray,"succcess")
       try {
         let successFileUrl: string | null = null;
         let errorFileUrl: string | null = null;
