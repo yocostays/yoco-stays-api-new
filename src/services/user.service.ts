@@ -52,6 +52,9 @@ import Course from "../models/course.model";
 import { sendPushNotificationToUser } from "../utils/commonService/pushNotificationService";
 import moment from "moment";
 import Joi from "joi";
+import StudentLeave from "../models/student-leave.model";
+import Complaint from "../models/complaint.model";
+import BookMeals from "../models/bookMeal.model";
 
 const { getRoleByName } = RoleService;
 const { checkTemplateExist } = TemplateService;
@@ -2965,7 +2968,7 @@ class UserService {
 
     // Check if a user exists with the same email, phone, or enrollment number
     const checkUser = await User.findOne(query);
-    console.log(checkUser,enrollmentNumber,"userrrrrrrrrrrrrr")
+    console.log(checkUser, enrollmentNumber, "userrrrrrrrrrrrrr")
     if (checkUser) {
       if (
         checkUser.email === email &&
@@ -3061,6 +3064,9 @@ class UserService {
 
       const userExist = await User.findOneAndDelete({ _id: id });
       if (userExist) {
+        await StudentLeave.findOneAndDelete({ userId: id })
+        await Complaint.findOneAndDelete({ userId: id })
+        await BookMeals.findOneAndDelete({ studentId: id })
         await StudentHostelAllocation.findOneAndDelete({ studentId: id })
 
         return DELETE_DATA;
