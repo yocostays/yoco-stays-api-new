@@ -1954,7 +1954,7 @@ class UserService {
         Gender: Joi.string().required().messages({
           "any.required": "Gender is required",
         }),
-        email: Joi.string()
+        Email: Joi.string()
           .email({ tlds: { allow: false } })
           .custom((value, helpers) => {
             const domain = value.split("@")[1];
@@ -1983,7 +1983,7 @@ class UserService {
             "string.max": "Full Name must not exceed 70 characters",
             "any.required": "Full Name is required",
           }),
-        "Mobile Number of Student": Joi.string()
+        "Mobile No.": Joi.string()
           .trim()
           .custom((value, helpers) => {
             if (!/^\d+$/.test(value)) {
@@ -2043,7 +2043,7 @@ class UserService {
         "Country": Joi.string().required(),
         "State": Joi.string().required(),
         "City": Joi.string().required(),
-        "Mother's Mobile Number": Joi.number()
+        "Mother's Mobile No.": Joi.number()
           .integer()
           .required()
           .custom((value, helpers) => {
@@ -2062,12 +2062,12 @@ class UserService {
             return value;
           })
           .messages({
-            "any.invalid": "Mother's Mobile Number must contain digits only",
-            "number.length": "Mother's Mobile Number must be between 8 to 15 digits",
-            "any.required": "Mother's Mobile Number is required",
-            "number.base": "Mother's Mobile Number must be a number",
+            "any.invalid": "Mother's Mobile No. must contain digits only",
+            "number.length": "Mother's Mobile No. must be between 8 to 15 digits",
+            "any.required": "Mother's Mobile No. is required",
+            "number.base": "Mother's Mobile No. must be a number",
           }),
-        "Father's Mobile Number": Joi.number()
+        "Father's Mobile No.": Joi.number()
           .integer()
           .required()
           .custom((value, helpers) => {
@@ -2086,10 +2086,10 @@ class UserService {
             return value;
           })
           .messages({
-            "any.invalid": "Father's Mobile Number must contain digits only",
-            "number.length": "Father's Mobile Number must be between 8 to 15 digits",
-            "any.required": "Father's Mobile Number is required",
-            "number.base": "Father's Mobile Number must be a number",
+            "any.invalid": "Father's Mobile No. must contain digits only",
+            "number.length": "Father's Mobile No. must be between 8 to 15 digits",
+            "any.required": "Father's Mobile No. is required",
+            "number.base": "Father's Mobile No. must be a number",
           }),
         "Room Number": Joi.number().integer().required(),
         "Floor Number": Joi.number().integer().required(),
@@ -2114,7 +2114,7 @@ class UserService {
         if ((value?.["Date of Birth"])?.success === false) {
           item["Date of Birth"] = value["Date of Birth"]?.date
         }
-        const phoneStr = value?.["Mobile Number of Student"];
+        const phoneStr = value?.["Mobile No."];
         // Check for duplicate phone
         if (phoneStr && /^[0-9]+$/.test(phoneStr)) {
           const phoneNum = Number(phoneStr);
@@ -2122,14 +2122,14 @@ class UserService {
             phone: phoneNum,
           });
           if (phoneExists) {
-            errors.push(`Mobile Number of Student: Phone number already exists`);
+            errors.push(`Mobile No. of Student: Phone number already exists`);
           }
         }
 
         // Check for duplicate Aadhaar
-        if (value?.email) {
+        if (value?.Email) {
           const emailExist = await User.findOne({
-            email: value?.email
+            email: value?.Email
           });
           if (emailExist) {
             errors.push(`Email: Email already exists`);
@@ -2192,11 +2192,11 @@ class UserService {
       // Process valid entries
       for (let i = 0; i < successArray.length; i++) {
         const data = successArray[i];
-
         try {
           const {
             "Full Name of Student": name,
-            "Mobile Number of Student": phone,
+            // "Mobile Number of Student": phone,
+            "Mobile No.": phone,
             Gender: gender,
             Country: nationality,
             State: state,
@@ -2204,15 +2204,15 @@ class UserService {
             "Date of Birth": dobExcel,
             "Permanent Address": permanentAddress,
             "Father's Name": fatherName,
-            "Father's Mobile Number": fatherNumber,
+            "Father's Mobile No.": fatherNumber,
             "Mother's Name": motherName,
-            "Mother's Mobile Number": motherNumber,
+            "Mother's Mobile No.": motherNumber,
             "Aadhaar Number": aadharNumber,
             "Room Number": roomNumber,
             "Floor Number": floorNumber,
             "Bed Number": bedNumber,
             "Blood Group": bloodGroup,
-            email: email
+            email: Email
           } = data;
 
 
@@ -2298,13 +2298,12 @@ class UserService {
             );
 
             const hashedPassword = await hashPassword("123456789");
-
             const newUser = new User({
               roleId: role._id,
               uniqueId,
               permanentAddress,
               bloodGroup,
-              email,
+              email: data?.Email,
               documents: {
                 aadhaarNumber: aadharNumber,
               },

@@ -24,6 +24,7 @@ const {
   fetchUsersBasedOnHostelAndAcademic,
   updateUserStatus,
   deleteUsers,
+  updateUserFromApp
 } = UserController;
 
 const userRouter = Router();
@@ -75,6 +76,7 @@ userRouter.post(
 ); //TODO - only use in warden panel for
 userRouter.delete("/vehicle/:id", validateToken, deleteUserVehicleDetails);
 userRouter.patch("/update/:id", validateToken, updateUserFromWardenPanel); //TODO - use in warden panel for update student
+userRouter.patch("student/update/:id", validateToken, updateUserFromApp); //TODO - use in warden panel for update student
 userRouter.post(
   "/hostel-academic",
   validateToken,

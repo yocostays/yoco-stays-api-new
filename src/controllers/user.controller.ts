@@ -1210,7 +1210,7 @@ class UserController {
           "Blood Group": String(item["Blood Group"])
             .replace(/\s+/g, "") // remove all spaces inside string
             .toUpperCase(), // optional normalize case => B+
-          "Mobile Number of Student": String(item["Mobile Number of Student"]),
+          "Mobile No.": String(item["Mobile No."]),
           Gender: String(item?.Gender).trim().toLowerCase()
         }
       })
@@ -1611,7 +1611,7 @@ class UserController {
       const { error } = schema.validate(data, {
         abortEarly: false,   // collect all errors
       });
-    
+
 
       if (error) {
         return res.status(400).json({
@@ -1656,6 +1656,183 @@ class UserController {
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: UPDATE_DATA,
+      };
+      return res.status(200).json(successResponse);
+    } catch (error: any) {
+      const errorMessage = error.message ?? SERVER_ERROR;
+      const errorResponse: HttpResponse = {
+        statusCode: 400,
+        message: errorMessage,
+      };
+      return res.status(400).json(errorResponse);
+    }
+  }
+
+  async updateUserFromApp(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const allowedDomains = [
+        "gmail.com",
+        "yahoo.com",
+        "outlook.com",
+        "hotmail.com",
+        "live.com",
+        "icloud.com",
+        "aol.com",
+        "zoho.com"
+      ];
+      const schema = Joi.object({
+        Gender: Joi.string().required().messages({
+          "any.required": "Gender is required",
+        }),
+        email: Joi.string()
+          .email({ tlds: { allow: false } })
+          .custom((value, helpers) => {
+            const domain = value.split("@")[1];
+
+            if (!allowedDomains.includes(domain)) {
+              return helpers.error("any.invalid");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "string.email": "Invalid email format",
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
+            "any.required": "Email is required"
+          }),
+        dob: Joi.date()
+          .required()
+          .messages({
+            "any.required": "Date of Birth is required",
+            "date.base": "Invalid Date format for Date of Birth",
+          }),
+        studentName: Joi.string()
+          .max(70)
+          .required()
+          .messages({
+            "string.max": "Full Name must not exceed 70 characters",
+            "any.required": "Full Name is required",
+          }),
+        "Mobile Number of Student": Joi.string()
+          .trim()
+          .custom((value, helpers) => {
+            if (!/^\d+$/.test(value)) {
+              return helpers.error("any.invalid");
+            }
+            if (value.length < 8 || value.length > 15) {
+              return helpers.error("number.length");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "any.invalid": "Mobile Number must contain digits only",
+            "number.length": "Mobile Number must be between 8 to 15 digits",
+            "any.required": "Mobile Number is required",
+          }),
+        fatherName: Joi.string()
+          .max(70)
+          .required()
+          .messages({
+            "string.max": "Full Name must not exceed 70 characters",
+            "any.required": "Full Name is required",
+          }),
+        motherName: Joi.string()
+          .max(70)
+          .required()
+          .messages({
+            "string.max": "Full Name must not exceed 70 characters",
+            "any.required": "Full Name is required",
+          }),
+        permanentAddress: Joi.string().required(),
+        "Hostel Name": Joi.string().required(),
+        "Aadhaar Number": Joi.number().allow("", null) // allow empty
+          .integer()
+          .required()
+          .custom((value, helpers) => {
+            const str = String(value);
+
+            // Must be only digits
+            if (!/^\d+$/.test(str)) {
+              return helpers.error("any.invalid");
+            }
+
+            // Check length 8 to 18 digits
+            if (str.length !== 12) {
+              return helpers.error("number.length");
+            }
+
+            return value;
+          })
+          .messages({
+            "any.invalid": "Aadhaar Number must contain digits only",
+            "number.length": "Aadhaar Number must be exactly 12 digits",
+            // "any.required": "Aadhaar Number is required",
+            "number.base": "Aadhaar Number must be a number",
+          }),
+        "Country": Joi.string().required(),
+        "State": Joi.string().required(),
+        "City": Joi.string().required(),
+        "Mother's Mobile Number": Joi.number()
+          .integer()
+          .required()
+          .custom((value, helpers) => {
+            const str = String(value);
+
+            // Must be only digits
+            if (!/^\d+$/.test(str)) {
+              return helpers.error("any.invalid");
+            }
+
+            // Check length 8 to 18 digits
+            if (str.length < 8 || str.length > 15) {
+              return helpers.error("number.length");
+            }
+
+            return value;
+          })
+          .messages({
+            "any.invalid": "Mother's Mobile Number must contain digits only",
+            "number.length": "Mother's Mobile Number must be between 8 to 15 digits",
+            "any.required": "Mother's Mobile Number is required",
+            "number.base": "Mother's Mobile Number must be a number",
+          }),
+        "Father's Mobile Number": Joi.number()
+          .integer()
+          .required()
+          .custom((value, helpers) => {
+            const str = String(value);
+
+            // Must be only digits
+            if (!/^\d+$/.test(str)) {
+              return helpers.error("any.invalid");
+            }
+
+            // Check length 8 to 18 digits
+            if (str.length < 8 || str.length > 15) {
+              return helpers.error("number.length");
+            }
+
+            return value;
+          })
+          .messages({
+            "any.invalid": "Father's Mobile Number must contain digits only",
+            "number.length": "Father's Mobile Number must be between 8 to 15 digits",
+            "any.required": "Father's Mobile Number is required",
+            "number.base": "Father's Mobile Number must be a number",
+          }),
+        "Room Number": Joi.number().integer().required(),
+        "Floor Number": Joi.number().integer().required(),
+        "Blood Group": Joi.string().required(),
+        "Bed Number": Joi.string().required()
+      });
+      const successResponse: HttpResponse = {
+        statusCode: 200,
+        message: FETCH_SUCCESS,
+        data: "",
       };
       return res.status(200).json(successResponse);
     } catch (error: any) {
