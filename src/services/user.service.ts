@@ -2524,9 +2524,10 @@ class UserService {
         if (!university) throw new Error(RECORD_NOT_FOUND("University"));
       }
 
-
-      // Step 3: Validate staff details
-      await this.validateUser({ email, phone, enrollmentNumber, studentId });
+      if(enrollmentNumber){
+        // Step 3: Validate staff details
+        await this.validateUser({ email, phone, enrollmentNumber, studentId });
+      }
 
       const dobDate = new Date(dob);
       dobDate.setUTCHours(0, 0, 0, 0);
@@ -2970,7 +2971,7 @@ class UserService {
 
     // Check if a user exists with the same email, phone, or enrollment number
     const checkUser = await User.findOne(query);
-    console.log(checkUser, enrollmentNumber, "userrrrrrrrrrrrrr")
+  
     if (checkUser) {
       if (
         checkUser.email === email &&
