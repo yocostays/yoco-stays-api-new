@@ -24,6 +24,7 @@ const {
   fetchUsersBasedOnHostelAndAcademic,
   updateUserStatus,
   deleteUsers,
+  userDeleteRequest,
   updateUserFromApp
 } = UserController;
 
@@ -84,4 +85,5 @@ userRouter.post(
 ); //TODO - use in warden panel for fetch users
 userRouter.post("/update-status", validateToken, updateUserStatus);
 userRouter.delete("/:id",validateToken,deleteUsers)
+userRouter.post("/request-account-deletion",userDeleteRequest)
 export default userRouter;

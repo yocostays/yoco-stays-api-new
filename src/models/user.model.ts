@@ -72,7 +72,7 @@ export interface IAcademicDetails extends Document {
 // Define the user interface
 export interface IUser extends Document {
   uniqueId: string;
-  nationality: string | null;
+  bulkCountry:string | null;
   bulkState: string | null;
   bulkCity: string | null;
   roleId: mongoose.Types.ObjectId;
@@ -374,7 +374,7 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
       default: null,
     },
     country: { type: CountrySchema, required: false, default: null },
-    nationality: {
+    bulkCountry: {
       type: String,
       requried: false
     },
