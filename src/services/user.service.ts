@@ -52,6 +52,12 @@ import Course from "../models/course.model";
 import { sendPushNotificationToUser } from "../utils/commonService/pushNotificationService";
 import moment from "moment";
 import Joi from "joi";
+import StudentLeave from "../models/student-leave.model";
+import Complaint from "../models/complaint.model";
+import BookMeals from "../models/bookMeal.model";
+import nodemailer from "nodemailer";
+import { generateSecureOtp, getExpiryDate } from "../utils/otpService";
+import Otp from "../models/otp.model";
 
 const { getRoleByName } = RoleService;
 const { checkTemplateExist } = TemplateService;
@@ -624,31 +630,31 @@ class UserService {
   //SECTION: Method to update student in app
   updateStudentInApp = async (
     studentId: mongoose.Types.ObjectId,
-    email: string,
-    image: string
+    // image: string,
+    studentData: any
   ): Promise<string> => {
     try {
+
       const studentExists: any = await User.findById(studentId);
       if (!studentExists) throw new Error(RECORD_NOT_FOUND("User"));
 
       // Check if the email is already in use by another user
       const checkUser: any = await User.findOne({
         _id: { $ne: studentId },
-        email,
+        email: studentData?.email
       });
-
       if (checkUser) throw new Error(ALREADY_EXIST_FIELD_ONE("Email"));
 
       // Get the current user to check if there is an existing image
       const currentUser = await User.findById(studentId);
-      let payload: { email: string; image?: string } = { email };
-
-      if (image && image.includes("base64")) {
-        const uploadImage = await uploadFileInS3Bucket(image, USER_FOLDER);
+      // let payload: { email: string; image?: string } = { email };
+      let payload
+      if (studentData?.image && studentData?.image.includes("base64")) {
+        const uploadImage = await uploadFileInS3Bucket(studentData?.image, USER_FOLDER);
 
         if (uploadImage !== false) {
           // Update the payload with the new image's S3 key
-          payload = { ...payload, image: uploadImage.Key };
+          payload = { ...studentData, image: uploadImage.Key };
 
           // After uploading, check if there is an existing image to delete
           if (currentUser?.image) {
@@ -662,62 +668,60 @@ class UserService {
           throw new Error(IMAGE_UPLOAD_ERROR);
         }
       }
-
       // Update the user's email and image in the database
-      const userUpdated = await User.findByIdAndUpdate(studentId, {
-        $set: payload,
+      await User.findByIdAndUpdate(studentId, {
+        $set: { ...studentData, payload },
       });
-
       //NOTE: Check user is updated or not.
-      if (userUpdated) {
-        const { playedIds, template, student, isPlayedNoticeCreated, log } =
-          await this.fetchPlayerNotificationConfig(
-            studentExists?._id,
-            TemplateTypes.PROFILE_UPDATED
-          );
+      // if (userUpdated) {
+      // const { playedIds, template, student, isPlayedNoticeCreated, log } =
+      //   await this.fetchPlayerNotificationConfig(
+      //     studentExists?._id,
+      //     TemplateTypes.PROFILE_UPDATED
+      //   );
 
-        //NOTE: Get student and hostelDetails
-        const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-          await this.getStudentAllocatedHostelDetails(
-            student?._id,
-            student?.hostelId,
-            TemplateTypes.PROFILE_UPDATED
-          );
+      //NOTE: Get student and hostelDetails
+      // const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+      //   await this.getStudentAllocatedHostelDetails(
+      //     student?._id,
+      //     student?.hostelId,
+      //     TemplateTypes.PROFILE_UPDATED
+      //   );
 
-        //NOTE: Final notice created check.
-        const finalNoticeCreated =
-          isPlayedNoticeCreated && isHostelNoticeCreated;
+      //NOTE: Final notice created check.
+      // const finalNoticeCreated =
+      // isPlayedNoticeCreated && isHostelNoticeCreated;
 
-        // NOTE: Combine available logs into an array
-        const notificationLog = [log, hostelLogs].filter(Boolean);
+      // NOTE: Combine available logs into an array
+      // const notificationLog = [log, hostelLogs].filter(Boolean);
 
-        //NOTE: Create entry in notice
-        await Notice.create({
-          userId: student?._id,
-          hostelId: student?.hostelId,
-          floorNumber: hostelDetail?.floorNumber,
-          bedType: hostelDetail?.bedType,
-          roomNumber: hostelDetail?.roomNumber,
-          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-          pushNotificationTypes: PushNotificationTypes.AUTO,
-          templateId: template?._id,
-          templateSendMessage: template?.description,
-          isNoticeCreated: finalNoticeCreated,
-          notificationLog,
-          createdAt: getCurrentISTTime(),
-        });
-        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-        if (finalNoticeCreated) {
-          //NOTE: Use the send push notification function
-          await sendPushNotificationToUser(
-            playedIds,
-            template?.title,
-            template?.description,
-            template?.image,
-            TemplateTypes.PROFILE_UPDATED
-          );
-        }
-      }
+      //NOTE: Create entry in notice
+      // await Notice.create({
+      //   userId: student?._id,
+      //   hostelId: student?.hostelId,
+      //   floorNumber: hostelDetail?.floorNumber,
+      //   bedType: hostelDetail?.bedType,
+      //   roomNumber: hostelDetail?.roomNumber,
+      //   noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+      //   pushNotificationTypes: PushNotificationTypes.AUTO,
+      //   templateId: template?._id,
+      //   templateSendMessage: template?.description,
+      //   isNoticeCreated: finalNoticeCreated,
+      //   notificationLog,
+      //   createdAt: getCurrentISTTime(),
+      // });
+      //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+      // if (finalNoticeCreated) {
+      //   //NOTE: Use the send push notification function
+      //   await sendPushNotificationToUser(
+      //     playedIds,
+      //     template?.title,
+      //     template?.description,
+      //     template?.image,
+      //     TemplateTypes.PROFILE_UPDATED
+      //   );
+      // }
+      // }
       return UPDATE_DATA;
     } catch (error: any) {
       throw new Error(error.message);
@@ -737,9 +741,9 @@ class UserService {
       const checkUser: any = await User.findOne({
         _id: studentId,
       }).select(
-        "uniqueId name email phone image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
+        "uniqueId name email phone bulkCountry bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
       );
-
+      console.log(checkUser, "checkuser")
       // Fetch the room details for the student
       const studentRoomDetails = await StudentHostelAllocation.findOne({
         studentId: studentId,
@@ -802,6 +806,9 @@ class UserService {
         _id: checkUser._id,
         name: checkUser?.name ?? null,
         uniqueId: checkUser?.uniqueId ?? null,
+        country: checkUser?.bulkCountry ?? null,
+        state: checkUser?.bulkState ?? null,
+        city: checkUser?.bulkCity ?? null,
         email: checkUser?.email ?? null,
         phone: checkUser?.phone ?? null,
         image: checkUser?.image ? await getSignedUrl(checkUser?.image) : null,
@@ -1951,7 +1958,7 @@ class UserService {
         Gender: Joi.string().required().messages({
           "any.required": "Gender is required",
         }),
-        email: Joi.string()
+        Email: Joi.string()
           .email({ tlds: { allow: false } })
           .custom((value, helpers) => {
             const domain = value.split("@")[1];
@@ -1980,7 +1987,7 @@ class UserService {
             "string.max": "Full Name must not exceed 70 characters",
             "any.required": "Full Name is required",
           }),
-        "Mobile Number of Student": Joi.string()
+        "Mobile No.": Joi.string()
           .trim()
           .custom((value, helpers) => {
             if (!/^\d+$/.test(value)) {
@@ -2040,7 +2047,7 @@ class UserService {
         "Country": Joi.string().required(),
         "State": Joi.string().required(),
         "City": Joi.string().required(),
-        "Mother's Mobile Number": Joi.number()
+        "Mother's Mobile No.": Joi.number()
           .integer()
           .required()
           .custom((value, helpers) => {
@@ -2059,12 +2066,12 @@ class UserService {
             return value;
           })
           .messages({
-            "any.invalid": "Mother's Mobile Number must contain digits only",
-            "number.length": "Mother's Mobile Number must be between 8 to 15 digits",
-            "any.required": "Mother's Mobile Number is required",
-            "number.base": "Mother's Mobile Number must be a number",
+            "any.invalid": "Mother's Mobile No. must contain digits only",
+            "number.length": "Mother's Mobile No. must be between 8 to 15 digits",
+            "any.required": "Mother's Mobile No. is required",
+            "number.base": "Mother's Mobile No. must be a number",
           }),
-        "Father's Mobile Number": Joi.number()
+        "Father's Mobile No.": Joi.number()
           .integer()
           .required()
           .custom((value, helpers) => {
@@ -2083,10 +2090,10 @@ class UserService {
             return value;
           })
           .messages({
-            "any.invalid": "Father's Mobile Number must contain digits only",
-            "number.length": "Father's Mobile Number must be between 8 to 15 digits",
-            "any.required": "Father's Mobile Number is required",
-            "number.base": "Father's Mobile Number must be a number",
+            "any.invalid": "Father's Mobile No. must contain digits only",
+            "number.length": "Father's Mobile No. must be between 8 to 15 digits",
+            "any.required": "Father's Mobile No. is required",
+            "number.base": "Father's Mobile No. must be a number",
           }),
         "Room Number": Joi.number().integer().required(),
         "Floor Number": Joi.number().integer().required(),
@@ -2111,7 +2118,7 @@ class UserService {
         if ((value?.["Date of Birth"])?.success === false) {
           item["Date of Birth"] = value["Date of Birth"]?.date
         }
-        const phoneStr = value?.["Mobile Number of Student"];
+        const phoneStr = value?.["Mobile No."];
         // Check for duplicate phone
         if (phoneStr && /^[0-9]+$/.test(phoneStr)) {
           const phoneNum = Number(phoneStr);
@@ -2119,14 +2126,14 @@ class UserService {
             phone: phoneNum,
           });
           if (phoneExists) {
-            errors.push(`Mobile Number of Student: Phone number already exists`);
+            errors.push(`Mobile No. of Student: Phone number already exists`);
           }
         }
 
         // Check for duplicate Aadhaar
-        if (value?.email) {
+        if (value?.Email) {
           const emailExist = await User.findOne({
-            email: value?.email
+            email: value?.Email
           });
           if (emailExist) {
             errors.push(`Email: Email already exists`);
@@ -2189,11 +2196,11 @@ class UserService {
       // Process valid entries
       for (let i = 0; i < successArray.length; i++) {
         const data = successArray[i];
-
         try {
           const {
             "Full Name of Student": name,
-            "Mobile Number of Student": phone,
+            // "Mobile Number of Student": phone,
+            "Mobile No.": phone,
             Gender: gender,
             Country: nationality,
             State: state,
@@ -2201,15 +2208,15 @@ class UserService {
             "Date of Birth": dobExcel,
             "Permanent Address": permanentAddress,
             "Father's Name": fatherName,
-            "Father's Mobile Number": fatherNumber,
+            "Father's Mobile No.": fatherNumber,
             "Mother's Name": motherName,
-            "Mother's Mobile Number": motherNumber,
+            "Mother's Mobile No.": motherNumber,
             "Aadhaar Number": aadharNumber,
             "Room Number": roomNumber,
             "Floor Number": floorNumber,
             "Bed Number": bedNumber,
             "Blood Group": bloodGroup,
-            email: email
+            email: Email
           } = data;
 
 
@@ -2295,13 +2302,13 @@ class UserService {
             );
 
             const hashedPassword = await hashPassword("123456789");
-
             const newUser = new User({
               roleId: role._id,
               uniqueId,
+              enrollmentNumber: null,
               permanentAddress,
               bloodGroup,
-              email,
+              email: data?.Email,
               documents: {
                 aadhaarNumber: aadharNumber,
               },
@@ -2310,7 +2317,7 @@ class UserService {
               phone,
               dob: dobExcel,
               gender,
-              nationality,
+              bulkCountry: nationality,
               bulkState: state,
               bulkCity: city,
               familiyDetails: {
@@ -2376,7 +2383,6 @@ class UserService {
           errorArray.push({ ...data, errors: error.message });
         }
       }
-
 
       try {
         let successFileUrl: string | null = null;
@@ -2519,9 +2525,10 @@ class UserService {
         if (!university) throw new Error(RECORD_NOT_FOUND("University"));
       }
 
-
-      // Step 3: Validate staff details
-      await this.validateUser({ email, phone, enrollmentNumber, studentId });
+      if (enrollmentNumber) {
+        // Step 3: Validate staff details
+        await this.validateUser({ email, phone, enrollmentNumber, studentId });
+      }
 
       const dobDate = new Date(dob);
       dobDate.setUTCHours(0, 0, 0, 0);
@@ -3061,6 +3068,9 @@ class UserService {
 
       const userExist = await User.findOneAndDelete({ _id: id });
       if (userExist) {
+        await StudentLeave.findOneAndDelete({ userId: id })
+        await Complaint.findOneAndDelete({ userId: id })
+        await BookMeals.findOneAndDelete({ studentId: id })
         await StudentHostelAllocation.findOneAndDelete({ studentId: id })
 
         return DELETE_DATA;
@@ -3071,10 +3081,63 @@ class UserService {
       throw new Error(RECORD_NOT_FOUND("User"));
     }
   };
+
+  userRequestDelete = async (
+    email: String,
+  ) => {
+    const userDetails: any = await User.findOne({ email: email });
+    if (!userDetails) throw new Error(RECORD_NOT_FOUND("Email"));
+    
+    try {
+      if (!email || typeof email !== "string") {
+        throw new Error("Invalid email address");
+      }
+
+        const otp = await generateSecureOtp()
+        const expiryTime = getExpiryDate(5, "M");
+        await Otp.findOneAndUpdate(
+          { userId: new mongoose.Types.ObjectId(userDetails?._id) },
+          {
+            otp,
+            expiryTime,
+            isVerified: false,
+            status: true,
+            updatedBy: userDetails?._id,
+          },
+          { upsert: true, new: true }
+        );
+
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: "sandeep.nandanwar@raisoni.net",
+            pass: "hkop aywb mcra ergi", // Gmail app password
+          },
+        });
+
+        await transporter.verify();
+
+        const htmlContent = `
+        <div style="font-family: Arial, sans-serif; background: #f9fafb; padding: 20px; border-radius: 10px; text-align: center; color: #333;">
+          <p style="font-size: 16px; margin-bottom: 10px;">Your OTP Code:</p>
+          <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #007bff; background: #fff; padding: 10px 20px; border-radius: 8px; display: inline-block;">
+            ${otp}
+          </div>
+        </div>
+      `;
+        await transporter.sendMail({
+          from: '"Yoco Stays" <sandeep.nandanwar@raisoni.net>',
+          to: email,
+          subject: "Your OTP Code 🔐",
+          html: htmlContent,
+        });
+      return "OTP sent";
+    } catch (error) {
+      throw new Error("Failed to send OTP email");
+    }
+  };
 }
 
 export default new UserService();
-function typeOf(arg0: number): any {
-  throw new Error("Function not implemented.");
-}
+
 
