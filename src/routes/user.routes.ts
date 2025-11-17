@@ -25,7 +25,8 @@ const {
   updateUserStatus,
   deleteUsers,
   userDeleteRequest,
-  updateUserFromApp
+  updateUserFromApp,
+  userVerifyOtp
 } = UserController;
 
 const userRouter = Router();
@@ -86,4 +87,5 @@ userRouter.post(
 userRouter.post("/update-status", validateToken, updateUserStatus);
 userRouter.delete("/:id",validateToken,deleteUsers)
 userRouter.post("/request-account-deletion",userDeleteRequest)
+userRouter.post("/request-otp-verify",userVerifyOtp)
 export default userRouter;

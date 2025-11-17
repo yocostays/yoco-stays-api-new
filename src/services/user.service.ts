@@ -741,9 +741,9 @@ class UserService {
       const checkUser: any = await User.findOne({
         _id: studentId,
       }).select(
-        "uniqueId name email phone bulkCountry bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
+        "uniqueId name email phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
       );
-      console.log(checkUser, "checkuser")
+      
       // Fetch the room details for the student
       const studentRoomDetails = await StudentHostelAllocation.findOne({
         studentId: studentId,
@@ -805,6 +805,7 @@ class UserService {
       const response = {
         _id: checkUser._id,
         name: checkUser?.name ?? null,
+        gender: checkUser?.gender ?? null,
         uniqueId: checkUser?.uniqueId ?? null,
         country: checkUser?.bulkCountry ?? null,
         state: checkUser?.bulkState ?? null,
@@ -824,7 +825,10 @@ class UserService {
         isVechicleDetailsAdded: checkUser?.vechicleDetails.length > 0,
         vechicleDetails: checkUser?.vechicleDetails ?? null,
         isKycDocumentAdded: !!checkUser?.documents,
+        identificationMark:checkUser?.identificationMark,
+        medicalIssue : checkUser?.medicalIssue,
         documents: {
+          aadhaarNumber:checkUser?.documents?.aadhaarNumber,
           aadhaarCard: checkUser?.documents?.aadhaarCard
             ? await getSignedUrl(checkUser?.documents?.aadhaarCard)
             : null,
@@ -3087,37 +3091,39 @@ class UserService {
   ) => {
     const userDetails: any = await User.findOne({ email: email });
     if (!userDetails) throw new Error(RECORD_NOT_FOUND("Email"));
-    
+
     try {
       if (!email || typeof email !== "string") {
         throw new Error("Invalid email address");
       }
 
-        const otp = await generateSecureOtp()
-        const expiryTime = getExpiryDate(5, "M");
-        await Otp.findOneAndUpdate(
-          { userId: new mongoose.Types.ObjectId(userDetails?._id) },
-          {
-            otp,
-            expiryTime,
-            isVerified: false,
-            status: true,
-            updatedBy: userDetails?._id,
-          },
-          { upsert: true, new: true }
-        );
+      const otp = await generateSecureOtp()
+      const expiryTime = getExpiryDate(5, "M");
+      await Otp.findOneAndUpdate(
+        { userId: new mongoose.Types.ObjectId(userDetails?._id) },
+        {
+          otp,
+          expiryTime,
+          isVerified: false,
+          email,
+          status: true,
+          createdBy: userDetails?._id,
+          updatedBy: userDetails?._id,
+        },
+        { upsert: true, new: true }
+      );
 
-        const transporter = nodemailer.createTransport({
-          service: "gmail",
-          auth: {
-            user: "sandeep.nandanwar@raisoni.net",
-            pass: "hkop aywb mcra ergi", // Gmail app password
-          },
-        });
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: "sandeep.nandanwar@raisoni.net",
+          pass: "hkop aywb mcra ergi", // Gmail app password
+        },
+      });
 
-        await transporter.verify();
+      await transporter.verify();
 
-        const htmlContent = `
+      const htmlContent = `
         <div style="font-family: Arial, sans-serif; background: #f9fafb; padding: 20px; border-radius: 10px; text-align: center; color: #333;">
           <p style="font-size: 16px; margin-bottom: 10px;">Your OTP Code:</p>
           <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #007bff; background: #fff; padding: 10px 20px; border-radius: 8px; display: inline-block;">
@@ -3125,17 +3131,45 @@ class UserService {
           </div>
         </div>
       `;
-        await transporter.sendMail({
-          from: '"Yoco Stays" <sandeep.nandanwar@raisoni.net>',
-          to: email,
-          subject: "Your OTP Code 🔐",
-          html: htmlContent,
-        });
+      await transporter.sendMail({
+        from: '"Yoco Stays" <sandeep.nandanwar@raisoni.net>',
+        to: email,
+        subject: "Your OTP Code 🔐",
+        html: htmlContent,
+      });
       return "OTP sent";
     } catch (error) {
       throw new Error("Failed to send OTP email");
     }
   };
+
+  verifyOTP = async (otp: number, email: string) => {
+    try {
+
+      // Check if OTP exists
+      const otpExists = await Otp.findOne({ email });
+      if(Number(otpExists?.otp) !== Number(otp)){
+        throw new Error("OTP not found")
+      }
+      if(!otpExists) throw new Error("OTP Expired")
+      if(otpExists?.isVerified) throw new Error("OTP already verified")
+      // if(!otpExists) throw new Error(OTP_NOT_VERIFIED);
+      if (otpExists) {
+         await Otp.findOneAndUpdate(
+        { userId: new mongoose.Types.ObjectId(otpExists?.userId) },
+        {
+          isVerified: true,
+          updatedBy: otpExists?.userId,
+        },
+        { upsert: true, new: true }
+      );
+
+        return "OTP Verified";
+      }
+    } catch (error:any) {
+      throw new Error(error.message || "Failed to Verify OTP");
+    }
+  }
 }
 
 export default new UserService();
