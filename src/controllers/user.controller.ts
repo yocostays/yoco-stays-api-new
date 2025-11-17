@@ -41,7 +41,8 @@ const {
   usersBasedOnHostelAndAcademic,
   updateUserStatus,
   deleteStudent,
-  userRequestDelete
+  userRequestDelete,
+  verifyOTP
 } = UserService;
 
 const {
@@ -1404,11 +1405,13 @@ class UserController {
       const url = fileUrl && fileUrl.Key ? fileUrl?.Key : null;
       // Perform file processing after sending response
       const jsonData = await excelToJson(file.buffer);
+      console.log(jsonData,"jsonsData")
       // Call the function to handle bulk upload of the data
       const data = jsonData.map((item: any) => {
 
         return {
           ...item,
+          Email:item?.Email,
           "Full Name of Student": normalizeFullName(item["Full Name of Student"]),
           "Father's Name": normalizeFullName(item["Father's Name"]),
           "Mother's Name": normalizeFullName(item["Mother's Name"]),
@@ -1422,11 +1425,14 @@ class UserController {
           Gender: String(item?.Gender).trim().toLowerCase()
         }
       })
+
+      console.log(data,"dataaaaaaaaaaaaaaaa")
       data.forEach((item: any) => {
         delete item.Timestamp,
           item["Aadhaar Number"] = item["Aadhaar Number"] ? item["Aadhaar Number"] : ""
       });
-      await userBulkUpload(data, staffId, hostelId, universityId, url);
+      console.log(data,"")
+      // await userBulkUpload(data, staffId, hostelId, universityId, url);
     } catch (error: any) {
       const errorMessage = error.message ?? SERVER_ERROR;
       const errorResponse: HttpResponse = {
@@ -2037,6 +2043,7 @@ class UserController {
         "Blood Group": Joi.string().required(),
         "Bed Number": Joi.string().required()
       });
+      console.log(req?.body,"reeqllll")
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: FETCH_SUCCESS,
@@ -2166,7 +2173,7 @@ class UserController {
       if (error) {
         const errorResponse = {
           statusCode: 400,
-          message: error?.details,
+          message: error?.details[0]?.message,
         };
         return res.status(400).json(errorResponse);
       }
@@ -2174,6 +2181,40 @@ class UserController {
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: "OTP has been sent",
+      };
+      return res.status(200).json(successResponse);
+    } catch (error: any) {
+      const errorMessage = error.message ?? SERVER_ERROR;
+      const errorResponse: HttpResponse = {
+        statusCode: 400,
+        message: errorMessage,
+      };
+      return res.status(400).json(errorResponse);
+    }
+  }
+
+   async userVerifyOtp(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const schema = Joi.object({
+        email:Joi.string().email().required(),
+        otp: Joi.number().required(),
+      });
+
+      const { error, value } = schema.validate(req?.body);
+      if (error) {
+        const errorResponse:HttpResponse = {
+          statusCode: 400,
+          message:`${error?.details[0]?.message}`,
+        };
+        return res.status(400).json(errorResponse);
+      }
+      await verifyOTP(value?.otp,value?.email)
+      const successResponse: HttpResponse = {
+        statusCode: 200,
+        message: "OTP Verified Successfully",
       };
       return res.status(200).json(successResponse);
     } catch (error: any) {

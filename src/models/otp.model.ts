@@ -6,6 +6,7 @@ export interface IOtp extends Document {
   userModel: SchemeReferenceModelTypes | null; 
   phone: string;
   otp: number;
+  email:string;
   expiryTime: Date;
   isVerified: boolean;
   status: boolean;
@@ -22,6 +23,12 @@ const OtpSchema: Schema = new Schema<IOtp>(
       refPath: "userModel",
       required: false,
       default: null,
+    },
+    email:{
+      type:String,
+      required:false,
+      default:null,
+      unique:true
     },
     userModel: {
       type: String,
@@ -69,6 +76,7 @@ const OtpSchema: Schema = new Schema<IOtp>(
 OtpSchema.index({ phone: 1 });
 OtpSchema.index({ userId: 1 });
 OtpSchema.index({ userModel: 1 });
+OtpSchema.index({ expiryTime: 1 }, { expireAfterSeconds: 0 });
 
 const Otp = mongoose.model<IOtp>("Otp", OtpSchema);
 export default Otp;
