@@ -56,7 +56,7 @@ import StudentLeave from "../models/student-leave.model";
 import Complaint from "../models/complaint.model";
 import BookMeals from "../models/bookMeal.model";
 import nodemailer from "nodemailer";
-import { generateSecureOtp, getExpiryDate } from "../utils/otpService";
+import { generateRandomSecureOtp, getExpiryDate } from "../utils/otpService";
 import Otp from "../models/otp.model";
 
 const { getRoleByName } = RoleService;
@@ -741,9 +741,8 @@ class UserService {
       const checkUser: any = await User.findOne({
         _id: studentId,
       }).select(
-        "uniqueId name email phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
+        "uniqueId name email category phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
       );
-      
       // Fetch the room details for the student
       const studentRoomDetails = await StudentHostelAllocation.findOne({
         studentId: studentId,
@@ -815,6 +814,7 @@ class UserService {
         image: checkUser?.image ? await getSignedUrl(checkUser?.image) : null,
         bloodGroup: checkUser?.bloodGroup ?? null,
         dob: checkUser?.dob ?? null,
+        category: checkUser?.category ?? null,
         semester: checkUser?.academicDetails?.semester ?? null,
         fatherName: checkUser?.familiyDetails?.fatherName ?? null,
         fatherNumber: checkUser?.familiyDetails?.fatherNumber ?? null,
@@ -822,13 +822,17 @@ class UserService {
         motherNumber: checkUser?.familiyDetails?.motherNumber ?? null,
         fatherEmail: checkUser?.familiyDetails?.fatherEmail ?? null,
         motherEmail: checkUser?.familiyDetails?.motherEmail ?? null,
+        guardianName: checkUser?.familiyDetails?.guardianName ?? null,
+        guardianRelationship: checkUser?.familiyDetails?.relationship ?? null,
+        guardianOccuption: checkUser?.familiyDetails?.occuption ?? null,
+        guardianAddress: checkUser?.familiyDetails?.address,
         isVechicleDetailsAdded: checkUser?.vechicleDetails.length > 0,
         vechicleDetails: checkUser?.vechicleDetails ?? null,
         isKycDocumentAdded: !!checkUser?.documents,
-        identificationMark:checkUser?.identificationMark,
-        medicalIssue : checkUser?.medicalIssue,
+        identificationMark: checkUser?.identificationMark,
+        medicalIssue: checkUser?.medicalIssue,
         documents: {
-          aadhaarNumber:checkUser?.documents?.aadhaarNumber,
+          aadhaarNumber: checkUser?.documents?.aadhaarNumber,
           aadhaarCard: checkUser?.documents?.aadhaarCard
             ? await getSignedUrl(checkUser?.documents?.aadhaarCard)
             : null,
@@ -3097,7 +3101,7 @@ class UserService {
         throw new Error("Invalid email address");
       }
 
-      const otp = await generateSecureOtp()
+      const otp = await generateRandomSecureOtp()
       const expiryTime = getExpiryDate(5, "M");
       await Otp.findOneAndUpdate(
         { userId: new mongoose.Types.ObjectId(userDetails?._id) },
@@ -3148,25 +3152,25 @@ class UserService {
 
       // Check if OTP exists
       const otpExists = await Otp.findOne({ email });
-      if(Number(otpExists?.otp) !== Number(otp)){
+      if (Number(otpExists?.otp) !== Number(otp)) {
         throw new Error("OTP not found")
       }
-      if(!otpExists) throw new Error("OTP Expired")
-      if(otpExists?.isVerified) throw new Error("OTP already verified")
+      if (!otpExists) throw new Error("OTP Expired")
+      if (otpExists?.isVerified) throw new Error("OTP already verified")
       // if(!otpExists) throw new Error(OTP_NOT_VERIFIED);
       if (otpExists) {
-         await Otp.findOneAndUpdate(
-        { userId: new mongoose.Types.ObjectId(otpExists?.userId) },
-        {
-          isVerified: true,
-          updatedBy: otpExists?.userId,
-        },
-        { upsert: true, new: true }
-      );
+        await Otp.findOneAndUpdate(
+          { userId: new mongoose.Types.ObjectId(otpExists?.userId) },
+          {
+            isVerified: true,
+            updatedBy: otpExists?.userId,
+          },
+          { upsert: true, new: true }
+        );
 
         return "OTP Verified";
       }
-    } catch (error:any) {
+    } catch (error: any) {
       throw new Error(error.message || "Failed to Verify OTP");
     }
   }
