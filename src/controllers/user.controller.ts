@@ -1405,7 +1405,6 @@ class UserController {
       const url = fileUrl && fileUrl.Key ? fileUrl?.Key : null;
       // Perform file processing after sending response
       const jsonData = await excelToJson(file.buffer);
-      console.log(jsonData,"jsonsData")
       // Call the function to handle bulk upload of the data
       const data = jsonData.map((item: any) => {
 
@@ -1426,13 +1425,11 @@ class UserController {
         }
       })
 
-      console.log(data,"dataaaaaaaaaaaaaaaa")
       data.forEach((item: any) => {
         delete item.Timestamp,
           item["Aadhaar Number"] = item["Aadhaar Number"] ? item["Aadhaar Number"] : ""
       });
-      console.log(data,"")
-      // await userBulkUpload(data, staffId, hostelId, universityId, url);
+      await userBulkUpload(data, staffId, hostelId, universityId, url);
     } catch (error: any) {
       const errorMessage = error.message ?? SERVER_ERROR;
       const errorResponse: HttpResponse = {
