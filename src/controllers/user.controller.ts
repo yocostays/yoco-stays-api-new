@@ -1405,7 +1405,6 @@ class UserController {
       const url = fileUrl && fileUrl.Key ? fileUrl?.Key : null;
       // Perform file processing after sending response
       const jsonData = await excelToJson(file.buffer);
-      console.log(jsonData,"jsonsData")
       // Call the function to handle bulk upload of the data
       const data = jsonData.map((item: any) => {
 
