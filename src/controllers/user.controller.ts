@@ -1426,13 +1426,11 @@ class UserController {
         }
       })
 
-      console.log(data,"dataaaaaaaaaaaaaaaa")
       data.forEach((item: any) => {
         delete item.Timestamp,
           item["Aadhaar Number"] = item["Aadhaar Number"] ? item["Aadhaar Number"] : ""
       });
-      console.log(data,"")
-      // await userBulkUpload(data, staffId, hostelId, universityId, url);
+      await userBulkUpload(data, staffId, hostelId, universityId, url);
     } catch (error: any) {
       const errorMessage = error.message ?? SERVER_ERROR;
       const errorResponse: HttpResponse = {
