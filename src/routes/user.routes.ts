@@ -41,7 +41,7 @@ userRouter.get(
 
 userRouter.get("/:id", validateToken, getStudentDetailsById);
 userRouter.post("/assign-hostel", validateToken, assignHostelIndivisually);
-userRouter.post("/profile/update", validateToken, updateStudentDetailsForApp); //TODO - only use in app for(email and image update)
+userRouter.patch("/profile/update", validateToken, updateStudentDetailsForApp); //TODO - only use in app for(email and image update)
 userRouter.post("/profile", validateToken, retrieveStudentDetailsByIdForApp); //TODO - only use in app for
 userRouter.patch(
   "/sync-vehicle",
