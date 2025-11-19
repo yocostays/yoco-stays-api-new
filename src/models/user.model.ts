@@ -113,6 +113,7 @@ export interface IUser extends Document {
   isLeft: boolean;
   leftDate: Date;
   status: boolean;
+  isRequestDeactivate:boolean;
   createdBy: mongoose.Types.ObjectId;
   updatedBy: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -496,6 +497,10 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     status: {
       type: Boolean,
       default: true,
+    },
+    isRequestDeactivate:{
+      type:Boolean,
+      default:false
     },
     createdBy: {
       type: Schema.Types.ObjectId,
