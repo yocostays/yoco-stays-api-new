@@ -576,27 +576,22 @@ class UserController {
 
       let payload
       let studentId = req?.body?._valid?._id
-      if (req?.body?.image) {
-        payload = {
-          image: req?.body?.image,
-        }
-      } else {
-        payload = {
-          ...req.body,
-          phone: String(req?.body?.phone),
-          motherName: normalizeFullName(req?.body?.motherName),
-          fatherName: normalizeFullName(req?.body?.fatherName),
-          fatherPhone: String(req?.body?.fatherPhone),
-          motherPhone: String(req?.body?.motherPhone),
-          aadhar: String(req?.body?.aadhar),
-          name: normalizeFullName(req?.body?.studentName),
-          gender: req.body?.gender?.replace(/\s+/g, "").toLowerCase(),
-          dob: excelDateToJSDate(req?.body?.dob)?.success === true ? excelDateToJSDate(req?.body?.dob)?.date : excelDateToJSDate(req?.body?.dob),
-        }
-
-        delete payload._valid
-        delete payload.studentName
+   
+      payload = {
+        ...req.body,
+        phone: String(req?.body?.phone),
+        motherName: normalizeFullName(req?.body?.motherName),
+        fatherName: normalizeFullName(req?.body?.fatherName),
+        fatherPhone: String(req?.body?.fatherPhone),
+        motherPhone: String(req?.body?.motherPhone),
+        aadhar: String(req?.body?.aadhar),
+        name: normalizeFullName(req?.body?.studentName),
+        gender: req.body?.gender?.replace(/\s+/g, "").toLowerCase(),
+        dob: excelDateToJSDate(req?.body?.dob)?.success === true ? excelDateToJSDate(req?.body?.dob)?.date : excelDateToJSDate(req?.body?.dob),
       }
+
+      delete payload._valid
+      delete payload.studentName
 
       const schema = Joi.object({
         name: Joi.string().required().messages({
@@ -707,33 +702,18 @@ class UserController {
         guardianRelation: Joi.string().max(100).optional().allow('', null),
         occuption: Joi.string().max(70).optional().allow('', null),
         guardianAddress: Joi.string().optional().allow('', null),
+        image: Joi.string().required().allow('', null)
       });
-      const imageSchema = Joi.object({
-        image: Joi.string().required()
-      })
-      if (req.body?.image) {
-        const { error } = imageSchema.validate(payload, {
-          abortEarly: false,   // collect all errors
-        });
-        if (error) {
-          return res.status(400).json({
-            statusCode: 400,
-            message: error?.details
-          })
+ 
+      const { error } = schema.validate(payload, {
+        abortEarly: false,   // collect all errors
+      });
+      if (error) {
+        return res.status(400).json({
+          statusCode: 400,
+          message: error?.details
+        })
 
-        }
-      } else {
-
-        const { error } = schema.validate(payload, {
-          abortEarly: false,   // collect all errors
-        });
-        if (error) {
-          return res.status(400).json({
-            statusCode: 400,
-            message: error?.details
-          })
-
-        }
       }
       if (!mongoose.isValidObjectId(studentId)) {
         throw new Error(INVALID_ID);
@@ -742,41 +722,35 @@ class UserController {
 
       let studentData: any
 
-      if (!req?.body?.image) {
-        let familiyDetails = {
-          motherName: normalizeFullName(payload?.motherName),
-          fatherName: normalizeFullName(payload?.fatherName),
-          fatherNumber: String(payload?.fatherPhone),
-          motherNumber: String(payload?.motherPhone),
-          guardianName: String(payload?.guardianName),
-          relationship: String(payload?.guardianRelation),
-          address: String(payload?.guardianAddress)
-        }
-        studentData = {
-          ...payload,
-          bulkCity: payload?.city,
-          bulkCountry: payload?.country,
-          bulkState: payload?.state,
-          familiyDetails: familiyDetails,
-        };
-
-        delete studentData.city;
-        delete studentData.country;
-        delete studentData.state;
-        delete studentData.fatherName;
-        delete studentData.motherName;
-        delete studentData.fatherPhone;
-        delete studentData.motherPhone;
-        delete studentData.guardianName;
-        delete studentData.guardianRelation;
-        delete studentData.guardianAddress;
-      } else {
-        studentData = {
-          image: payload?.image,
-        }
-
+      let familiyDetails = {
+        motherName: normalizeFullName(payload?.motherName),
+        fatherName: normalizeFullName(payload?.fatherName),
+        fatherNumber: String(payload?.fatherPhone),
+        motherNumber: String(payload?.motherPhone),
+        guardianName: String(payload?.guardianName),
+        relationship: String(payload?.guardianRelation),
+        address: String(payload?.guardianAddress)
       }
+      studentData = {
+        ...payload,
+        bulkCity: payload?.city,
+        bulkCountry: payload?.country,
+        bulkState: payload?.state,
+        familiyDetails: familiyDetails,
+        image: payload?.image,
+      };
 
+      delete studentData.city;
+      delete studentData.country;
+      delete studentData.state;
+      delete studentData.fatherName;
+      delete studentData.motherName;
+      delete studentData.fatherPhone;
+      delete studentData.motherPhone;
+      delete studentData.guardianName;
+      delete studentData.guardianRelation;
+      delete studentData.guardianAddress;
+    
       // Call the service to update student
       await updateStudentInApp(studentId, studentData);
 
@@ -1410,7 +1384,7 @@ class UserController {
 
         return {
           ...item,
-          Email:item?.Email,
+          Email: item?.Email,
           "Full Name of Student": normalizeFullName(item["Full Name of Student"]),
           "Father's Name": normalizeFullName(item["Father's Name"]),
           "Mother's Name": normalizeFullName(item["Mother's Name"]),
@@ -2040,7 +2014,6 @@ class UserController {
         "Blood Group": Joi.string().required(),
         "Bed Number": Joi.string().required()
       });
-      console.log(req?.body,"reeqllll")
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: FETCH_SUCCESS,
@@ -2174,9 +2147,11 @@ class UserController {
         };
         return res.status(400).json(errorResponse);
       }
-      await userRequestDelete(value?.email)
+      const user = await userRequestDelete(value?.email)
+
       const successResponse: HttpResponse = {
         statusCode: 200,
+        data: user,
         message: "OTP has been sent",
       };
       return res.status(200).json(successResponse);
@@ -2190,25 +2165,25 @@ class UserController {
     }
   }
 
-   async userVerifyOtp(
+  async userVerifyOtp(
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
       const schema = Joi.object({
-        email:Joi.string().email().required(),
+        email: Joi.string().email().required(),
         otp: Joi.number().required(),
       });
 
       const { error, value } = schema.validate(req?.body);
       if (error) {
-        const errorResponse:HttpResponse = {
+        const errorResponse: HttpResponse = {
           statusCode: 400,
-          message:`${error?.details[0]?.message}`,
+          message: `${error?.details[0]?.message}`,
         };
         return res.status(400).json(errorResponse);
       }
-      await verifyOTP(value?.otp,value?.email)
+      await verifyOTP(value?.otp, value?.email)
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: "OTP Verified Successfully",

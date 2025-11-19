@@ -649,7 +649,7 @@ class UserService {
       const currentUser = await User.findById(studentId);
       // let payload: { email: string; image?: string } = { email };
       let payload
-      if (studentData?.image && studentData?.image.includes("base64")) {
+      if (studentData?.image && studentData?.image !==" " && studentData?.image.includes("base64")) {
         const uploadImage = await uploadFileInS3Bucket(studentData?.image, USER_FOLDER);
 
         if (uploadImage !== false) {
@@ -741,7 +741,7 @@ class UserService {
       const checkUser: any = await User.findOne({
         _id: studentId,
       }).select(
-        "uniqueId name email category phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
+        "uniqueId name email permanentAddress category phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
       );
       // Fetch the room details for the student
       const studentRoomDetails = await StudentHostelAllocation.findOne({
@@ -803,6 +803,7 @@ class UserService {
       // Prepare the response
       const response = {
         _id: checkUser._id,
+        address: checkUser?.permanentAddress ?? null,
         name: checkUser?.name ?? null,
         gender: checkUser?.gender ?? null,
         uniqueId: checkUser?.uniqueId ?? null,
@@ -3141,7 +3142,10 @@ class UserService {
         subject: "Your OTP Code 🔐",
         html: htmlContent,
       });
-      return "OTP sent";
+      return {
+        name:userDetails?.name,
+        userId : userDetails?.uniqueId
+      };
     } catch (error) {
       throw new Error("Failed to send OTP email");
     }
@@ -3170,6 +3174,19 @@ class UserService {
 
         return "OTP Verified";
       }
+    } catch (error: any) {
+      throw new Error(error.message || "Failed to Verify OTP");
+    }
+  }
+
+  userRequestDeactivate = async (email: string) => {
+    try {
+      await User.findOneAndUpdate(
+        { email: email },
+        { $set: { isRequestDeactivate: true } },
+        { new: true }
+      );
+      return "Activation request sent"
     } catch (error: any) {
       throw new Error(error.message || "Failed to Verify OTP");
     }
