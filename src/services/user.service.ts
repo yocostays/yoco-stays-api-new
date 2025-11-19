@@ -649,28 +649,21 @@ class UserService {
       const currentUser = await User.findById(studentId);
       // let payload: { email: string; image?: string } = { email };
       let payload
-      if (studentData?.image && studentData?.image !==" " && studentData?.image.includes("base64")) {
+     
+      if (studentData?.image && studentData?.image.includes("base64")) {
         const uploadImage = await uploadFileInS3Bucket(studentData?.image, USER_FOLDER);
-
+        console.log(uploadImage, "uploadImage")
         if (uploadImage !== false) {
-          // Update the payload with the new image's S3 key
           payload = { ...studentData, image: uploadImage.Key };
-
-          // After uploading, check if there is an existing image to delete
-          if (currentUser?.image) {
-            const existingImageKey = currentUser.image;
-            await deleteFromS3(
-              process.env.S3_BUCKET_NAME ?? "yoco-staging",
-              existingImageKey
-            );
-          }
         } else {
           throw new Error(IMAGE_UPLOAD_ERROR);
         }
       }
+      console.log(payload, "imageeeeeeeeeee1111111")
+
       // Update the user's email and image in the database
       await User.findByIdAndUpdate(studentId, {
-        $set: { ...studentData, payload },
+        $set: { ...payload},
       });
       //NOTE: Check user is updated or not.
       // if (userUpdated) {
@@ -3143,8 +3136,8 @@ class UserService {
         html: htmlContent,
       });
       return {
-        name:userDetails?.name,
-        userId : userDetails?.uniqueId
+        name: userDetails?.name,
+        userId: userDetails?.uniqueId
       };
     } catch (error) {
       throw new Error("Failed to send OTP email");

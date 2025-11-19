@@ -576,7 +576,7 @@ class UserController {
 
       let payload
       let studentId = req?.body?._valid?._id
-   
+
       payload = {
         ...req.body,
         phone: String(req?.body?.phone),
@@ -704,7 +704,7 @@ class UserController {
         guardianAddress: Joi.string().optional().allow('', null),
         image: Joi.string().required().allow('', null)
       });
- 
+
       const { error } = schema.validate(payload, {
         abortEarly: false,   // collect all errors
       });
@@ -750,7 +750,7 @@ class UserController {
       delete studentData.guardianName;
       delete studentData.guardianRelation;
       delete studentData.guardianAddress;
-    
+
       // Call the service to update student
       await updateStudentInApp(studentId, studentData);
 
@@ -1466,7 +1466,6 @@ class UserController {
       const { staff } = await getStaffById(staffId);
 
       if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
-
       const {
         name,
         image,
@@ -1497,6 +1496,7 @@ class UserController {
         bedNumber,
         hostelId
       } = req.body;
+      console.log(image, "imagessssssssssssssssssss2222222")
 
       const allowedDomains = [
         "gmail.com",
