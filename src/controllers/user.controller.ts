@@ -585,7 +585,7 @@ class UserController {
         fatherName: normalizeFullName(req?.body?.fatherName),
         fatherPhone: String(req?.body?.fatherPhone),
         motherPhone: String(req?.body?.motherPhone),
-        aadhar: String(req?.body?.aadhar),
+        aadhar: req.body?.aadhar ? String(req?.body?.aadhar) : null,
         name: normalizeFullName(req?.body?.studentName),
         gender: req.body?.gender?.replace(/\s+/g, "").toLowerCase(),
         dob: excelDateToJSDate(req?.body?.dob)?.success === true ? excelDateToJSDate(req?.body?.dob)?.date : excelDateToJSDate(req?.body?.dob),
@@ -593,7 +593,6 @@ class UserController {
 
       delete payload._valid
       delete payload.studentName
-
       const schema = Joi.object({
         name: Joi.string().required().messages({
           "any.required": "Student Name is required",
@@ -645,7 +644,14 @@ class UserController {
             "number.length": "Mobile Number must be between 8 to 15 digits",
             "any.required": "Mobile Number is required",
           }),
-        aadhar: Joi.string().allow(" ", null),
+          // aadhar:Joi.string().allow('', null),
+        aadhar: Joi.string()
+          .allow('', null)
+          .pattern(/^\d{12}$/)
+          .optional()
+          .messages({
+            'string.pattern.base': 'Aadhar must be exactly 12 digits'
+          }),
         address: Joi.string().allow(" ", null),
         country: Joi.string().required().messages({
           "any.required": "Country is required",
@@ -732,6 +738,10 @@ class UserController {
         relationship: String(payload?.guardianRelation),
         address: String(payload?.guardianAddress)
       }
+
+      let documentsDetails ={
+        aadhaarNumber : payload?.aadhar
+      }
       studentData = {
         ...payload,
         bulkCity: payload?.city,
@@ -739,9 +749,10 @@ class UserController {
         bulkState: payload?.state,
         familiyDetails: familiyDetails,
         image: payload?.image,
-        medicalIssue:payload?.medical,
-        permanentAddress:payload?.address,
-        identificationMark:payload?.identification
+        medicalIssue: payload?.medical,
+        permanentAddress: payload?.address,
+        documents:documentsDetails,
+        identificationMark: payload?.identification
       };
 
       delete studentData.city;
@@ -1170,7 +1181,6 @@ class UserController {
     })
     const { error, value } = schema.validate(req.body, { abortEarly: false });
     if (error) {
-      console.log(error, "error")
       // error.details.forEach((err: any) => {
       //   const field = err.context.label || err.context.key;
       //   const message = err.message.replace(/"/g, "");
@@ -2202,7 +2212,7 @@ class UserController {
     }
   }
 
-   async userRequestDeactivate(
+  async userRequestDeactivate(
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
