@@ -739,7 +739,9 @@ class UserController {
         bulkState: payload?.state,
         familiyDetails: familiyDetails,
         image: payload?.image,
-        medicalIssue:payload?.medical
+        medicalIssue:payload?.medical,
+        permanentAddress:payload?.address,
+        identificationMark:payload?.identification
       };
 
       delete studentData.city;
