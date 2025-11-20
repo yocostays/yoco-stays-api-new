@@ -656,11 +656,13 @@ class UserService {
         } else {
           throw new Error(IMAGE_UPLOAD_ERROR);
         }
+      }else{
+        payload.image  = studentData?.image || null
       }
       const safeData = { ...studentData };
       delete safeData.email;
       delete safeData.phone;
-
+      delete safeData.image;
       // Merge safe fields
       payload = { ...payload, ...safeData };
       // Update the user's email and image in the database
