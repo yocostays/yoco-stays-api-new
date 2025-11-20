@@ -648,23 +648,26 @@ class UserService {
       // Get the current user to check if there is an existing image
       const currentUser = await User.findById(studentId);
       // let payload: { email: string; image?: string } = { email };
-      let payload
-     
+      let payload: any = {};
       if (studentData?.image && studentData?.image.includes("base64")) {
         const uploadImage = await uploadFileInS3Bucket(studentData?.image, USER_FOLDER);
-        console.log(uploadImage, "uploadImage")
         if (uploadImage !== false) {
-          payload = { ...studentData, image: uploadImage.Key };
+          payload = { image: uploadImage.Key };
         } else {
           throw new Error(IMAGE_UPLOAD_ERROR);
         }
       }
-      console.log(payload, "imageeeeeeeeeee1111111")
-
       // Update the user's email and image in the database
-      await User.findByIdAndUpdate(studentId, {
-        $set: { ...payload},
-      });
+      await User.findByIdAndUpdate(
+        studentId,
+        {
+          $set: {
+            ...studentData,
+            ...payload
+          }
+        },
+        { new: true }
+      );
       //NOTE: Check user is updated or not.
       // if (userUpdated) {
       // const { playedIds, template, student, isPlayedNoticeCreated, log } =
@@ -2513,6 +2516,7 @@ class UserService {
     floorNumber?: number,
     roomNumber?: number,
     bedNumber?: string,
+    aadharNumber?: string,
     hostelId?: string
   ): Promise<string> => {
     try {
@@ -2562,7 +2566,8 @@ class UserService {
           }
         }
       }
-
+      console.log(aadharNumber, "aaaa")
+      console.log(documents, "document")
       // Step 6: Update the user details
       const updatedUserData = {
         name,
@@ -2594,7 +2599,7 @@ class UserService {
         updatedAt: getCurrentISTTime(),
         updatedBy: staffId,
       };
-
+      console.log(updatedUserData, "updateddDAta")
       // await User.findByIdAndUpdate(studentId, { $set: updatedUserData });
       await User.findByIdAndUpdate(
         { _id: studentId },
@@ -3174,6 +3179,16 @@ class UserService {
 
   userRequestDeactivate = async (email: string) => {
     try {
+      const user = await User.findOne({ email });
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      // Already requested
+      if (user.isRequestDeactivate === true) {
+        throw new Error("Already request sent")
+      }
       await User.findOneAndUpdate(
         { email: email },
         { $set: { isRequestDeactivate: true } },
