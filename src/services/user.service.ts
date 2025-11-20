@@ -78,6 +78,27 @@ const {
 const { UPDATE_DATA, CREATE_DATA, FILE_UPLOADED, DELETE_DATA } =
   SUCCESS_MESSAGES;
 
+const extractUploadPath = (url: string) => {
+
+  if (!url) return null;
+  // if (url.startsWith("data:image")) {
+  //   data.includes("base64")
+  //   return url
+  // }
+  if(url.includes("base64")){
+    return url
+  }
+  // Check if the string is a full URL (production or localhost)
+  const isFullUrl = url.startsWith("http://") || url.startsWith("https://");
+
+  // If it's a URL AND contains uploads
+  if (isFullUrl && url.includes("/uploads/")) {
+    return url.split("/uploads/")[1]; // return part after uploads
+  }
+
+  // If not a URL (already a simple path)
+  return url;
+};
 class UserService {
   //SECTION: Method to create a new student
   registerNewUser = async (
@@ -627,6 +648,8 @@ class UserService {
     }
   };
 
+
+
   //SECTION: Method to update student in app
   updateStudentInApp = async (
     studentId: mongoose.Types.ObjectId,
@@ -649,22 +672,25 @@ class UserService {
       // Get the current user to check if there is an existing image
       // let payload: { email: string; image?: string } = { email };
       let payload: any = {};
-      if (studentData?.image && studentData?.image.includes("base64")) {
-        const uploadImage = await uploadFileInS3Bucket(studentData?.image, USER_FOLDER);
+      const data = extractUploadPath(studentData?.image)
+      if (data && data.includes("base64")) {
+        const uploadImage = await uploadFileInS3Bucket(data, USER_FOLDER);
         if (uploadImage !== false) {
           payload = { image: uploadImage.Key };
         } else {
           throw new Error(IMAGE_UPLOAD_ERROR);
         }
-      }else{
-        payload.image  = studentData?.image || null
+      } else {
+        payload.image = data || null
       }
+
       const safeData = { ...studentData };
       delete safeData.email;
       delete safeData.phone;
       delete safeData.image;
       // Merge safe fields
       payload = { ...payload, ...safeData };
+
       // Update the user's email and image in the database
       await User.findByIdAndUpdate(
         studentId,
@@ -2569,8 +2595,7 @@ class UserService {
           }
         }
       }
-      console.log(aadharNumber, "aaaa")
-      console.log(documents, "document")
+
       // Step 6: Update the user details
       const updatedUserData = {
         name,
@@ -2602,7 +2627,6 @@ class UserService {
         updatedAt: getCurrentISTTime(),
         updatedBy: staffId,
       };
-      console.log(updatedUserData, "updateddDAta")
       // await User.findByIdAndUpdate(studentId, { $set: updatedUserData });
       await User.findByIdAndUpdate(
         { _id: studentId },
