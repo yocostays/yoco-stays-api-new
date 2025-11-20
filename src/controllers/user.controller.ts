@@ -42,7 +42,8 @@ const {
   updateUserStatus,
   deleteStudent,
   userRequestDelete,
-  verifyOTP
+  verifyOTP,
+  userRequestDeactivate
 } = UserService;
 
 const {
@@ -1496,7 +1497,6 @@ class UserController {
         bedNumber,
         hostelId
       } = req.body;
-      console.log(image, "imagessssssssssssssssssss2222222")
 
       const allowedDomains = [
         "gmail.com",
@@ -2187,6 +2187,39 @@ class UserController {
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: "OTP Verified Successfully",
+      };
+      return res.status(200).json(successResponse);
+    } catch (error: any) {
+      const errorMessage = error.message ?? SERVER_ERROR;
+      const errorResponse: HttpResponse = {
+        statusCode: 400,
+        message: errorMessage,
+      };
+      return res.status(400).json(errorResponse);
+    }
+  }
+
+   async userRequestDeactivate(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const schema = Joi.object({
+        email: Joi.string().email().required(),
+      });
+
+      const { error, value } = schema.validate(req?.body);
+      if (error) {
+        const errorResponse: HttpResponse = {
+          statusCode: 400,
+          message: `${error?.details[0]?.message}`,
+        };
+        return res.status(400).json(errorResponse);
+      }
+      await userRequestDeactivate(value?.email)
+      const successResponse: HttpResponse = {
+        statusCode: 200,
+        message: "Your request has been Sent",
       };
       return res.status(200).json(successResponse);
     } catch (error: any) {
