@@ -639,14 +639,14 @@ class UserService {
       if (!studentExists) throw new Error(RECORD_NOT_FOUND("User"));
 
       // Check if the email is already in use by another user
-      const checkUser: any = await User.findOne({
-        _id: { $ne: studentId },
-        email: studentData?.email
-      });
-      if (checkUser) throw new Error(ALREADY_EXIST_FIELD_ONE("Email"));
+      // const checkUser: any = await User.findOne({
+      //   _id: { $ne: studentId },
+      //   email: studentData?.email
+      // });
+      // if (checkUser) throw new Error(ALREADY_EXIST_FIELD_ONE("Email"));
+      const currentUser = await User.findById(studentId);
 
       // Get the current user to check if there is an existing image
-      const currentUser = await User.findById(studentId);
       // let payload: { email: string; image?: string } = { email };
       let payload: any = {};
       if (studentData?.image && studentData?.image.includes("base64")) {
@@ -657,15 +657,16 @@ class UserService {
           throw new Error(IMAGE_UPLOAD_ERROR);
         }
       }
+      const safeData = { ...studentData };
+      delete safeData.email;
+      delete safeData.phone;
+
+      // Merge safe fields
+      payload = { ...payload, ...safeData };
       // Update the user's email and image in the database
       await User.findByIdAndUpdate(
         studentId,
-        {
-          $set: {
-            ...studentData,
-            ...payload
-          }
-        },
+        { $set: payload },
         { new: true }
       );
       //NOTE: Check user is updated or not.
