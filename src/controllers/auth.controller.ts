@@ -197,12 +197,7 @@ class AuthController {
   ): Promise<Response<HttpResponse>> {
     try {
       const { email } = req.body;
-      // const schema = Joi.object({
-      //   email: Joi.string().email().required().messages({
-      //     "string.email": "Invalid email format",
-      //     "any.required": "Email is required",
-      //   })
-      // });
+     
       const allowedDomains = [
         "gmail.com",
         "yahoo.com",
