@@ -15,6 +15,9 @@ import {
   SAMPLE_FILE,
   STAFF_FOLDER,
 } from "../utils/s3bucketFolder";
+import userService from "../services/user.service";
+import Joi from "joi";
+import User from "../models/user.model";
 
 const {
   staffLoginWithUserNameAndPwd,
@@ -29,6 +32,11 @@ const {
   generateOtpUserSignUp,
   verifyOtpUserSignUp,
 } = AuthService;
+
+const {
+  userRequestDelete,
+  verifyOTP
+} = userService
 
 const { getStudentByUniqueId } = UserService;
 const { getStaffById, staffByEmailId } = StaffService;
@@ -188,28 +196,70 @@ class AuthController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      const { uniqueId } = req.body;
+      const { email } = req.body;
+      // const schema = Joi.object({
+      //   email: Joi.string().email().required().messages({
+      //     "string.email": "Invalid email format",
+      //     "any.required": "Email is required",
+      //   })
+      // });
+      const allowedDomains = [
+        "gmail.com",
+        "yahoo.com",
+        "outlook.com",
+        "hotmail.com",
+        "live.com",
+        "icloud.com",
+        "aol.com",
+        "zoho.com",
+        "raisoni.net"
+      ];
+      const schema = Joi.object({
+        email: Joi.string()
+          .email({ tlds: { allow: false } })
+          .custom((value, helpers) => {
+            const domain = value.split("@")[1];
 
-      //NOTE - get user by unique Id
-      const { student } = await getStudentByUniqueId(uniqueId);
-
-      if (!student) {
-        throw new Error(RECORD_NOT_FOUND("Student"));
+            if (!allowedDomains.includes(domain)) {
+              return helpers.error("any.invalid");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "string.email": "Invalid email format",
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
+            "any.required": "Email is required"
+          }),
+      })
+      const { error } = schema.validate(req.body, { abortEarly: false });
+      if (error) {
+        const errorResponse: HttpResponse = {
+          statusCode: 400,
+          message: error?.details[0]?.message,
+        };
+        return res.status(400).json(errorResponse);
       }
+      // //NOTE - get user by unique Id
+      // const { student } = await getStudentByUniqueId(uniqueId);
 
-      if (!student.isVerified) throw new Error(USER_NOT_ACTIVE);
+      // if (!student) {
+      //   throw new Error(RECORD_NOT_FOUND("Student"));
+      // }
 
-      const mobile = String(student.phone)
-      // Call the service to generate otp
-      const { otp } = await generateOtp(student._id, mobile);
+      // if (!student.isVerified) throw new Error(USER_NOT_ACTIVE);
 
+      // const mobile = String(student.phone)
+      // // Call the service to generate otp
+      // const { otp } = await generateOtp(student._id, mobile);
+      await userRequestDelete(email)
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: GENERATE_OTP,
-        data: {
-          otp,
-          uniqueId: student?.uniqueId,
-        },
+        // data: {
+        //   otp,
+        //   uniqueId: student?.uniqueId,
+        // },
       };
       return res.status(200).json(successResponse);
     } catch (error: any) {
@@ -228,15 +278,81 @@ class AuthController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      const { uniqueId, otp, password } = req.body;
+      const allowedDomains = [
+        "gmail.com",
+        "yahoo.com",
+        "outlook.com",
+        "hotmail.com",
+        "live.com",
+        "icloud.com",
+        "aol.com",
+        "zoho.com",
+        "raisoni.net"
+      ];
+      const schema = Joi.object({
+        email: Joi.string()
+          .email({ tlds: { allow: false } })
+          .custom((value, helpers) => {
+            const domain = value.split("@")[1];
+
+            if (!allowedDomains.includes(domain)) {
+              return helpers.error("any.invalid");
+            }
+            return value;
+          })
+          .required()
+          .messages({
+            "string.email": "Invalid email format",
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
+            "any.required": "Email is required"
+          }),
+        otp: Joi.number().required(),
+        password: Joi.string()
+          .pattern(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/)
+          .required()
+          .messages({
+            "string.pattern.base": "Password must contain letters and numbers",
+            "any.required": "Password is required",
+          })
+      })
+
+      const { error } = schema.validate(req?.body);
+      if (error) {
+        const errorResponse: HttpResponse = {
+          statusCode: 400,
+          message: `${error?.details[0]?.message}`,
+        };
+        return res.status(400).json(errorResponse);
+      }
+      // const { uniqueId, otp, password } = req.body;
+      const { email, otp, password } = req?.body
+
+      await verifyOTP(otp, email)
+      const student = await User.findOne({ email })
 
       //NOTE - get user by unique Id
-      const { student } = await getStudentByUniqueId(uniqueId);
+      // const { student } = await getStudentByUniqueId(uniqueId);
+      //  const otpExists = await Otp.findOne({ email });
+      // if (Number(otpExists?.otp) !== Number(otp)) {
+      //   throw new Error("OTP not found")
+      // }
+      // if (!otpExists) throw new Error("OTP Expired")
+      // if (otpExists?.isVerified) throw new Error("OTP already verified")
+      // // if(!otpExists) throw new Error(OTP_NOT_VERIFIED);
+      // if (otpExists) {
+      //   await Otp.findOneAndUpdate(
+      //     { userId: new mongoose.Types.ObjectId(otpExists?.userId) },
+      //     {
+      //       isVerified: true,
+      //       updatedBy: otpExists?.userId,
+      //     },
+      //     { upsert: true, new: true }
+      //   );
 
-      if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
+      // if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
 
       // Call the service to reset User password
-      await resetStudentPassword(student._id, password, otp);
+      await resetStudentPassword(student, password);
 
       const successResponse: HttpResponse = {
         statusCode: 200,
@@ -269,8 +385,8 @@ class AuthController {
         type === "staff"
           ? STAFF_FOLDER
           : type === "sample"
-          ? SAMPLE_FILE
-          : COMPLAIN_FILES;
+            ? SAMPLE_FILE
+            : COMPLAIN_FILES;
 
       const url = await uploadFileInApp(file, folderName);
 
@@ -342,7 +458,7 @@ class AuthController {
       const { staff } = await staffByEmailId(email);
 
       // Call the service to generate otp
-      const { otp } = await generateOtp(staff._id,staff.phone);
+      const { otp } = await generateOtp(staff._id, staff.phone);
 
       const successResponse: HttpResponse = {
         statusCode: 200,
