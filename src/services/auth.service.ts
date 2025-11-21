@@ -236,37 +236,35 @@ class AuthService {
 
   //SECTION: Method to reset student password
   resetStudentPassword = async (
-    userId: string,
-    password: string,
-    otp: number
+    users: any,
+    newPassword: string,
   ): Promise<string> => {
     try {
-      const currentDate = new Date();
 
       //NOTE - find otp
-      const existingOtp: any = await Otp.findOne({
-        userId,
-        otp,
-      });
+      // const existingOtp: any = await Otp.findOne({
+      //   userId,
+      //   otp,
+      // });
 
-      if (!existingOtp) throw new Error(OTP_NOT_VERIFIED);
+      // if (!existingOtp) throw new Error(OTP_NOT_VERIFIED);
 
-      const expiryTimeDate = new Date(existingOtp.expiryTime);
+      // const expiryTimeDate = new Date(existingOtp.expiryTime);
 
-      if (expiryTimeDate <= currentDate || existingOtp.isVerified)
-        throw new Error(OTP_EXPIRED);
+      // if (expiryTimeDate <= currentDate || existingOtp.isVerified)
+      //   throw new Error(OTP_EXPIRED);
 
-      //NOTE: otp verifed sucessfully
-      await Otp.findByIdAndUpdate(existingOtp._id, {
-        $set: { status: false, isVerified: true },
-      });
-
+      // //NOTE: otp verifed sucessfully
+      // await Otp.findByIdAndUpdate(existingOtp._id, {
+      //   $set: { status: false, isVerified: true },
+      // });
+    
       // Step 2: Hash the password
-      const hashedPassword = await hashPassword(password);
+      const hashedPassword = await hashPassword(newPassword);
 
       //reset user password
       const reset = await User.findOneAndUpdate(
-        { _id: new mongoose.Types.ObjectId(userId) },
+        { _id: new mongoose.Types.ObjectId(users?._id) },
         { $set: { password: hashedPassword, updatedAt: getCurrentISTTime() } }
       );
 
@@ -392,10 +390,10 @@ class AuthService {
         type === BulkUploadTypes.MEAL
           ? process.env.MESS_BULK_UPLOAD_SAMPLE_FILE
           : type === BulkUploadTypes.FOOD_WASTAGE
-          ? process.env.FOOD_WASTAGE_BULK_UPLOAD_SAMPLE_FILE
-          : type === BulkUploadTypes.HOSTEL_ROOM_MAP
-          ? process.env.HOSTEL_ROOM_MAP_BULK_UPLOAD_SAMPLE_FILES
-          : process.env.STUDENT_BULK_UPLOAD_SAMPLE_FILE;
+            ? process.env.FOOD_WASTAGE_BULK_UPLOAD_SAMPLE_FILE
+            : type === BulkUploadTypes.HOSTEL_ROOM_MAP
+              ? process.env.HOSTEL_ROOM_MAP_BULK_UPLOAD_SAMPLE_FILES
+              : process.env.STUDENT_BULK_UPLOAD_SAMPLE_FILE;
 
       const url = await getSignedUrl(originalFile as string);
 
