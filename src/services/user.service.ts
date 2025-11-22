@@ -658,6 +658,13 @@ class UserService {
       const studentExists: any = await User.findById(studentId);
       if (!studentExists) throw new Error(RECORD_NOT_FOUND("User"));
 
+       if (studentExists?.email !== studentData?.email) {
+        const student = await User.findOne({ email : studentData?.email })
+        if (student) {
+          throw new Error('Email already exist')
+        }
+      }
+
       // Check if the email is already in use by another user
       // const checkUser: any = await User.findOne({
       //   _id: { $ne: studentId },
