@@ -24,7 +24,7 @@ export interface IStudentLeave extends Document {
   startDate: Date;
   endDate: Date;
   days: number;
-  hours: string;
+  hours: Number;
   description: string;
   visitorName: string;
   visitorNumber: number;
@@ -114,7 +114,7 @@ const StudentLeaveSchema: Schema = new Schema<IStudentLeave>(
       default: 0,
     },
     hours: {
-      type: String,
+      type: Number,
       required: false,
       default: null,
     },
