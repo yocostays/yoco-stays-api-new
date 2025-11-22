@@ -572,7 +572,8 @@ class UserController {
         "live.com",
         "icloud.com",
         "aol.com",
-        "zoho.com"
+        "zoho.com",
+        "raisoni.net"
       ];
 
       let payload
@@ -1818,7 +1819,6 @@ class UserController {
           message: error?.details.map((item: any) => item?.message)
         });
       }
-
       // Call the service to update a user
       await updateUserFromWardenPanel(
         id,
@@ -1880,7 +1880,8 @@ class UserController {
         "live.com",
         "icloud.com",
         "aol.com",
-        "zoho.com"
+        "zoho.com",
+        "raisoni.net"
       ];
       const schema = Joi.object({
         Gender: Joi.string().required().messages({
