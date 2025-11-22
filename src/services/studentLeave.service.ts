@@ -46,9 +46,11 @@ class StudentLeaveService {
     startDate: Date,
     endDate: Date,
     days: number,
+    hours:number,
     description: string
   ): Promise<IStudentLeave> => {
     try {
+      console.log(hours,"hours")
       const leaveStartDate = new Date(startDate);
       leaveStartDate.setUTCHours(0, 0, 0, 0);
 
@@ -88,6 +90,7 @@ class StudentLeaveService {
         startDate,
         endDate,
         days,
+        hours,
         description,
         leaveStatus: LeaveStatusTypes.PENDING,
         approvalStatus: LeaveApproveStatusTypes.PENDING_APPROVAL,

@@ -644,7 +644,7 @@ class UserController {
             "number.length": "Mobile Number must be between 8 to 15 digits",
             "any.required": "Mobile Number is required",
           }),
-          // aadhar:Joi.string().allow('', null),
+        // aadhar:Joi.string().allow('', null),
         aadhar: Joi.string()
           .allow('', null)
           .pattern(/^\d{12}$/)
@@ -739,8 +739,8 @@ class UserController {
         address: String(payload?.guardianAddress)
       }
 
-      let documentsDetails ={
-        aadhaarNumber : payload?.aadhar
+      let documentsDetails = {
+        aadhaarNumber: payload?.aadhar
       }
       studentData = {
         ...payload,
@@ -751,7 +751,7 @@ class UserController {
         image: payload?.image,
         medicalIssue: payload?.medical,
         permanentAddress: payload?.address,
-        documents:documentsDetails,
+        documents: documentsDetails,
         identificationMark: payload?.identification
       };
 
@@ -1519,7 +1519,8 @@ class UserController {
         "live.com",
         "icloud.com",
         "aol.com",
-        "zoho.com"
+        "zoho.com",
+        "raisoni.net"
       ];
       let data = {
         ...req?.body,

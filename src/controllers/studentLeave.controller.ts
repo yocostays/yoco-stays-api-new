@@ -57,22 +57,38 @@ class StudentLeaveController {
         throw new Error(RECORD_NOT_FOUND("Student"));
       }
 
-      const { categoryId, startDate, endDate, days, description } = req.body;
+      const { categoryId, startDate, endDate, days, description, hours } = req.body;
+      if (
+        !categoryId ||
+        !startDate ||
+        !endDate ||
+        description === undefined ||
+        description === null ||
+        days === undefined ||
+        days === null ||
+        hours === undefined ||
+        hours === null
+      ) {
+        const missingField =
+          !categoryId
+            ? "Category"
+            : !startDate
+              ? "Start Date"
+              : !endDate
+                ? "End Date"
+                : description === undefined || description === null
+                  ? "Description"
+                  : days === undefined || days === null
+                    ? "Days"
+                    : hours === undefined || hours === null
+                      ? "Hours"
+                      : "";
 
-      if (!categoryId || !startDate || !endDate || !description || !days) {
-        const missingField = !categoryId
-          ? "Category"
-          : !startDate
-          ? "Start Date"
-          : !endDate
-          ? "End Date"
-          : !days
-          ? "Days"
-          : "Description";
         const errorResponse: HttpResponse = {
           statusCode: 400,
           message: `${missingField} is required`,
         };
+
         return res.status(400).json(errorResponse);
       }
 
@@ -84,6 +100,7 @@ class StudentLeaveController {
         startDate,
         endDate,
         days,
+        hours,
         description
       );
 
@@ -367,14 +384,14 @@ class StudentLeaveController {
           leaveType === LeaveTypes.DAY_OUT && !categoryId
             ? "Category"
             : !startDate
-            ? "Start Date"
-            : !endDate
-            ? "End Date"
-            : !hours
-            ? "Hours"
-            : !leaveType
-            ? "Leave Type"
-            : "Description";
+              ? "Start Date"
+              : !endDate
+                ? "End Date"
+                : !hours
+                  ? "Hours"
+                  : !leaveType
+                    ? "Leave Type"
+                    : "Description";
         const errorResponse: HttpResponse = {
           statusCode: 400,
           message: `${missingField} is required`,
