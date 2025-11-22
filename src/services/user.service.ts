@@ -81,11 +81,8 @@ const { UPDATE_DATA, CREATE_DATA, FILE_UPLOADED, DELETE_DATA } =
 const extractUploadPath = (url: string) => {
 
   if (!url) return null;
-  // if (url.startsWith("data:image")) {
-  //   data.includes("base64")
-  //   return url
-  // }
-  if(url.includes("base64")){
+
+  if (url.includes("base64")) {
     return url
   }
   // Check if the string is a full URL (production or localhost)
@@ -667,7 +664,7 @@ class UserService {
       //   email: studentData?.email
       // });
       // if (checkUser) throw new Error(ALREADY_EXIST_FIELD_ONE("Email"));
-      const currentUser = await User.findById(studentId);
+      // const currentUser = await User.findById(studentId);
 
       // Get the current user to check if there is an existing image
       // let payload: { email: string; image?: string } = { email };
@@ -2554,6 +2551,13 @@ class UserService {
       const student = await User.findById(studentId).lean();
       if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
 
+
+      if (student?.email !== email) {
+        const student = await User.findOne({ email })
+        if (student) {
+          throw new Error('Email already exist')
+        }
+      }
       // Step 2: Validate university
       if (academicDetails.universityId) {
         const university = await College.findById(academicDetails?.universityId);
@@ -2584,9 +2588,17 @@ class UserService {
         image = student.image; // Retain the existing image key if no new image is provided
       }
 
+
       // Step 5: Handle document updates
-      let updatedDocuments: any = { ...student.documents };
+      let updatedDocuments: any = { ...documents };
       for (const [key, value] of Object.entries(documents)) {
+        const extracted = extractUploadPath(value); 
+
+        // 1️⃣ If NOT base64 → use extracted URL/path directly
+        if (extracted && !extracted.includes("base64")) {
+          updatedDocuments[key] = extracted;
+          continue;
+        }
         if (value && value.includes("base64")) {
           const uploadDoc = await uploadFileInS3Bucket(value, USER_FOLDER);
           if (uploadDoc !== false) {
@@ -2596,7 +2608,6 @@ class UserService {
           }
         }
       }
-
       // Step 6: Update the user details
       const updatedUserData = {
         name,
@@ -2623,11 +2634,15 @@ class UserService {
         // currentAddress,
         familiyDetails,
         academicDetails,
-        documents: updatedDocuments,
+        documents: {
+          ...updatedDocuments,
+          aadhaarNumber: updatedDocuments?.aadharNumber
+        },
         vechicleDetails,
         updatedAt: getCurrentISTTime(),
         updatedBy: staffId,
       };
+
       // await User.findByIdAndUpdate(studentId, { $set: updatedUserData });
       await User.findByIdAndUpdate(
         { _id: studentId },
@@ -2639,6 +2654,7 @@ class UserService {
         },
         { new: true }
       );
+
       const hostelAlloc = await StudentHostelAllocation.findOne({ studentId })
       if (hostelAlloc) {
 
