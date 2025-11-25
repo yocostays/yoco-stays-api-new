@@ -506,7 +506,7 @@ console.log(template,"template")
       )
         throw new Error(COMPLAINT_UPDATE_ERROR(complaint.complainStatus));
 
-      if (complaint.assignedStaff === null) throw new Error(NO_ASSIGNED_STAFF);
+      // if (complaint.assignedStaff === null) throw new Error(NO_ASSIGNED_STAFF);
 
       // Push the update log
       complaint.updateLogs.push({
@@ -1301,10 +1301,10 @@ console.log(template,"template")
       }
 
       // Check if any complaint has assignedStaff as null
-      const unassignedComplaint = complaintRecords.find(
-        (c: any) => c.assignedStaff === null
-      );
-      if (unassignedComplaint) throw new Error(NO_ASSIGNED_STAFF);
+      // const unassignedComplaint = complaintRecords.find(
+      //   (c: any) => c.assignedStaff === null
+      // );
+      // if (unassignedComplaint) throw new Error(NO_ASSIGNED_STAFF);
 
       const bulkOperations: any[] = complaints
         .map(({ complaintId, status, remark }) => {
