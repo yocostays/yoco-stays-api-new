@@ -27,8 +27,8 @@ const OtpSchema: Schema = new Schema<IOtp>(
     email:{
       type:String,
       required:false,
-      default:null,
-      unique:true
+      // default:null,
+      // unique:true
     },
     userModel: {
       type: String,
@@ -73,6 +73,16 @@ const OtpSchema: Schema = new Schema<IOtp>(
   { timestamps: true }
 );
 
+OtpSchema.index(
+  { email: 1 },
+  
+  {
+    unique: true,
+    partialFilterExpression: {
+      email: { $exists: true, $nin: ["", null] }
+    }
+  }
+);
 OtpSchema.index({ phone: 1 });
 OtpSchema.index({ userId: 1 });
 OtpSchema.index({ userModel: 1 });
