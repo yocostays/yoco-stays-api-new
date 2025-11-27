@@ -197,7 +197,7 @@ class AuthController {
   ): Promise<Response<HttpResponse>> {
     try {
 
-      await generateOtp(req.body.userId, req.body.phone);
+      // await generateOtp(req.body.userId, req.body.phone);
       const { email } = req.body;
 
       const allowedDomains = [
