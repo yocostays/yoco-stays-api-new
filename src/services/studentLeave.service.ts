@@ -871,76 +871,76 @@ class StudentLeaveService {
       );
 
       //NOTE: Check user leave applied or not.
-      if (studentLeave) {
-        //NOTE: Dynamically select the appropriate template type based on leave status.
-        const templateType =
-          status === LeaveStatusTypes.APPROVED
-            ? TemplateTypes.LEAVE_APPROVED
-            : TemplateTypes.LEAVE_REJECTED;
+      // if (studentLeave) {
+      //   //NOTE: Dynamically select the appropriate template type based on leave status.
+      //   const templateType =
+      //     status === LeaveStatusTypes.APPROVED
+      //       ? TemplateTypes.LEAVE_APPROVED
+      //       : TemplateTypes.LEAVE_REJECTED;
 
-        const { playedIds, template, student, isPlayedNoticeCreated, log } =
-          await fetchPlayerNotificationConfig(
-            studentLeave?.createdBy,
-            templateType
-          );
+      //   const { playedIds, template, student, isPlayedNoticeCreated, log } =
+      //     await fetchPlayerNotificationConfig(
+      //       studentLeave?.createdBy,
+      //       templateType
+      //     );
 
-        //NOTE: Get student and hostelDetails
-        const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-          await getStudentAllocatedHostelDetails(
-            student?._id,
-            student?.hostelId,
-            templateType
-          );
+      //   //NOTE: Get student and hostelDetails
+      //   const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+      //     await getStudentAllocatedHostelDetails(
+      //       student?._id,
+      //       student?.hostelId,
+      //       templateType
+      //     );
 
-        //NOTE: Final notice created check.
-        const finalNoticeCreated =
-          isPlayedNoticeCreated && isHostelNoticeCreated;
+      //   //NOTE: Final notice created check.
+      //   const finalNoticeCreated =
+      //     isPlayedNoticeCreated && isHostelNoticeCreated;
 
-        // NOTE: Combine available logs into an array
-        const notificationLog = [log, hostelLogs].filter(Boolean);
+      //   // NOTE: Combine available logs into an array
+      //   const notificationLog = [log, hostelLogs].filter(Boolean);
 
-        //NOTE: Retrieve only the date section from date & time.
-        const fromDate = formatDateOnly(studentLeave?.startDate);
-        const toDate = formatDateOnly(studentLeave?.endDate);
+      //   //NOTE: Retrieve only the date section from date & time.
+      //   const fromDate = formatDateOnly(studentLeave?.startDate);
+      //   const toDate = formatDateOnly(studentLeave?.endDate);
 
-        const dynamicData = {
-          fromDate,
-          toDate,
-        };
-        //NOTE: Add details for dynamic message using the populateTemplate.
-        const description = populateTemplate(
-          template?.description,
-          dynamicData
-        );
+      //   const dynamicData = {
+      //     fromDate,
+      //     toDate,
+      //   };
+      //   //NOTE: Add details for dynamic message using the populateTemplate.
+      //   const description = populateTemplate(
+      //     template?.description,
+      //     dynamicData
+      //   );
 
-        //NOTE: Create entry in notice
-        await Notice.create({
-          userId: student?._id,
-          hostelId: student?.hostelId,
-          floorNumber: hostelDetail?.floorNumber,
-          bedType: hostelDetail?.bedType,
-          roomNumber: hostelDetail?.roomNumber,
-          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-          pushNotificationTypes: PushNotificationTypes.AUTO,
-          templateId: template?._id,
-          templateSendMessage: description,
-          isNoticeCreated: finalNoticeCreated,
-          notificationLog,
-          createdAt: getCurrentISTTime(),
-        });
+      //   //NOTE: Create entry in notice
+      //   await Notice.create({
+      //     userId: student?._id,
+      //     hostelId: student?.hostelId,
+      //     floorNumber: hostelDetail?.floorNumber,
+      //     bedType: hostelDetail?.bedType,
+      //     roomNumber: hostelDetail?.roomNumber,
+      //     noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+      //     pushNotificationTypes: PushNotificationTypes.AUTO,
+      //     templateId: template?._id,
+      //     templateSendMessage: description,
+      //     isNoticeCreated: finalNoticeCreated,
+      //     notificationLog,
+      //     createdAt: getCurrentISTTime(),
+      //   });
 
-        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-        if (finalNoticeCreated) {
-          //NOTE: Use the send push notification function.
-          await sendPushNotificationToUser(
-            playedIds,
-            template?.title,
-            description,
-            template?.image,
-            templateType
-          );
-        }
-      }
+      //   //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+      //   if (finalNoticeCreated) {
+      //     //NOTE: Use the send push notification function.
+      //     await sendPushNotificationToUser(
+      //       playedIds,
+      //       template?.title,
+      //       description,
+      //       template?.image,
+      //       templateType
+      //     );
+      //   }
+      // }
       return UPDATE_DATA;
     } catch (error: any) {
       throw new Error(error.message);

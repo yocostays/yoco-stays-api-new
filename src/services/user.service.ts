@@ -658,8 +658,8 @@ class UserService {
       const studentExists: any = await User.findById(studentId);
       if (!studentExists) throw new Error(RECORD_NOT_FOUND("User"));
 
-       if (studentExists?.email !== studentData?.email) {
-        const student = await User.findOne({ email : studentData?.email })
+      if (studentExists?.email !== studentData?.email) {
+        const student = await User.findOne({ email: studentData?.email })
         if (student) {
           throw new Error('Email already exist')
         }
@@ -1352,23 +1352,27 @@ class UserService {
   ): Promise<{ uniqueId: string }> => {
     try {
       //NOTE - get university capacity
-      const university = await College.findById(academicDetails?.universityId);
 
-      if (!university) throw new Error(RECORD_NOT_FOUND("University"));
+      if (academicDetails.universityId) {
+        const university = await College.findById(academicDetails?.universityId);
 
+        if (!university) throw new Error(RECORD_NOT_FOUND("University"));
+      }
       // Get the user count for the current university
-      const userCount = await User.countDocuments({
-        "academicDetails.universityId": university._id,
-      });
+      // const userCount = await User.countDocuments({
+      //   "academicDetails.universityId": university._id,
+      // });
 
-      if (userCount >= university.totalCapacity)
-        throw new Error(TOTAL_CAPACITY_ISSUES);
+      // if (userCount >= university.totalCapacity)
+      //   throw new Error(TOTAL_CAPACITY_ISSUES);
 
       const currentDate = new Date();
       currentDate.setUTCHours(0, 0, 0, 0);
 
-      // Step 1: Validate staff by email and phone
-      await this.validateUser({ email, phone, enrollmentNumber });
+      if (enrollmentNumber) {
+        // Step 1: Validate staff by email and phone
+        await this.validateUser({ email, phone, enrollmentNumber });
+      }
 
       //NOTE - get role
       const { role } = await getRoleByName("student");
@@ -2258,7 +2262,6 @@ class UserService {
             email: Email
           } = data;
 
-
           let uniqueId
           // Get hostel info
           const [hostel] = await Hostel.aggregate([
@@ -2344,7 +2347,6 @@ class UserService {
             const newUser = new User({
               roleId: role._id,
               uniqueId,
-              enrollmentNumber: null,
               permanentAddress,
               bloodGroup,
               email: data?.Email,
@@ -2356,9 +2358,9 @@ class UserService {
               phone,
               dob: dobExcel,
               gender,
-              bulkCountry: nationality,
-              bulkState: state,
-              bulkCity: city,
+              bulkCountry: nationality.trim(),
+              bulkState: state.trim(),
+              bulkCity: city.trim(),
               familiyDetails: {
                 fatherName,
                 // parentsContactNo,
@@ -2422,7 +2424,6 @@ class UserService {
           errorArray.push({ ...data, errors: error.message });
         }
       }
-
       try {
         let successFileUrl: string | null = null;
         let errorFileUrl: string | null = null;
@@ -2443,7 +2444,6 @@ class UserService {
           );
         }
 
-
         // if (bulkUpload?._id && (successFileUrl || errorFileUrl)) {
         await BulkUpload.findByIdAndUpdate(bulkUpload._id, {
           $set: {
@@ -2462,6 +2462,7 @@ class UserService {
 
       return FILE_UPLOADED;
     } catch (error: any) {
+      console.log(error, "errrooooooo")
       throw new Error(`${error.message}`);
     }
   };
@@ -2599,7 +2600,7 @@ class UserService {
       // Step 5: Handle document updates
       let updatedDocuments: any = { ...documents };
       for (const [key, value] of Object.entries(documents)) {
-        const extracted = extractUploadPath(value); 
+        const extracted = extractUploadPath(value);
 
         // 1️⃣ If NOT base64 → use extracted URL/path directly
         if (extracted && !extracted.includes("base64")) {
@@ -2649,7 +2650,11 @@ class UserService {
         updatedAt: getCurrentISTTime(),
         updatedBy: staffId,
       };
-
+      if (enrollmentNumber) {
+        updatedUserData.enrollmentNumber = enrollmentNumber;
+      } else {
+        delete (updatedUserData as any).enrollmentNumber;
+      }
       // await User.findByIdAndUpdate(studentId, { $set: updatedUserData });
       await User.findByIdAndUpdate(
         { _id: studentId },
