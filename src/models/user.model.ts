@@ -203,21 +203,21 @@ const AcademicDetailsSchema: Schema<IAcademicDetails> =
   new Schema<IAcademicDetails>({
     universityId: {
       type: Schema.Types.ObjectId,
-      required: true,
+      required: false,
       ref: "College",
     },
     courseId: {
       type: Schema.Types.ObjectId,
-      required: true,
+      required: false,
       ref: "Course",
     },
     academicYear: {
       type: String,
-      required: true,
+      required: false,
     },
     semester: {
       type: Number,
-      required: true,
+      required: false,
     },
   });
 
@@ -339,9 +339,6 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     enrollmentNumber: {
       type: String,
       required: false,
-      sparse: true,
-      unique: true,
-      default:null,
     },
     bloodGroup: {
       type: String,
@@ -515,6 +512,18 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
   },
   { timestamps: true }
 );
+
+UserSchema.index(
+  { enrollmentNumber: 1 },
+  
+  {
+    unique: true,
+    partialFilterExpression: {
+      enrollmentNumber: { $exists: true, $nin: ["", null] }
+    }
+  }
+);
+
 
 const User = mongoose.model<IUser>("User", UserSchema);
 export default User;
