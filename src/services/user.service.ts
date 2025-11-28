@@ -56,7 +56,7 @@ import StudentLeave from "../models/student-leave.model";
 import Complaint from "../models/complaint.model";
 import BookMeals from "../models/bookMeal.model";
 import nodemailer from "nodemailer";
-import { generateRandomSecureOtp, getExpiryDate } from "../utils/otpService";
+import { generateSecureOtp, getExpiryDate } from "../utils/otpService";
 import Otp from "../models/otp.model";
 
 const { getRoleByName } = RoleService;
@@ -3156,7 +3156,7 @@ class UserService {
         throw new Error("Invalid email address");
       }
 
-      const otp = await generateRandomSecureOtp()
+      const otp = await generateSecureOtp()
       const expiryTime = getExpiryDate(5, "M");
       await Otp.findOneAndUpdate(
         { userId: new mongoose.Types.ObjectId(userDetails?._id) },

@@ -1,23 +1,22 @@
-import mongoose from "mongoose";
 import { Request, Response } from "express";
+import Joi from "joi";
+import mongoose from "mongoose";
+import User from "../models/user.model";
 import AuthService from "../services/auth.service";
-import UserService from "../services/user.service";
 import StaffService from "../services/staff.service";
+import { default as UserService, default as userService } from "../services/user.service";
+import { getSignedUrl } from "../utils/awsUploadService";
 import { HttpResponse } from "../utils/httpResponse";
 import {
-  SUCCESS_MESSAGES,
   ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
   VALIDATION_MESSAGES,
 } from "../utils/messages";
-import { getSignedUrl } from "../utils/awsUploadService";
 import {
   COMPLAIN_FILES,
   SAMPLE_FILE,
   STAFF_FOLDER,
 } from "../utils/s3bucketFolder";
-import userService from "../services/user.service";
-import Joi from "joi";
-import User from "../models/user.model";
 
 const {
   staffLoginWithUserNameAndPwd,
@@ -27,6 +26,7 @@ const {
   uploadFileInApp,
   wardenRefreshToken,
   generateOtp,
+  generateOtpMail,
   resetStaffPassword,
   downloadSampleBulkUploadFile,
   generateOtpUserSignUp,
@@ -191,83 +191,223 @@ class AuthController {
   }
 
   //SECTION: Controller method to handle generate code for password reset
-  async generateOtpForApp(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
+  // async generateOtpForApp(
+  //   req: Request,
+  //   res: Response
+  // ): Promise<Response<HttpResponse>> {
+  //   try {
+
+  //     // await generateOtp(req.body.userId, req.body.phone);
+  //     const { email } = req.body;
+
+  //     const allowedDomains = [
+  //       "gmail.com",
+  //       "yahoo.com",
+  //       "outlook.com",
+  //       "hotmail.com",
+  //       "live.com",
+  //       "icloud.com",
+  //       "aol.com",
+  //       "zoho.com",
+  //       "raisoni.net"
+  //     ];
+  //     const schema = Joi.object({
+  //       email: Joi.string()
+  //         .email({ tlds: { allow: false } })
+  //         .custom((value, helpers) => {
+  //           const domain = value.split("@")[1];
+
+  //           if (!allowedDomains.includes(domain)) {
+  //             return helpers.error("any.invalid");
+  //           }
+  //           return value;
+  //         })
+  //         .required()
+  //         .messages({
+  //           "string.email": "Invalid email format",
+  //           "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
+  //           "any.required": "Email is required"
+  //         }),
+  //     })
+  //     const { error } = schema.validate(req.body, { abortEarly: false });
+  //     if (error) {
+  //       const errorResponse: HttpResponse = {
+  //         statusCode: 400,
+  //         message: error?.details[0]?.message,
+  //       };
+  //       return res.status(400).json(errorResponse);
+  //     }
+  //     // //NOTE - get user by unique Id
+  //     // const { student } = await getStudentByUniqueId(uniqueId);
+
+  //     // if (!student) {
+  //     //   throw new Error(RECORD_NOT_FOUND("Student"));
+  //     // }
+
+  //     // if (!student.isVerified) throw new Error(USER_NOT_ACTIVE);
+
+  //     // const mobile = String(student.phone)
+  //     // // Call the service to generate otp
+  //     // const { otp } = await generateOtp(student._id, mobile);
+  //     await userRequestDelete(email)
+  //     const successResponse: HttpResponse = {
+  //       statusCode: 200,
+  //       message: GENERATE_OTP,
+  //       // data: {
+  //       //   otp,
+  //       //   uniqueId: student?.uniqueId,
+  //       // },
+  //     };
+  //     return res.status(200).json(successResponse);
+  //   } catch (error: any) {
+  //     const errorMessage = error.message ?? SERVER_ERROR;
+  //     const errorResponse: HttpResponse = {
+  //       statusCode: 400,
+  //       message: errorMessage,
+  //     };
+  //     return res.status(400).json(errorResponse);
+  //   }
+  // }
+
+async  generateOtpForApp(
+  req: Request,
+  res: Response
+): Promise<Response<HttpResponse>> {
+ try {
+  const { email, phone } = req.body;
+
+  if (!email && !phone) {
+    return res
+      .status(400)
+      .json({ statusCode: 400, message: "Email or phone is required" });
+  }
+
+  if (phone) {
+    const phoneTrimmed = String(phone).trim();
+
+  const phoneSchema = Joi.object({
+  phone: Joi.string()
+    .trim()
+    .pattern(/^\+?\d{7,15}$/)
+    .required()
+    .messages({
+      "string.empty": "Phone number is required",
+      "any.required": "Phone number is required",
+      "string.pattern.base": "Invalid phone number format",
+    }),
+});
+
+if (phone) {
+  const { error } = phoneSchema.validate({ phone });
+  if (error) {
+    return res.status(400).json({
+      statusCode: 400,
+      message: error.details[0].message,
+    });
+  }
+}
+
+
+    // Check phone exists in users collection
+    const userByPhone = await User.findOne({ phone: phoneTrimmed }).lean();
+    if (!userByPhone) {
+      return res
+        .status(400)
+        .json({ statusCode: 400, message: "Phone number not registered" });
+    }
+
+    await generateOtp(userByPhone._id?.toString() ?? null, phoneTrimmed);
+
     try {
+      await userRequestDelete(phoneTrimmed);
+    } catch (e) {
+    }
 
-      // await generateOtp(req.body.userId, req.body.phone);
-      const { email } = req.body;
+    const successResponse: HttpResponse = {
+      statusCode: 200,
+      message: "OTP sent to phone",
+    };
+    return res.status(200).json(successResponse);
+  }
 
-      const allowedDomains = [
-        "gmail.com",
-        "yahoo.com",
-        "outlook.com",
-        "hotmail.com",
-        "live.com",
-        "icloud.com",
-        "aol.com",
-        "zoho.com",
-        "raisoni.net"
-      ];
-      const schema = Joi.object({
-        email: Joi.string()
-          .email({ tlds: { allow: false } })
-          .custom((value, helpers) => {
-            const domain = value.split("@")[1];
+  // Else: email path (email is present)
+  if (email) {
+    const allowedDomains = [
+      "gmail.com",
+      "yahoo.com",
+      "outlook.com",
+      "hotmail.com",
+      "live.com",
+      "icloud.com",
+      "aol.com",
+      "zoho.com",
+      "raisoni.net",
+    ];
+    const schema = Joi.object({
+      email: Joi.string()
+        .email({ tlds: { allow: false } })
+        .custom((value, helpers) => {
+          const domain = value.split("@")[1];
+          if (!allowedDomains.includes(domain)) {
+            return helpers.error("any.invalid");
+          }
+          return value;
+        })
+        .required()
+        .messages({
+          "string.email": "Invalid email format",
+          "any.invalid": `Only these domains allowed: ${allowedDomains.join(
+            ", "
+          )}`,
+          "any.required": "Email is required",
+        }),
+    });
 
-            if (!allowedDomains.includes(domain)) {
-              return helpers.error("any.invalid");
-            }
-            return value;
-          })
-          .required()
-          .messages({
-            "string.email": "Invalid email format",
-            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
-            "any.required": "Email is required"
-          }),
-      })
-      const { error } = schema.validate(req.body, { abortEarly: false });
-      if (error) {
-        const errorResponse: HttpResponse = {
-          statusCode: 400,
-          message: error?.details[0]?.message,
-        };
-        return res.status(400).json(errorResponse);
-      }
-      // //NOTE - get user by unique Id
-      // const { student } = await getStudentByUniqueId(uniqueId);
-
-      // if (!student) {
-      //   throw new Error(RECORD_NOT_FOUND("Student"));
-      // }
-
-      // if (!student.isVerified) throw new Error(USER_NOT_ACTIVE);
-
-      // const mobile = String(student.phone)
-      // // Call the service to generate otp
-      // const { otp } = await generateOtp(student._id, mobile);
-      await userRequestDelete(email)
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: GENERATE_OTP,
-        // data: {
-        //   otp,
-        //   uniqueId: student?.uniqueId,
-        // },
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
+    const { error } = schema.validate({ email }, { abortEarly: false });
+    if (error) {
       const errorResponse: HttpResponse = {
         statusCode: 400,
-        message: errorMessage,
+        message: error?.details[0]?.message,
       };
       return res.status(400).json(errorResponse);
     }
+
+    // Check email exists in users collection
+    const emailLower = email.toLowerCase();
+    const userByEmail = await User.findOne({ email: emailLower }).lean();
+    if (!userByEmail) {
+      return res
+        .status(400)
+        .json({ statusCode: 400, message: "Email not registered" });
+    }
+
+    await generateOtpMail(userByEmail._id?.toString() ?? null, emailLower);
+
+    try {
+      await userRequestDelete(emailLower);
+    } catch (e) {
+    }
+
+    const successResponse: HttpResponse = {
+      statusCode: 200,
+      message: "OTP sent to email",
+    };
+    return res.status(200).json(successResponse);
   }
+
+  return res
+    .status(400)
+    .json({ statusCode: 400, message: "Invalid request" });
+}catch (error: any) {
+    const errorMessage = error?.message ?? "Server error";
+    const errorResponse: HttpResponse = {
+      statusCode: 400,
+      message: errorMessage,
+    };
+    return res.status(400).json(errorResponse);
+  }
+}
+
 
   //SECTION: Controller method to handle reset paswwrod for user
   async resetStudentPasswordInApp(

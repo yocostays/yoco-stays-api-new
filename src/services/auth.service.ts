@@ -205,7 +205,7 @@ class AuthService {
   };
 
   //SECTION: Method to generate Otp
-  generateOtp = async (
+  generateOtpMail = async (
     userId: string,
     phone: string
   ): Promise<{ otp: number }> => {
@@ -233,6 +233,66 @@ class AuthService {
       throw new Error(`User OTP geenerate: ${error.message}`);
     }
   };
+
+ generateOtp = async (
+  userId: string | null | undefined,
+  phone: string | null | undefined
+): Promise<{ otp: number }> => {
+  try {
+    if (!phone || String(phone).trim().length === 0) {
+      throw new Error("Phone number is required for SMS OTP");
+    }
+    const phoneTrimmed = String(phone).trim();
+
+    if (!/^\+?\d{7,15}$/.test(phoneTrimmed)) {
+      throw new Error("Invalid phone number format");
+    }
+
+    const otp = generateSecureOtp(); 
+    const expiryTime = getExpiryDate(5, "M"); 
+
+    const filter: any = phoneTrimmed ? { phone: phoneTrimmed } : undefined;
+
+    if (!filter && userId) {
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new Error("Invalid userId");
+      }
+      filter.userId = new mongoose.Types.ObjectId(userId);
+    }
+
+    if (!filter) {
+      throw new Error("Either phone or valid userId is required to generate OTP");
+    }
+
+    // Prepare update document
+    const update: any = {
+      $set: {
+        otp,
+        expiryTime,
+        isVerified: false,
+        status: true,
+        updatedBy: userId ?? null,
+        phone: phoneTrimmed,
+        email: null,
+      },
+      $setOnInsert: {
+        createdBy: userId ?? null,
+      },
+    };
+
+    await Otp.findOneAndUpdate(filter, update, {
+      upsert: true,
+      new: true,
+    });
+
+    // Send SMS
+    await sendSMS(phoneTrimmed, otp);
+
+    return { otp };
+  } catch (error: any) {
+    throw new Error(`User OTP generate: ${error.message}`);
+  }
+};
 
   //SECTION: Method to reset student password
   resetStudentPassword = async (
