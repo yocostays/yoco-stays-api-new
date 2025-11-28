@@ -381,7 +381,7 @@ if (phone) {
         .json({ statusCode: 400, message: "Email not registered" });
     }
 
-    await generateOtpMail(userByEmail._id?.toString() ?? null, emailLower);
+    // await generateOtpMail(userByEmail._id?.toString() ?? null, emailLower);
 
     try {
       await userRequestDelete(emailLower);
