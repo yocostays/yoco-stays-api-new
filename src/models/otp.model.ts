@@ -39,7 +39,7 @@ const OtpSchema: Schema = new Schema<IOtp>(
     phone: {
       type: String,
       required: false,
-      default: null,
+      // default: null,
     },
     otp: {
       type: Number,
@@ -83,7 +83,18 @@ OtpSchema.index(
     }
   }
 );
-OtpSchema.index({ phone: 1 });
+
+OtpSchema.index(
+  { phone: 1 },
+  
+  {
+    unique: true,
+    partialFilterExpression: {
+      phone: { $exists: true, $nin: ["", null] }
+    }
+  }
+);
+// OtpSchema.index({ phone: 1 });
 OtpSchema.index({ userId: 1 });
 OtpSchema.index({ userModel: 1 });
 OtpSchema.index({ expiryTime: 1 }, { expireAfterSeconds: 0 });
