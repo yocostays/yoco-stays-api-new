@@ -3165,6 +3165,7 @@ class UserService {
           expiryTime,
           isVerified: false,
           email,
+          phone:null,
           status: true,
           createdBy: userDetails?._id,
           updatedBy: userDetails?._id,
