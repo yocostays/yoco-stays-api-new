@@ -1980,6 +1980,7 @@ class UserService {
               },
               name: name.toUpperCase(),
               password: hashedPassword,
+              testPassword: plainPassword,
               phone,
               dob: dobExcel,
               gender,
