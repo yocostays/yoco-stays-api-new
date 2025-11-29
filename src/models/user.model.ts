@@ -323,7 +323,7 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     phone: {
       type: Number,
       required: true,
-      unique: true,
+      // unique: true,
     },
     email: {
       type: String,
@@ -520,6 +520,17 @@ UserSchema.index(
     unique: true,
     partialFilterExpression: {
       enrollmentNumber: { $exists: true, $nin: ["", null] }
+    }
+  }
+);
+
+UserSchema.index(
+  { phone: 1 },
+  
+  {
+    unique: true,
+    partialFilterExpression: {
+      phone: { $exists: true, $nin: ["", null] }
     }
   }
 );
