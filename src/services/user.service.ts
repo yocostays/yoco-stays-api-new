@@ -1601,6 +1601,7 @@ class UserService {
       "aol.com",
       "zoho.com",
       "raisoni.net",
+      "ghrce.raisoni.net",
     ];
     try {
       // const validGenders = ["male", "female", "other", "not selected"];
@@ -1615,9 +1616,9 @@ class UserService {
           .custom((value, helpers) => {
             const domain = value.split("@")[1]?.trim();
 
-            // if (!allowedDomains.includes(domain)) {
-            //   return helpers.error("any.invalid");
-            // }
+            if (!allowedDomains.includes(domain)) {
+              return helpers.error("any.invalid");
+            }
             return value;
           })
           .required()
@@ -2001,8 +2002,8 @@ class UserService {
             });
 
             await newUser.save();
-            console.log("IN LOOP, item index:" );
-            console.log("data.Email inside loop:");
+            // console.log("IN LOOP, item index:" );
+            // console.log("data.Email inside loop:");
             // Queue email only after successful save
             if (data?.Email) {
               console.log(
@@ -2068,22 +2069,22 @@ class UserService {
         }
       }
 
-      console.log("welcomeMailQueue before sending", welcomeMailQueue);
-      console.log("successArray after processing", successArray);
+      // console.log("welcomeMailQueue before sending", welcomeMailQueue);
+      // console.log("successArray after processing", successArray);
 
       // Send welcome emails for all newly created students
-      for (const mailJob of welcomeMailQueue) {
-        try {
-          await sendStudentWelcomeEmail(mailJob);
-        } catch (err) {
-          console.error(
-            `Failed to send welcome email to ${mailJob.email}:`,
-            (err as Error).message
-          );
-        }
-      }
+      // for (const mailJob of welcomeMailQueue) {
+      //   try {
+      //     await sendStudentWelcomeEmail(mailJob);
+      //   } catch (err) {
+      //     console.error(
+      //       `Failed to send welcome email to ${mailJob.email}:`,
+      //       (err as Error).message
+      //     );
+      //   }
+      // }
 
-      console.log("welcomeMailQueue after sending", welcomeMailQueue);
+      // console.log("welcomeMailQueue after sending", welcomeMailQueue);
 
       try {
         let successFileUrl: string | null = null;
