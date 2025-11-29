@@ -22,7 +22,9 @@ import {
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
 } from "../utils/messages";
-import { hashPassword } from "../utils/hashUtils";
+import { generateRandomPassword, hashPassword } from "../utils/hashUtils";
+import { sendStudentWelcomeEmail } from "../services/mailService";
+
 import {
   BedTypes,
   BillingCycleTypes,
@@ -79,11 +81,10 @@ const { UPDATE_DATA, CREATE_DATA, FILE_UPLOADED, DELETE_DATA } =
   SUCCESS_MESSAGES;
 
 const extractUploadPath = (url: string) => {
-
   if (!url) return null;
 
   if (url.includes("base64")) {
-    return url
+    return url;
   }
   // Check if the string is a full URL (production or localhost)
   const isFullUrl = url.startsWith("http://") || url.startsWith("https://");
@@ -251,10 +252,10 @@ class UserService {
 
       // Set isVerified based on the status
       if (status === UserGetByTypes.ACTIVE) {
-        searchParams.isVerified = true
+        searchParams.isVerified = true;
         searchParams.status = true;
       } else if (status === UserGetByTypes.INACTIVE) {
-        searchParams.isVerified = true
+        searchParams.isVerified = true;
         searchParams.status = false;
       } else if (status === UserGetByTypes.ALL) {
         // Do nothing; this includes all verified and unverified users
@@ -401,8 +402,8 @@ class UserService {
               ele?.status && ele?.isVerified
                 ? "active"
                 : ele?.status && !ele?.isVerified
-                  ? "pending"
-                  : "in-active",
+                ? "pending"
+                : "in-active",
             status: ele?.status,
             createdBy: (ele?.createdBy as any)?.name ?? null,
             createdAt: ele?.createdAt ?? null,
@@ -547,7 +548,10 @@ class UserService {
       );
 
       // Step 2: Hash the password
-      const hashedPassword = await hashPassword("123456789");
+      // const hashedPassword = await hashPassword("123456789");
+      const plainPassword = generateRandomPassword(8);
+      const hashedPassword = await hashPassword(plainPassword);
+      console.log("password", plainPassword, hashedPassword);
 
       // Generate billingCycleDetails based on the billing cycle type
       const billingDetails = createBillingCycleDetails(
@@ -645,8 +649,6 @@ class UserService {
     }
   };
 
-
-
   //SECTION: Method to update student in app
   updateStudentInApp = async (
     studentId: mongoose.Types.ObjectId,
@@ -654,14 +656,13 @@ class UserService {
     studentData: any
   ): Promise<string> => {
     try {
-
       const studentExists: any = await User.findById(studentId);
       if (!studentExists) throw new Error(RECORD_NOT_FOUND("User"));
 
       if (studentExists?.email !== studentData?.email) {
-        const student = await User.findOne({ email: studentData?.email })
+        const student = await User.findOne({ email: studentData?.email });
         if (student) {
-          throw new Error('Email already exist')
+          throw new Error("Email already exist");
         }
       }
 
@@ -676,7 +677,7 @@ class UserService {
       // Get the current user to check if there is an existing image
       // let payload: { email: string; image?: string } = { email };
       let payload: any = {};
-      const data = extractUploadPath(studentData?.image)
+      const data = extractUploadPath(studentData?.image);
       if (data && data.includes("base64")) {
         const uploadImage = await uploadFileInS3Bucket(data, USER_FOLDER);
         if (uploadImage !== false) {
@@ -685,7 +686,7 @@ class UserService {
           throw new Error(IMAGE_UPLOAD_ERROR);
         }
       } else {
-        payload.image = data || null
+        payload.image = data || null;
       }
 
       const safeData = { ...studentData };
@@ -696,11 +697,7 @@ class UserService {
       payload = { ...payload, ...safeData };
 
       // Update the user's email and image in the database
-      await User.findByIdAndUpdate(
-        studentId,
-        { $set: payload },
-        { new: true }
-      );
+      await User.findByIdAndUpdate(studentId, { $set: payload }, { new: true });
       //NOTE: Check user is updated or not.
       // if (userUpdated) {
       // const { playedIds, template, student, isPlayedNoticeCreated, log } =
@@ -1102,8 +1099,9 @@ class UserService {
                   email: user.email ?? null,
                   phone: user.phone ?? null,
                   image: user.image ? await getSignedUrl(user.image) : null,
-                  roomDetails: `${mate.roomNumber ?? null}/${mate.bedNumber ?? null
-                    }`,
+                  roomDetails: `${mate.roomNumber ?? null}/${
+                    mate.bedNumber ?? null
+                  }`,
                 };
               }
 
@@ -1354,7 +1352,9 @@ class UserService {
       //NOTE - get university capacity
 
       if (academicDetails.universityId) {
-        const university = await College.findById(academicDetails?.universityId);
+        const university = await College.findById(
+          academicDetails?.universityId
+        );
 
         if (!university) throw new Error(RECORD_NOT_FOUND("University"));
       }
@@ -1537,7 +1537,6 @@ class UserService {
         }
       );
 
-
       return { uniqueId: newUser.uniqueId };
     } catch (error: any) {
       throw new Error(error.message);
@@ -1580,400 +1579,9 @@ class UserService {
     }
   };
 
-  //   //SECTION: Method to bulk upload user
-  //   userBulkUpload = async (
-  //     jsonData: any[],
-  //     staffId: string,
-  //     hostelId: string,
-  //     universityId: string,
-  //     url?: any
-  //   ) => {
-  //     let successArray: any[] = [];
-  //     let errorArray: any[] = [];
-  //     try {
-  //       const validGenders = ["male", "female", "other", "not selected"];
+  
 
-  //       const schema = Joi.object({
-  //         // Timestamp: Joi.date().timestamp().optional(),
-  //         gender: Joi.string().valid(...validGenders).default("not selected"),
-  //         "Date of Birth": Joi.date()
-  //           .required()
-  //           .messages({
-  //             "any.required": "Date of Birth is required",
-  //             "date.base": "Invalid Date format for Date of Birth",
-  //           }),
-  //         "Full Name of Student": Joi.string().required(),
-  //         "Mobile Number of Student": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
-  //           "string.pattern.base": "Mobile Number must be exactly 10 digits",
-  //           "any.required": "Mobile Number is required",
-  //           "number.min": "Mobile Number must be exactly 10 digits",
-  //           "number.max": "Mobile Number must be exactly 10 digits",
-  //         }),
-  //         "Father's Name": Joi.string().required(),
-  //         "Mother's Name": Joi.string().required(),
-  //         "Parent's Mobile Number": Joi.number().integer().min(1000000000).max(9999999999).required().messages({
-  //           "string.pattern.base": "Mobile Number must be exactly 10 digits",
-  //           "any.required": "Mobile Number is required",
-  //           "number.min": "Mobile Number must be exactly 10 digits",
-  //           "number.max": "Mobile Number must be exactly 10 digits",
-  //         }),
-  //         "Permanent Address": Joi.string().required(),
-  //         "Hostel Name": Joi.string().required(),
-  //         "Aadhaar Number": Joi.number().integer().min(100000000000).max(999999999999).required().messages({
-  //           "string.pattern.base": "Aadhaar Number must be exactly 12 digits",
-  //           "any.required": "Aadhaar Number is required",
-  //           "number.min": "Aadhaar Number must be exactly 12 digits",
-  //           "number.max": "Aadhaar Number must be exactly 12 digits",
-  //         }),
-  //         "Country": Joi.string().required(),
-  //         "State": Joi.string().required(),
-  //         "City": Joi.string().required(),
-  //       });
-
-
-  //       for (const item of jsonData) {
-  //         let errors: string[] = [];
-
-  //         // ✅ STEP 1: Joi Validation (Collect All Errors)
-  //         const { error, value } = schema.validate(item, { abortEarly: false });
-  //         if (error) {
-  //           error.details.forEach((err: any) => {
-  //             const field = err.context.label || err.context.key;
-  //             const message = err.message.replace(/"/g, "");
-  //             errors.push(`${field}: ${message}`);
-  //           });
-  //         }
-
-  //         // ✅ STEP 2: DB Validation - Check Phone Exists
-  //         if (value?.["Mobile Number of Student"]) {
-  //           const phoneExists = await User.findOne({
-  //             phone: value["Mobile Number of Student"],
-  //           });
-  //           if (phoneExists) {
-  //             errors.push(`Mobile Number of Student: Phone number already exists`);
-  //           }
-  //         }
-
-
-  //         // ✅ STEP 3: Push to Correct Array (No Duplicate Rows)
-  //         if (errors.length > 0) {
-  //           errorArray.push({
-  //             ...item,
-  //             errors: errors.join(" | "), // 👉 Excel Friendly Format
-  //           });
-  //         } else {
-  //           successArray.push({
-  //             ...item,
-  //             errors: null,
-  //           });
-  //         }
-  //       }
-
-
-  //       //NOTE - get university capacity
-  //       const university = await College.findById(universityId);
-
-  //       if (!university) throw new Error(RECORD_NOT_FOUND("University"));
-
-  //       // Get the user count for the current university
-  //       const userCount = await User.countDocuments({
-  //         "academicDetails.universityId": university._id,
-  //       });
-
-  //       if (userCount >= university.totalCapacity)
-  //         throw new Error(TOTAL_CAPACITY_ISSUES);
-
-  //       const currentDate = new Date();
-  //       currentDate.setUTCHours(0, 0, 0, 0);
-
-  //       //NOTE - get role
-  //       const { role } = await getRoleByName("student");
-
-  //       // Create an entry in the bulk upload table
-  //       const bulkUpload = await BulkUpload.create({
-  //         originalFile: url,
-  //         createdBy: staffId,
-  //         createdAt: getCurrentISTTime(),
-  //         updatedAt: getCurrentISTTime(),
-  //       });
-
-  //       for (let data of successArray) {
-  //         try {
-  //           const {
-  //             "Full Name of Student": name,
-  //             "Mobile Number of Student": phone,
-  //             Gender: gender,
-  //             Nationality: nationality,
-  //             State: state,
-  //             City: city,
-  //             "Date of Birth": dobExcel,
-  //             "Permanent Address": permanentAddress,
-  //             "Father's Name": fatherName,
-  //             "Mother's Name": motherName,
-  //             "Parent's Mobile Number": parentsContactNo,
-  //             "Aadhaar Number": aadharNumber,
-  //             "Room Number": roomNumber,
-  //             // "Bed Number": bedNumber,
-  //             // "Billing Cycle": billingCycle,
-  //           } = data;
-
-  //           // Validate mandatory fields (e.g., email, phone)
-  //           // if (phone) {
-  //           //   errorArray.push({
-  //           //     ...data,
-  //           //     error: "phone number already exist",
-  //           //   });
-  //           //   continue;
-  //           // }
-
-  //           // Check if email or phone already exists
-  //           // const existingUser = await User.findOne({
-  //           //   $or: [{ email }, { phone }, { enrollmentNumber }],
-  //           // });
-  //           // const existingUser = await User.findOne({
-  //           //   $or: [{ phone }],
-  //           // });
-  //           const existingUser = await User.findOne({ phone: phone })
-  //           if (existingUser) {
-  //             continue
-  //           }
-  //           // if (existingUser) {
-  //           //   errorArray.push({
-  //           //     ...data,
-  //           //     error: "Email or phone or enrollmentNumber already exists",
-  //           //   });
-  //           //   continue;
-  //           // }
-
-  //           // if (existingUser) {
-  //           //   errorArray.push({
-  //           //     ...data,
-  //           //     error: "User/Phone No. already exists",
-  //           //   });
-  //           //   continue;
-  //           // }
-  //           //NOTE - find the course id based on the name
-  //           // const course = await Course.findOne({
-  //           //   name: { $regex: courseName, $options: "i" },
-  //           // });
-
-  //           // if (!course) {
-  //           //   errorArray.push({ ...data, error: "Course not found." });
-  //           //   continue;
-  //           // }
-
-  //           // If the course is found, check if it's in the College
-  //           // const college = await College.findOne({
-  //           //   _id: university._id,
-  //           //   courseIds: { $elemMatch: { $eq: course._id } },
-  //           // });
-
-  //           // if (!college) {
-  //           //   errorArray.push({
-  //           //     ...data,
-  //           //     error: "Course not associated with the College.",
-  //           //   });
-  //           //   continue;
-  //           // }
-  //           // Convert Excel date to JavaScript date
-  //           // const dob = new Date((dobExcel - 25569) * 86400 * 1000);
-  //           // const dob = new Date(dobExcel)
-  //           // Get the student's hostel information
-  //           const [hostel] = await Hostel.aggregate([
-  //             { $match: { _id: new mongoose.Types.ObjectId(hostelId) } },
-  //             {
-  //               $project: {
-  //                 _id: 1,
-  //                 buildingNumber: 1,
-  //                 identifier: 1,
-  //                 securityFee: 1,
-  //                 // bedDetails: {
-  //                 //   $filter: {
-  //                 //     input: "$bedDetails",
-  //                 //     as: "bedDetail",
-  //                 //     cond: { $eq: ["$$bedDetail.bedType", bedType] },
-  //                 //   },
-  //                 // },
-  //                 // roomDetails: {
-  //                 //   $filter: {
-  //                 //     input: "$roomMapping",
-  //                 //     as: "room",
-  //                 //     cond: {
-  //                 //       $and: [
-  //                 //         { $eq: ["$$room.roomNumber", roomNumber] },
-  //                 //         {
-  //                 //           $gt: [
-  //                 //             {
-  //                 //               $size: {
-  //                 //                 $filter: {
-  //                 //                   input: "$$room.bedNumbers",
-  //                 //                   as: "bed",
-  //                 //                   cond: {
-  //                 //                     $eq: ["$$bed.bedNumber", String(bedNumber)],
-  //                 //                   },
-  //                 //                 },
-  //                 //               },
-  //                 //             },
-  //                 //             0,
-  //                 //           ],
-  //                 //         },
-  //                 //       ],
-  //                 //     },
-  //                 //   },
-  //                 // },
-  //               },
-  //             },
-  //             // { $unwind: "$roomDetails" },
-  //             // {
-  //             //   $project: {
-  //             //     _id: 1,
-  //             //     buildingNumber: 1,
-  //             //     identifier: 1,
-  //             //     securityFee: 1,
-  //             //     // bedDetails: 1,
-  //             //     // roomDetails: {
-  //             //     //   roomNumber: 1,
-  //             //     //   floorNumber: 1,
-  //             //     //   bedNumbers: {
-  //             //     //     $filter: {
-  //             //     //       input: "$roomDetails.bedNumbers",
-  //             //     //       as: "bed",
-  //             //     //       cond: { $eq: ["$$bed.bedNumber", String(bedNumber)] },
-  //             //     //     },
-  //             //     //   },
-  //             //     // },
-  //             //   },
-  //             // },
-  //           ]);
-  //           // if (!hostel) {
-  //           //   errorArray.push({ ...data, error: "Hostel not found" });
-  //           //   continue;
-  //           // }
-
-  //           // Generate a unique ID for the student
-  //           const uniqueId = await this.generateUniqueYocoId(
-  //             hostel?.identifier,
-  //             hostel?._id
-  //           );
-
-  //           // Hash a default password for the user
-  //           const hashedPassword = await hashPassword("123456789");
-
-  //           // // Generate billing cycle details
-  //           // const billingDetails = createBillingCycleDetails(
-  //           //   hostel.bedDetails[0]?.accommodationFee,
-  //           //   billingCycle
-  //           // );
-
-  //           // Create the new user
-
-  //           const newUser = new User({
-  //             roleId: role._id,
-  //             uniqueId,
-  //             permanentAddress,
-  //             parentsContactNo,
-  //             documents: {
-  //               aadhaarNumber: String(aadharNumber)
-  //             },
-  //             name: name.toUpperCase(),
-  //             password: hashedPassword,
-  //             phone,
-  //             dob: dobExcel,
-  //             gender: gender,
-  //             nationality: nationality,
-  //             bulkState: state,
-  //             bulkCity: city,
-  //             familiyDetails: {
-  //               fatherName,
-  //               parentsContactNo,
-  //               motherName,
-  //             },
-  //             hostelId: hostel?._id,
-  //             isVerified: true,
-  //             verifiedBy: staffId,
-  //             createdAt: getCurrentISTTime(),
-  //             updatedAt: getCurrentISTTime(),
-  //             createdBy: staffId,
-  //           });
-
-  //           await newUser.save();
-  //           // Allocate the student to the hostel
-  //           await StudentHostelAllocation.create({
-  //             studentId: newUser._id,
-  //             hostelId: hostel._id,
-  //             buildingNumber: hostel?.buildingNumber,
-  //             roomNumber,
-  //             // bedNumber: hostel.roomDetails?.bedNumbers[0]._id,
-  //             // floorNumber: hostel.roomDetails?.floorNumber,
-  //             securityFee: hostel?.securityFee,
-  //             // billingCycle: billingCycle.toLowerCase(),
-  //             joiningDate: currentDate,
-  //             createdBy: staffId,
-  //             createdAt: getCurrentISTTime(),
-  //             updatedAt: getCurrentISTTime(),
-  //           });
-
-  //           //NOTE - update in hostel
-  //           // await Hostel.findOneAndUpdate(
-  //           //   { _id: hostelId, "roomMapping.roomNumber": roomNumber },
-  //           //   {
-  //           //     $inc: {
-  //           //       "roomMapping.$.vacant": -1,
-  //           //       "roomMapping.$.occupied": 1,
-  //           //     },
-  //           //     $set: { "roomMapping.$.bedNumbers.$[bed].isVacant": false },
-  //           //   },
-  //           //   {
-  //           //     new: true,
-  //           //     runValidators: true,
-  //           //     arrayFilters: [{ "bed.bedNumber": bedNumber }],
-  //           //   }
-  //           // );
-
-  //           // Push success details (add the full original data to the success array)
-  //           // successArray.push(data);
-  //           // console.log(successArray, errorArray, "errrr")
-  //         } catch (error: any) {
-  //           // Catch errors for individual student data and push to errorArray
-  //           errorArray.push({ ...data, error: error.message });
-  //         }
-  //       }
-  //       // If there are successes or errors, generate CSV/Excel files and upload them to AWS S3
-  //       let successFileUrl = null;
-  //       let errorFileUrl = null;
-  //       if (successArray.length > 0) {
-  //         const successFilePath = await pushToS3Bucket(
-  //           successArray,
-  //           process.env.S3_BUCKET_NAME as string,
-  //           USER_BULK_UPLOAD_FILES
-  //         );
-  //         successFileUrl = successFilePath;
-  //       }
-  //       if (errorArray.length > 0) {
-  //         const errorFilePath = await pushToS3Bucket(
-  //           errorArray,
-  //           process.env.S3_BUCKET_NAME as string,
-  //           USER_BULK_UPLOAD_FILES
-  //         );
-  //         errorFileUrl = errorFilePath;
-  //       }
-
-
-  //       //NOTE - update bulk upload
-  //       await BulkUpload.findByIdAndUpdate(bulkUpload._id, {
-  //         $set: {
-  //           successFile: successFileUrl,
-  //           errorFile: errorFileUrl,
-  //           updatedAt: getCurrentISTTime(),
-  //         },
-  //       });
-
-  //       return FILE_UPLOADED;
-  //     } catch (error: any) {
-  //       throw new Error(`${error.message}`);
-  //     }
-  //   };
-  // SECTION: Method to bulk upload user
+ //here we upload user bulk upload  and send mail with id and password
   userBulkUpload = async (
     jsonData: any[],
     staffId: string,
@@ -1992,7 +1600,7 @@ class UserService {
       "icloud.com",
       "aol.com",
       "zoho.com",
-      "raisoni.net"
+      "raisoni.net",
     ];
     try {
       // const validGenders = ["male", "female", "other", "not selected"];
@@ -2002,34 +1610,32 @@ class UserService {
           "any.required": "Gender is required",
         }),
         Email: Joi.string()
+          .trim()
           .email({ tlds: { allow: false } })
           .custom((value, helpers) => {
-            const domain = value.split("@")[1];
+            const domain = value.split("@")[1]?.trim();
 
-            if (!allowedDomains.includes(domain)) {
-              return helpers.error("any.invalid");
-            }
+            // if (!allowedDomains.includes(domain)) {
+            //   return helpers.error("any.invalid");
+            // }
             return value;
           })
           .required()
           .messages({
             "string.email": "Invalid email format",
-            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
-            "any.required": "Email is required"
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(
+              ", "
+            )}`,
+            "any.required": "Email is required",
           }),
-        "Date of Birth": Joi.date()
-          .required()
-          .messages({
-            "any.required": "Date of Birth is required",
-            "date.base": "Invalid Date format for Date of Birth",
-          }),
-        "Full Name of Student": Joi.string()
-          .max(70)
-          .required()
-          .messages({
-            "string.max": "Full Name must not exceed 70 characters",
-            "any.required": "Full Name is required",
-          }),
+        "Date of Birth": Joi.date().required().messages({
+          "any.required": "Date of Birth is required",
+          "date.base": "Invalid Date format for Date of Birth",
+        }),
+        "Full Name of Student": Joi.string().max(70).required().messages({
+          "string.max": "Full Name must not exceed 70 characters",
+          "any.required": "Full Name is required",
+        }),
         "Mobile No.": Joi.string()
           .trim()
           .custom((value, helpers) => {
@@ -2047,23 +1653,18 @@ class UserService {
             "number.length": "Mobile Number must be between 8 to 15 digits",
             "any.required": "Mobile Number is required",
           }),
-        "Father's Name": Joi.string()
-          .max(70)
-          .required()
-          .messages({
-            "string.max": "Full Name must not exceed 70 characters",
-            "any.required": "Full Name is required",
-          }),
-        "Mother's Name": Joi.string()
-          .max(70)
-          .required()
-          .messages({
-            "string.max": "Full Name must not exceed 70 characters",
-            "any.required": "Full Name is required",
-          }),
+        "Father's Name": Joi.string().max(70).required().messages({
+          "string.max": "Full Name must not exceed 70 characters",
+          "any.required": "Full Name is required",
+        }),
+        "Mother's Name": Joi.string().max(70).required().messages({
+          "string.max": "Full Name must not exceed 70 characters",
+          "any.required": "Full Name is required",
+        }),
         "Permanent Address": Joi.string().required(),
         "Hostel Name": Joi.string().required(),
-        "Aadhaar Number": Joi.number().allow("", null) // allow empty
+        "Aadhaar Number": Joi.number()
+          .allow("", null) // allow empty
           .integer()
           .required()
           .custom((value, helpers) => {
@@ -2087,9 +1688,9 @@ class UserService {
             // "any.required": "Aadhaar Number is required",
             "number.base": "Aadhaar Number must be a number",
           }),
-        "Country": Joi.string().required(),
-        "State": Joi.string().required(),
-        "City": Joi.string().required(),
+        Country: Joi.string().required(),
+        State: Joi.string().required(),
+        City: Joi.string().required(),
         "Mother's Mobile No.": Joi.number()
           .integer()
           .required()
@@ -2110,7 +1711,8 @@ class UserService {
           })
           .messages({
             "any.invalid": "Mother's Mobile No. must contain digits only",
-            "number.length": "Mother's Mobile No. must be between 8 to 15 digits",
+            "number.length":
+              "Mother's Mobile No. must be between 8 to 15 digits",
             "any.required": "Mother's Mobile No. is required",
             "number.base": "Mother's Mobile No. must be a number",
           }),
@@ -2134,21 +1736,22 @@ class UserService {
           })
           .messages({
             "any.invalid": "Father's Mobile No. must contain digits only",
-            "number.length": "Father's Mobile No. must be between 8 to 15 digits",
+            "number.length":
+              "Father's Mobile No. must be between 8 to 15 digits",
             "any.required": "Father's Mobile No. is required",
             "number.base": "Father's Mobile No. must be a number",
           }),
         "Room Number": Joi.number().integer().required(),
         "Floor Number": Joi.number().integer().required(),
         "Blood Group": Joi.string().required(),
-        "Bed Number": Joi.string().required()
+        "Bed Number": Joi.string().required(),
       });
 
       // Validate and classify entries
       for (const item of jsonData) {
         let errors: string[] = [];
         const { error, value } = schema.validate(item, {
-          abortEarly: false,   // collect all errors
+          abortEarly: false, // collect all errors
         });
 
         if (error) {
@@ -2158,8 +1761,8 @@ class UserService {
             errors.push(`${field}: ${message}`);
           });
         }
-        if ((value?.["Date of Birth"])?.success === false) {
-          item["Date of Birth"] = value["Date of Birth"]?.date
+        if (value?.["Date of Birth"]?.success === false) {
+          item["Date of Birth"] = value["Date of Birth"]?.date;
         }
         const phoneStr = value?.["Mobile No."];
         // Check for duplicate phone
@@ -2176,7 +1779,7 @@ class UserService {
         // Check for duplicate Aadhaar
         if (value?.Email) {
           const emailExist = await User.findOne({
-            email: value?.Email
+            email: value?.Email,
           });
           if (emailExist) {
             errors.push(`Email: Email already exists`);
@@ -2196,7 +1799,7 @@ class UserService {
         const dob = value["Date of Birth"];
 
         if (moment(dob).isAfter(moment(), "day")) {
-          errors.push("Invalid DOB: Date cannot be in the future.")
+          errors.push("Invalid DOB: Date cannot be in the future.");
         }
 
         if (errors.length > 0) {
@@ -2204,7 +1807,6 @@ class UserService {
         } else {
           successArray.push({ ...item });
         }
-
       }
 
       // Check university capacity
@@ -2236,9 +1838,20 @@ class UserService {
         throw new Error("Failed to create bulk upload entry.");
       }
 
+      const welcomeMailQueue: {
+        email: string;
+        name: string;
+        uniqueId: string;
+        plainPassword: string;
+      }[] = [];
+
+      // console.log("welcomqueue", welcomeMailQueue);
+      // console.log("successArray", successArray);
+
       // Process valid entries
       for (let i = 0; i < successArray.length; i++) {
         const data = successArray[i];
+
         try {
           const {
             "Full Name of Student": name,
@@ -2259,14 +1872,14 @@ class UserService {
             "Floor Number": floorNumber,
             "Bed Number": bedNumber,
             "Blood Group": bloodGroup,
-            email: Email
+            email: Email,
           } = data;
 
-          let uniqueId
+          let uniqueId;
           // Get hostel info
           const [hostel] = await Hostel.aggregate([
             {
-              $match: { _id: new mongoose.Types.ObjectId(hostelId) }
+              $match: { _id: new mongoose.Types.ObjectId(hostelId) },
             },
             {
               $project: {
@@ -2292,20 +1905,20 @@ class UserService {
                                   cond: {
                                     $and: [
                                       { $eq: ["$$bed.bedNumber", bedNumber] },
-                                      { $eq: ["$$bed.isVacant", true] } // ✅ only vacant beds
-                                    ]
-                                  }
-                                }
-                              }
+                                      { $eq: ["$$bed.isVacant", true] }, //  only vacant beds
+                                    ],
+                                  },
+                                },
+                              },
                             },
-                            0
-                          ]
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
+                            0,
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
             },
             { $unwind: "$roomDetails" },
             {
@@ -2325,25 +1938,36 @@ class UserService {
                       cond: {
                         $and: [
                           { $eq: ["$$bed.bedNumber", bedNumber] },
-                          { $eq: ["$$bed.isVacant", true] } // ✅ only return vacant bed
-                        ]
-                      }
-                    }
-                  }
-                }
-              }
-            }
+                          { $eq: ["$$bed.isVacant", true] }, // only return vacant bed
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
           ]);
+
+          console.log(
+            "Hostel result for",
+            name,
+            "=>",
+            JSON.stringify(hostel, null, 2)
+          );
           if (!hostel) {
             errorArray.push({ ...data, errors: "Bed already occupied" });
-            successArray.splice(i, 1);
+            continue; // skip to next student, don't touch successArray
           } else {
             uniqueId = await this.generateUniqueYocoId(
               hostel?.identifier,
               hostel?._id
             );
 
-            const hashedPassword = await hashPassword("123456789");
+            const plainPassword = generateRandomPassword(8);
+            const hashedPassword = await hashPassword(plainPassword);
+
+            console.log("password");
+
             const newUser = new User({
               roleId: role._id,
               uniqueId,
@@ -2377,53 +2001,90 @@ class UserService {
             });
 
             await newUser.save();
+            console.log("IN LOOP, item index:" );
+            console.log("data.Email inside loop:");
+            // Queue email only after successful save
+            if (data?.Email) {
+              console.log(
+                "Queuing welcome email for:",
+                data.Email,
+                uniqueId
+              );
+
+              welcomeMailQueue.push({
+                email: data.Email,
+                name,
+                uniqueId,
+                plainPassword
+              });
+            }
             await Hostel.findOneAndUpdate(
               {
                 _id: new mongoose.Types.ObjectId(hostelId),
                 "roomMapping.floorNumber": floorNumber,
                 "roomMapping.roomNumber": roomNumber,
                 "roomMapping.bedNumbers": {
-                  $elemMatch: { bedNumber: String(bedNumber), isVacant: true }
-                }
+                  $elemMatch: { bedNumber: String(bedNumber), isVacant: true },
+                },
               },
               {
                 $set: {
-                  "roomMapping.$[room].bedNumbers.$[bed].isVacant": false
+                  "roomMapping.$[room].bedNumbers.$[bed].isVacant": false,
                 },
                 $inc: {
                   "roomMapping.$[room].vacant": -1,
-                  "roomMapping.$[room].occupied": 1
-                }
+                  "roomMapping.$[room].occupied": 1,
+                },
               },
               {
                 arrayFilters: [
-                  { "room.floorNumber": floorNumber, "room.roomNumber": roomNumber },
-                  { "bed.bedNumber": String(bedNumber) }
+                  {
+                    "room.floorNumber": floorNumber,
+                    "room.roomNumber": roomNumber,
+                  },
+                  { "bed.bedNumber": String(bedNumber) },
                 ],
-                new: true
+                new: true,
               }
-            ),
+            );
 
-              await StudentHostelAllocation.create({
-                studentId: newUser._id,
-                hostelId: hostel._id,
-                buildingNumber: hostel?.buildingNumber,
-                roomNumber,
-                bedType: hostel.roomDetails?.bedType,
-                bedNumber: hostel.roomDetails?.bedNumbers[0]?.bedNumber,
-                floorNumber: hostel.roomDetails?.floorNumber,
-                securityFee: hostel?.securityFee,
-                joiningDate: currentDate,
-                createdBy: staffId,
-                createdAt: getCurrentISTTime(),
-                updatedAt: getCurrentISTTime(),
-              });
+            await StudentHostelAllocation.create({
+              studentId: newUser._id,
+              hostelId: hostel._id,
+              buildingNumber: hostel?.buildingNumber,
+              roomNumber,
+              bedType: hostel.roomDetails?.bedType,
+              bedNumber: hostel.roomDetails?.bedNumbers[0]?.bedNumber,
+              floorNumber: hostel.roomDetails?.floorNumber,
+              securityFee: hostel?.securityFee,
+              joiningDate: currentDate,
+              createdBy: staffId,
+              createdAt: getCurrentISTTime(),
+              updatedAt: getCurrentISTTime(),
+            });
           }
-
         } catch (error: any) {
           errorArray.push({ ...data, errors: error.message });
         }
       }
+
+      console.log("welcomeMailQueue before sending", welcomeMailQueue);
+      console.log("successArray after processing", successArray);
+
+      // Send welcome emails for all newly created students
+      for (const mailJob of welcomeMailQueue) {
+        try {
+          await sendStudentWelcomeEmail(mailJob);
+        } catch (err) {
+          console.error(
+            `Failed to send welcome email to ${mailJob.email}:`,
+            (err as Error).message
+          );
+        }
+      }
+
+      console.log("welcomeMailQueue after sending", welcomeMailQueue);
+
       try {
         let successFileUrl: string | null = null;
         let errorFileUrl: string | null = null;
@@ -2462,7 +2123,7 @@ class UserService {
 
       return FILE_UPLOADED;
     } catch (error: any) {
-      console.log(error, "errrooooooo")
+      console.log(error, "errrooooooo");
       throw new Error(`${error.message}`);
     }
   };
@@ -2559,16 +2220,17 @@ class UserService {
       const student = await User.findById(studentId).lean();
       if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
 
-
       if (student?.email !== email) {
-        const student = await User.findOne({ email })
+        const student = await User.findOne({ email });
         if (student) {
-          throw new Error('Email already exist')
+          throw new Error("Email already exist");
         }
       }
       // Step 2: Validate university
       if (academicDetails.universityId) {
-        const university = await College.findById(academicDetails?.universityId);
+        const university = await College.findById(
+          academicDetails?.universityId
+        );
 
         if (!university) throw new Error(RECORD_NOT_FOUND("University"));
       }
@@ -2595,7 +2257,6 @@ class UserService {
       } else {
         image = student.image; // Retain the existing image key if no new image is provided
       }
-
 
       // Step 5: Handle document updates
       let updatedDocuments: any = { ...documents };
@@ -2644,7 +2305,7 @@ class UserService {
         academicDetails,
         documents: {
           ...updatedDocuments,
-          aadhaarNumber: updatedDocuments?.aadharNumber
+          aadhaarNumber: updatedDocuments?.aadharNumber,
         },
         vechicleDetails,
         updatedAt: getCurrentISTTime(),
@@ -2667,9 +2328,8 @@ class UserService {
         { new: true }
       );
 
-      const hostelAlloc = await StudentHostelAllocation.findOne({ studentId })
+      const hostelAlloc = await StudentHostelAllocation.findOne({ studentId });
       if (hostelAlloc) {
-
         await Hostel.findOneAndUpdate(
           {
             _id: hostelAlloc?.hostelId,
@@ -2685,7 +2345,10 @@ class UserService {
           },
           {
             arrayFilters: [
-              { "room.floorNumber": Number(hostelAlloc?.floorNumber), "room.roomNumber": Number(hostelAlloc?.roomNumber) },
+              {
+                "room.floorNumber": Number(hostelAlloc?.floorNumber),
+                "room.roomNumber": Number(hostelAlloc?.roomNumber),
+              },
               { "bed.bedNumber": String(hostelAlloc?.bedNumber) },
             ],
             new: true,
@@ -2699,7 +2362,7 @@ class UserService {
               floorNumber: Number(floorNumber),
               roomNumber: Number(roomNumber),
               bedNumber: String(bedNumber),
-            }
+            },
           },
           { new: true } // returns updated doc
         );
@@ -2718,7 +2381,10 @@ class UserService {
           },
           {
             arrayFilters: [
-              { "room.floorNumber": Number(floorNumber), "room.roomNumber": Number(roomNumber) },
+              {
+                "room.floorNumber": Number(floorNumber),
+                "room.roomNumber": Number(roomNumber),
+              },
               { "bed.bedNumber": String(bedNumber) },
             ],
             new: true,
@@ -2815,7 +2481,6 @@ class UserService {
     let isPlayedNoticeCreated = true;
     let log: Pick<INotificationLog, "templateType" | "reason">;
     try {
-
       // NOTE: Retrieve student details
       student = await User.findById(studentId).select(
         "oneSignalWebId oneSignalAndoridId oneSignalIosId hostelId"
@@ -3101,40 +2766,46 @@ class UserService {
     id: string | mongoose.Types.ObjectId
   ): Promise<string> => {
     try {
-      const hostel = await StudentHostelAllocation.findOne({ studentId: id })
+      const hostel = await StudentHostelAllocation.findOne({ studentId: id });
       await Hostel.findOneAndUpdate(
         {
           _id: new mongoose.Types.ObjectId(hostel?.hostelId),
           "roomMapping.floorNumber": hostel?.floorNumber,
           "roomMapping.roomNumber": hostel?.roomNumber,
           "roomMapping.bedNumbers": {
-            $elemMatch: { bedNumber: String(hostel?.bedNumber), isVacant: false }
-          }
+            $elemMatch: {
+              bedNumber: String(hostel?.bedNumber),
+              isVacant: false,
+            },
+          },
         },
         {
           $set: {
-            "roomMapping.$[room].bedNumbers.$[bed].isVacant": true
+            "roomMapping.$[room].bedNumbers.$[bed].isVacant": true,
           },
           $inc: {
             "roomMapping.$[room].vacant": 1,
-            "roomMapping.$[room].occupied": -1
-          }
+            "roomMapping.$[room].occupied": -1,
+          },
         },
         {
           arrayFilters: [
-            { "room.floorNumber": hostel?.floorNumber, "room.roomNumber": hostel?.roomNumber },
-            { "bed.bedNumber": String(hostel?.bedNumber) }
+            {
+              "room.floorNumber": hostel?.floorNumber,
+              "room.roomNumber": hostel?.roomNumber,
+            },
+            { "bed.bedNumber": String(hostel?.bedNumber) },
           ],
-          new: true
+          new: true,
         }
-      )
+      );
 
       const userExist = await User.findOneAndDelete({ _id: id });
       if (userExist) {
-        await StudentLeave.findOneAndDelete({ userId: id })
-        await Complaint.findOneAndDelete({ userId: id })
-        await BookMeals.findOneAndDelete({ studentId: id })
-        await StudentHostelAllocation.findOneAndDelete({ studentId: id })
+        await StudentLeave.findOneAndDelete({ userId: id });
+        await Complaint.findOneAndDelete({ userId: id });
+        await BookMeals.findOneAndDelete({ studentId: id });
+        await StudentHostelAllocation.findOneAndDelete({ studentId: id });
 
         return DELETE_DATA;
       } else {
@@ -3145,9 +2816,7 @@ class UserService {
     }
   };
 
-  userRequestDelete = async (
-    email: String,
-  ) => {
+  userRequestDelete = async (email: String) => {
     const userDetails: any = await User.findOne({ email: email });
     if (!userDetails) throw new Error(RECORD_NOT_FOUND("Email"));
 
@@ -3156,7 +2825,7 @@ class UserService {
         throw new Error("Invalid email address");
       }
 
-      const otp = await generateSecureOtp()
+      const otp = await generateSecureOtp();
       const expiryTime = getExpiryDate(5, "M");
       await Otp.findOneAndUpdate(
         { userId: new mongoose.Types.ObjectId(userDetails?._id) },
@@ -3165,7 +2834,7 @@ class UserService {
           expiryTime,
           isVerified: false,
           email,
-          phone:null,
+          phone: null,
           status: true,
           createdBy: userDetails?._id,
           updatedBy: userDetails?._id,
@@ -3199,7 +2868,7 @@ class UserService {
       });
       return {
         name: userDetails?.name,
-        userId: userDetails?.uniqueId
+        userId: userDetails?.uniqueId,
       };
     } catch (error) {
       throw new Error("Failed to send OTP email");
@@ -3208,14 +2877,13 @@ class UserService {
 
   verifyOTP = async (otp: number, email: string) => {
     try {
-
       // Check if OTP exists
       const otpExists = await Otp.findOne({ email });
       if (Number(otpExists?.otp) !== Number(otp)) {
-        throw new Error("OTP not found")
+        throw new Error("OTP not found");
       }
-      if (!otpExists) throw new Error("OTP Expired")
-      if (otpExists?.isVerified) throw new Error("OTP already verified")
+      if (!otpExists) throw new Error("OTP Expired");
+      if (otpExists?.isVerified) throw new Error("OTP already verified");
       // if(!otpExists) throw new Error(OTP_NOT_VERIFIED);
       if (otpExists) {
         await Otp.findOneAndUpdate(
@@ -3232,7 +2900,7 @@ class UserService {
     } catch (error: any) {
       throw new Error(error.message || "Failed to Verify OTP");
     }
-  }
+  };
 
   userRequestDeactivate = async (email: string) => {
     try {
@@ -3244,20 +2912,18 @@ class UserService {
 
       // Already requested
       if (user.isRequestDeactivate === true) {
-        throw new Error("Already request sent")
+        throw new Error("Already request sent");
       }
       await User.findOneAndUpdate(
         { email: email },
         { $set: { isRequestDeactivate: true } },
         { new: true }
       );
-      return "Activation request sent"
+      return "Activation request sent";
     } catch (error: any) {
       throw new Error(error.message || "Failed to Verify OTP");
     }
-  }
+  };
 }
 
 export default new UserService();
-
-
