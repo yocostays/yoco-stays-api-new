@@ -2059,16 +2059,16 @@ class UserService {
       // console.log("successArray after processing", successArray);
 
       // Send welcome emails for all newly created students
-      // await Promise.allSettled(
-      //   welcomeMailQueue.map((mailJob) =>
-      //     sendStudentWelcomeEmail(mailJob).catch((err) => {
-      //       console.error(
-      //         `Failed to send welcome email to ${mailJob.email}:`,
-      //         err.message
-      //       );
-      //     })
-      //   )
-      // );
+      await Promise.allSettled(
+        welcomeMailQueue.map((mailJob) =>
+          sendStudentWelcomeEmail(mailJob).catch((err) => {
+            console.error(
+              `Failed to send welcome email to:`,
+              err.message
+            );
+          })
+        )
+      );
 
       // console.log("welcomeMailQueue after sending", welcomeMailQueue);
 
