@@ -38,6 +38,7 @@ import {
   LEGAL_DOCUMENTS,
 } from "../utils/s3bucketFolder";
 import BulkUpload from "../models/bulkUpload.model";
+import { normalizeBedNumber } from "../utils/normalizeBedNumber";
 
 const {
   DUPLICATE_RECORD,
@@ -536,7 +537,7 @@ class HostelService {
         totalBeds: ele?.bedType,
         bedNumbers: ele?.bedNumbers?.map((b: IBedNumberDetails) => ({
           ...b,
-          bedNumber: b.bedNumber.trim()
+          bedNumber: normalizeBedNumber(b?.bedNumber)
         })),
         vacant: ele?.occupied ? ele?.bedType - ele?.occupied : ele?.bedType - 0,
         occupied: ele?.occupied ?? 0,
@@ -545,7 +546,7 @@ class HostelService {
         occupancyType: ele?.occupancyType,
         washroomType: ele?.washroomType,
       }));
-      console.log(roomDetailsData, "roomDetails")
+      // console.log(roomDetailsData, "roomDetails")
       //NOTE - update the room details
       await Hostel.findByIdAndUpdate(hostelId, {
         $set: {

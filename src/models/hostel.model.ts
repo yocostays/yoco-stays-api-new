@@ -120,7 +120,7 @@ const ImageSchema: Schema<IImageDetails> = new Schema({
 });
 
 const BedNumberDetailsSchema: Schema<IBedNumberDetails> = new Schema({
-  bedNumber: { type: String, required: true },
+  bedNumber: { type: String, trim: true, required: true },
   isVacant: { type: Boolean, default: true },
 });
 

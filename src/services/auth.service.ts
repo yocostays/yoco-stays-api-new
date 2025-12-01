@@ -204,36 +204,40 @@ class AuthService {
     }
   };
 
-  //SECTION: Method to generate Otp
-  generateOtpMail = async (
-    userId: string,
-    phone: string
-  ): Promise<{ otp: number }> => {
-    try {
-      const otp = generateSecureOtp();
-      const expiryTime = getExpiryDate(5, "M");
+  //SECTION: Method to generate Otp for mail  but we are useing userRequest delete function
 
-      // Upsert OTP document for the user
-      await Otp.findOneAndUpdate(
-        { userId: new mongoose.Types.ObjectId(userId) },
-        {
-          otp,
-          expiryTime,
-          isVerified: false,
-          status: true,
-          updatedBy: userId,
-        },
-        { upsert: true, new: true }
-      );
+  // generateOtpMail = async (
+  //   userId: string,
+  //   phone: string
+  // ): Promise<{ otp: number }> => {
+  //   try {
+  //     const otp = generateSecureOtp();
+  //     const expiryTime = getExpiryDate(5, "M");
 
-      //NOTE: Send otp to the User.
-      await sendSMS(phone, otp);
-      return { otp };
-    } catch (error: any) {
-      throw new Error(`User OTP geenerate: ${error.message}`);
-    }
-  };
+  //     // Upsert OTP document for the user
+  //     await Otp.findOneAndUpdate(
+  //       { userId: new mongoose.Types.ObjectId(userId) },
+  //       {
+  //         otp,
+  //         expiryTime,
+  //         isVerified: false,
+  //         status: true,
+  //         updatedBy: userId,
+  //       },
+  //       { upsert: true, new: true }
+  //     );
 
+  //     //NOTE: Send otp to the User.
+  //     await sendSMS(phone, otp);
+  //     return { otp };
+  //   } catch (error: any) {
+  //     throw new Error(`User OTP geenerate: ${error.message}`);
+  //   }
+  // };
+
+
+
+//generate Otp for phone number 
  generateOtp = async (
   userId: string | null | undefined,
   phone: string | null | undefined
@@ -242,51 +246,66 @@ class AuthService {
     if (!phone || String(phone).trim().length === 0) {
       throw new Error("Phone number is required for SMS OTP");
     }
-    const phoneTrimmed = String(phone).trim();
 
+    const phoneTrimmed = String(phone).trim();
+    // keep your existing regex for validation
     if (!/^\+?\d{7,15}$/.test(phoneTrimmed)) {
       throw new Error("Invalid phone number format");
     }
 
-    const otp = generateSecureOtp(); 
-    const expiryTime = getExpiryDate(5, "M"); 
+    const otp = generateSecureOtp(); // number
+    const expiryTime = getExpiryDate(5, "M");
 
-    const filter: any = phoneTrimmed ? { phone: phoneTrimmed } : undefined;
-
-    if (!filter && userId) {
+    // Build filter: prefer phone; fall back to userId if phone not provided
+    let filter: any = null;
+    if (phoneTrimmed) {
+      filter = { phone: phoneTrimmed };
+    } else if (userId) {
       if (!mongoose.Types.ObjectId.isValid(userId)) {
         throw new Error("Invalid userId");
       }
-      filter.userId = new mongoose.Types.ObjectId(userId);
-    }
-
-    if (!filter) {
+      filter = { userId: new mongoose.Types.ObjectId(userId) };
+    } else {
       throw new Error("Either phone or valid userId is required to generate OTP");
     }
 
-    // Prepare update document
+    const setObj: any = {
+      otp,
+      expiryTime,
+      isVerified: false,
+      status: true,
+      updatedBy: userId ? new mongoose.Types.ObjectId(userId) : null,
+      failedAttempts: 0,
+      sent: false,
+    };
+
+    // only add phone when present
+    if (phoneTrimmed) {
+      setObj.phone = phoneTrimmed;
+    }
+
     const update: any = {
-      $set: {
-        otp,
-        expiryTime,
-        isVerified: false,
-        status: true,
-        updatedBy: userId ?? null,
-        phone: phoneTrimmed,
-        email: null,
-      },
+      $set: setObj,
       $setOnInsert: {
-        createdBy: userId ?? null,
+        createdBy: userId ? new mongoose.Types.ObjectId(userId) : null,
+        userId: userId ? new mongoose.Types.ObjectId(userId) : null,
       },
     };
 
     await Otp.findOneAndUpdate(filter, update, {
       upsert: true,
       new: true,
-    });
+      setDefaultsOnInsert: true,
+    }).exec();
 
-    // Send SMS
-    await sendSMS(phoneTrimmed, otp);
+
+    // Send SMS (prefer queue in production). If send succeeds, mark sent=true.
+    try {
+      await sendSMS(phoneTrimmed, otp);
+      await Otp.updateOne(filter, { $set: { sent: true } }).exec();
+    } catch (smsErr: any) {
+      // keep sent=false so you can retry or investigate; do not throw to avoid leaking provider issues
+    }
 
     return { otp };
   } catch (error: any) {
