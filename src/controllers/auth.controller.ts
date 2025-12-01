@@ -4,7 +4,10 @@ import mongoose from "mongoose";
 import User from "../models/user.model";
 import AuthService from "../services/auth.service";
 import StaffService from "../services/staff.service";
-import { default as UserService, default as userService } from "../services/user.service";
+import {
+  default as UserService,
+  default as userService,
+} from "../services/user.service";
 import { getSignedUrl } from "../utils/awsUploadService";
 import { HttpResponse } from "../utils/httpResponse";
 import {
@@ -17,6 +20,7 @@ import {
   SAMPLE_FILE,
   STAFF_FOLDER,
 } from "../utils/s3bucketFolder";
+import { allowedDomains } from "../constants/allowedDomains";
 
 const {
   staffLoginWithUserNameAndPwd,
@@ -26,17 +30,14 @@ const {
   uploadFileInApp,
   wardenRefreshToken,
   generateOtp,
-  generateOtpMail,
+  // generateOtpMail,
   resetStaffPassword,
   downloadSampleBulkUploadFile,
   generateOtpUserSignUp,
   verifyOtpUserSignUp,
 } = AuthService;
 
-const {
-  userRequestDelete,
-  verifyOTP
-} = userService
+const { userRequestDelete, verifyOTP, verifyPhoneOTP } = userService;
 
 const { getStudentByUniqueId } = UserService;
 const { getStaffById, staffByEmailId } = StaffService;
@@ -112,13 +113,8 @@ class AuthController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      const {
-        uniqueId,
-        password,
-        rememberMe,
-        loginType,
-        subscriptionId,
-      } = req.body;
+      const { uniqueId, password, rememberMe, loginType, subscriptionId } =
+        req.body;
 
       if (!uniqueId || !password) {
         const missingField = !uniqueId ? "Yoco unique id" : "Password";
@@ -135,7 +131,7 @@ class AuthController {
         password,
         rememberMe,
         loginType,
-        subscriptionId,
+        subscriptionId
       );
 
       const result = {
@@ -269,189 +265,168 @@ class AuthController {
   //   }
   // }
 
-async  generateOtpForApp(
-  req: Request,
-  res: Response
-): Promise<Response<HttpResponse>> {
- try {
-  const { email, phone } = req.body;
+  //Here we generate otp for app using email or phone for password reset and user delete request(using mail);
+  async generateOtpForApp(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const { email, phone } = req.body;
 
-  if (!email && !phone) {
-    return res
-      .status(400)
-      .json({ statusCode: 400, message: "Email or phone is required" });
-  }
+      if (!email && !phone) {
+        return res
+          .status(400)
+          .json({ statusCode: 400, message: "Email or phone is required" });
+      }
 
-  if (phone) {
-    const phoneTrimmed = String(phone).trim();
+      if (phone) {
+        const phoneTrimmed = String(phone).trim();
 
-  const phoneSchema = Joi.object({
-  phone: Joi.string()
-    .trim()
-    .pattern(/^\+?\d{7,15}$/)
-    .required()
-    .messages({
-      "string.empty": "Phone number is required",
-      "any.required": "Phone number is required",
-      "string.pattern.base": "Invalid phone number format",
-    }),
-});
+        const phoneSchema = Joi.object({
+          phone: Joi.string()
+            .trim()
+            .pattern(/^\+?\d{7,15}$/)
+            .required()
+            .messages({
+              "string.empty": "Phone number is required",
+              "any.required": "Phone number is required",
+              "string.pattern.base": "Invalid phone number format",
+            }),
+        });
 
-if (phone) {
-  const { error } = phoneSchema.validate({ phone });
-  if (error) {
-    return res.status(400).json({
-      statusCode: 400,
-      message: error.details[0].message,
-    });
-  }
-}
+        if (phone) {
+          const { error } = phoneSchema.validate({ phone });
+          if (error) {
+            return res.status(400).json({
+              statusCode: 400,
+              message: error.details[0].message,
+            });
+          }
+        }
 
+        // Check phone exists in users collection
+        const userByPhone = await User.findOne({ phone: phoneTrimmed }).lean();
+        if (!userByPhone) {
+          return res
+            .status(400)
+            .json({ statusCode: 400, message: "Phone number not registered" });
+        }
 
-    // Check phone exists in users collection
-    const userByPhone = await User.findOne({ phone: phoneTrimmed }).lean();
-    if (!userByPhone) {
+        await generateOtp(userByPhone._id?.toString() ?? null, phoneTrimmed);
+
+        const successResponse: HttpResponse = {
+          statusCode: 200,
+          message: "OTP sent to phone",
+        };
+        return res.status(200).json(successResponse);
+      }
+
+      // Else: email path (email is present)
+      if (email) {
+      
+        const schema = Joi.object({
+          email: Joi.string()
+            .email({ tlds: { allow: false } })
+            .custom((value, helpers) => {
+              const domain = value.split("@")[1];
+              if (!allowedDomains.includes(domain)) {
+                return helpers.error("any.invalid");
+              }
+              return value;
+            })
+            .required()
+            .messages({
+              "string.email": "Invalid email format",
+              "any.invalid": `Only these domains allowed: ${allowedDomains.join(
+                ", "
+              )}`,
+              "any.required": "Email is required",
+            }),
+        });
+
+        const { error } = schema.validate({ email }, { abortEarly: false });
+        if (error) {
+          const errorResponse: HttpResponse = {
+            statusCode: 400,
+            message: error?.details[0]?.message,
+          };
+          return res.status(400).json(errorResponse);
+        }
+
+        // Check email exists in users collection
+        const emailLower = email.toLowerCase();
+        const userByEmail = await User.findOne({ email: emailLower }).lean();
+        if (!userByEmail) {
+          return res
+            .status(400)
+            .json({ statusCode: 400, message: "Email not registered" });
+        }
+
+        try {
+          await userRequestDelete(emailLower);
+        } catch (e) {}
+
+        const successResponse: HttpResponse = {
+          statusCode: 200,
+          message: "OTP sent to email",
+        };
+        return res.status(200).json(successResponse);
+      }
+
       return res
         .status(400)
-        .json({ statusCode: 400, message: "Phone number not registered" });
-    }
-
-    await generateOtp(userByPhone._id?.toString() ?? null, phoneTrimmed);
-
-    try {
-      await userRequestDelete(phoneTrimmed);
-    } catch (e) {
-    }
-
-    const successResponse: HttpResponse = {
-      statusCode: 200,
-      message: "OTP sent to phone",
-    };
-    return res.status(200).json(successResponse);
-  }
-
-  // Else: email path (email is present)
-  if (email) {
-    const allowedDomains = [
-      "gmail.com",
-      "yahoo.com",
-      "outlook.com",
-      "hotmail.com",
-      "live.com",
-      "icloud.com",
-      "aol.com",
-      "zoho.com",
-      "raisoni.net",
-    ];
-    const schema = Joi.object({
-      email: Joi.string()
-        .email({ tlds: { allow: false } })
-        .custom((value, helpers) => {
-          const domain = value.split("@")[1];
-          if (!allowedDomains.includes(domain)) {
-            return helpers.error("any.invalid");
-          }
-          return value;
-        })
-        .required()
-        .messages({
-          "string.email": "Invalid email format",
-          "any.invalid": `Only these domains allowed: ${allowedDomains.join(
-            ", "
-          )}`,
-          "any.required": "Email is required",
-        }),
-    });
-
-    const { error } = schema.validate({ email }, { abortEarly: false });
-    if (error) {
+        .json({ statusCode: 400, message: "Invalid request" });
+    } catch (error: any) {
+      const errorMessage = error?.message ?? "Server error";
       const errorResponse: HttpResponse = {
         statusCode: 400,
-        message: error?.details[0]?.message,
+        message: errorMessage,
       };
       return res.status(400).json(errorResponse);
     }
-
-    // Check email exists in users collection
-    const emailLower = email.toLowerCase();
-    const userByEmail = await User.findOne({ email: emailLower }).lean();
-    if (!userByEmail) {
-      return res
-        .status(400)
-        .json({ statusCode: 400, message: "Email not registered" });
-    }
-
-    // await generateOtpMail(userByEmail._id?.toString() ?? null, emailLower);
-
-    try {
-      await userRequestDelete(emailLower);
-    } catch (e) {
-    }
-
-    const successResponse: HttpResponse = {
-      statusCode: 200,
-      message: "OTP sent to email",
-    };
-    return res.status(200).json(successResponse);
   }
 
-  return res
-    .status(400)
-    .json({ statusCode: 400, message: "Invalid request" });
-}catch (error: any) {
-    const errorMessage = error?.message ?? "Server error";
-    const errorResponse: HttpResponse = {
-      statusCode: 400,
-      message: errorMessage,
-    };
-    return res.status(400).json(errorResponse);
-  }
-}
-
-
-  //SECTION: Controller method to handle reset paswwrod for user
+  //SECTION: Controller method to handle reset paswwrod for user in app
   async resetStudentPasswordInApp(
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      const allowedDomains = [
-        "gmail.com",
-        "yahoo.com",
-        "outlook.com",
-        "hotmail.com",
-        "live.com",
-        "icloud.com",
-        "aol.com",
-        "zoho.com",
-        "raisoni.net"
-      ];
+    
       const schema = Joi.object({
         email: Joi.string()
           .email({ tlds: { allow: false } })
           .custom((value, helpers) => {
-            const domain = value.split("@")[1];
-
-            if (!allowedDomains.includes(domain)) {
+            const domain = value.split("@")[1] || "";
+            if (!allowedDomains.includes(domain))
               return helpers.error("any.invalid");
-            }
             return value;
           })
-          .required()
           .messages({
             "string.email": "Invalid email format",
-            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
-            "any.required": "Email is required"
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(
+              ", "
+            )}`,
           }),
-        otp: Joi.number().required(),
+
+        phone: Joi.string()
+          .pattern(/^\+?\d{7,15}$/)
+          .messages({ "string.pattern.base": "Invalid phone format" }),
+
+        otp: Joi.alternatives()
+          .try(Joi.string(), Joi.number())
+          .required()
+          .messages({ "any.required": "OTP is required" }),
+
         password: Joi.string()
           .pattern(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/)
           .required()
           .messages({
             "string.pattern.base": "Password must contain letters and numbers",
-            "any.required": "Password is required",
-          })
+          }),
       })
+        .or("email", "phone")
+        .messages({ "object.missing": "Either email or phone is required" });
 
       const { error } = schema.validate(req?.body);
       if (error) {
@@ -461,11 +436,24 @@ if (phone) {
         };
         return res.status(400).json(errorResponse);
       }
-      // const { uniqueId, otp, password } = req.body;
-      const { email, otp, password } = req?.body
 
-      await verifyOTP(otp, email)
-      const student = await User.findOne({ email })
+      const { email, phone, otp: rawOtp, password } = req.body;
+      const otp = String(rawOtp).trim();
+
+      if (email) {
+        await verifyOTP(otp, email);
+      } else if (phone) {
+        await verifyPhoneOTP(Number(otp), phone);
+      }
+
+      const findQuery: any = email ? { email } : { phone };
+      const student = await User.findOne(findQuery);
+      if (!student) {
+        return res.status(404).json({
+          statusCode: 404,
+          message: "Student not found",
+        });
+      }
 
       //NOTE - get user by unique Id
       // const { student } = await getStudentByUniqueId(uniqueId);
@@ -489,6 +477,7 @@ if (phone) {
       // if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
 
       // Call the service to reset User password
+
       await resetStudentPassword(student, password);
 
       const successResponse: HttpResponse = {
@@ -502,6 +491,7 @@ if (phone) {
         statusCode: 400,
         message: errorMessage,
       };
+
       return res.status(400).json(errorResponse);
     }
   }
@@ -522,8 +512,8 @@ if (phone) {
         type === "staff"
           ? STAFF_FOLDER
           : type === "sample"
-            ? SAMPLE_FILE
-            : COMPLAIN_FILES;
+          ? SAMPLE_FILE
+          : COMPLAIN_FILES;
 
       const url = await uploadFileInApp(file, folderName);
 

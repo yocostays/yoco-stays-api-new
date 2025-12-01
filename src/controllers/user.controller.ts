@@ -18,6 +18,7 @@ import { USER_BULK_UPLOAD_FILES } from "../utils/s3bucketFolder";
 import { uploadFileToCloudStorage } from "../utils/awsUploadService";
 import Joi from "joi";
 import moment from "moment";
+import { allowedDomains } from "../constants/allowedDomains";
 
 const { getStaffById } = StaffService;
 const {
@@ -43,7 +44,8 @@ const {
   deleteStudent,
   userRequestDelete,
   verifyOTP,
-  userRequestDeactivate
+  verifyPhoneOTP,
+  userRequestDeactivate,
 } = UserService;
 
 const {
@@ -56,15 +58,15 @@ const {
 } = SUCCESS_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 const { INVALID_ID, REQUIRED_FIELD } = VALIDATION_MESSAGES;
-
+const PHONE_REGEX = /^\+?\d{7,15}$/;
 
 const normalizeFullName = (name: string) => {
   if (typeof name !== "string") return name;
 
   return name
-    .trim()                     // Remove leading & trailing spaces
+    .trim() // Remove leading & trailing spaces
     .replace(/[^a-zA-Z\s]/g, "") // Remove special characters & numbers
-    .replace(/\s+/g, " ");      // Replace multiple spaces with one
+    .replace(/\s+/g, " "); // Replace multiple spaces with one
 };
 
 // const excelDateToJSDate = (input: number) => {
@@ -118,13 +120,19 @@ const normalizeFullName = (name: string) => {
 
 //   return `${year}-${month}-${day}`;
 // };
-const excelDateToJSDate = (input: number | string): { success: boolean; date?: string | number; error?: string } => {
+const excelDateToJSDate = (
+  input: number | string
+): { success: boolean; date?: string | number; error?: string } => {
   let momentDate: moment.Moment;
 
   try {
     if (typeof input === "number") {
       if (input >= 1000 && input <= 9999) {
-        return { success: false, error: "Invalid DOB: year only is not allowed.", date: input };
+        return {
+          success: false,
+          error: "Invalid DOB: year only is not allowed.",
+          date: input,
+        };
       }
 
       const excelEpoch = new Date(Date.UTC(1899, 11, 30));
@@ -132,7 +140,6 @@ const excelDateToJSDate = (input: number | string): { success: boolean; date?: s
       const date = new Date(excelEpoch.getTime() + input * msPerDay);
       momentDate = moment(date);
     } else if (typeof input === "string") {
-
       momentDate = moment(
         input,
         [
@@ -162,9 +169,6 @@ const excelDateToJSDate = (input: number | string): { success: boolean; date?: s
   }
 };
 
-
-
-
 // const excelDateToJSDate = (input: number | string): string => {
 //   let momentDate: moment.Moment;
 
@@ -181,7 +185,7 @@ const excelDateToJSDate = (input: number | string): { success: boolean; date?: s
 //       const date = new Date(excelEpoch.getTime() + input * msPerDay);
 //       momentDate = moment(date);
 //     }
-//   } 
+//   }
 //   else if (typeof input === "string") {
 //     momentDate = moment(
 //       input,
@@ -196,7 +200,7 @@ const excelDateToJSDate = (input: number | string): { success: boolean; date?: s
 //       ],
 //       true
 //     );
-//   } 
+//   }
 //   else {
 //     throw new Error("Unsupported input type for DOB.");
 //   }
@@ -204,12 +208,10 @@ const excelDateToJSDate = (input: number | string): { success: boolean; date?: s
 //   if (!momentDate.isValid()){
 //     console.log("error dob")
 //     throw new Error("Invalid DOB format");
-//   } 
+//   }
 
 //   return momentDate.format("YYYY-MM-DD");
 // };
-
-
 
 class UserController {
   //SECTION Controller method to handle user creation
@@ -244,7 +246,6 @@ class UserController {
         oneSignalIosId,
       } = req.body;
 
-
       if (
         !name ||
         !email ||
@@ -267,36 +268,36 @@ class UserController {
         const missingField = !name
           ? "Name"
           : !email
-            ? "Email"
-            : !phone
-              ? "Phone"
-              : !enrollmentNumber
-                ? "Enrollment Number"
-                : !dob
-                  ? "Date of Birth"
-                  : !fatherName
-                    ? "Father's Name"
-                    : !fatherNumber
-                      ? "Father's Number"
-                      : !motherName
-                        ? "Mother's Name"
-                        : !motherNumber
-                          ? "Mother's Number"
-                          : !adharNumber
-                            ? "Adhar Number"
-                            : !bloodGroup
-                              ? "Blood Group"
-                              : !courseName
-                                ? "Course Name"
-                                : !academicYear
-                                  ? "Academic Year"
-                                  : !guardianContactNo
-                                    ? "Guardian Contact Number"
-                                    : !category
-                                      ? "Category"
-                                      : !hostelId
-                                        ? "Hostel ID"
-                                        : "Address";
+          ? "Email"
+          : !phone
+          ? "Phone"
+          : !enrollmentNumber
+          ? "Enrollment Number"
+          : !dob
+          ? "Date of Birth"
+          : !fatherName
+          ? "Father's Name"
+          : !fatherNumber
+          ? "Father's Number"
+          : !motherName
+          ? "Mother's Name"
+          : !motherNumber
+          ? "Mother's Number"
+          : !adharNumber
+          ? "Adhar Number"
+          : !bloodGroup
+          ? "Blood Group"
+          : !courseName
+          ? "Course Name"
+          : !academicYear
+          ? "Academic Year"
+          : !guardianContactNo
+          ? "Guardian Contact Number"
+          : !category
+          ? "Category"
+          : !hostelId
+          ? "Hostel ID"
+          : "Address";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -384,7 +385,6 @@ class UserController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-
       const hostelId = req.body._valid?.hostelId;
 
       const { page, limit, search, status, dateRange, sort, academicYear } =
@@ -510,14 +510,14 @@ class UserController {
         const missingField = !hostelId
           ? "Hostel ID"
           : !bedType
-            ? "Bed Type"
-            : !roomNumber
-              ? "RoomNumber"
-              : !bedNumber
-                ? "BedNumber"
-                : !studentId
-                  ? "Student Id"
-                  : "Billing Cycle";
+          ? "Bed Type"
+          : !roomNumber
+          ? "RoomNumber"
+          : !bedNumber
+          ? "BedNumber"
+          : !studentId
+          ? "Student Id"
+          : "Billing Cycle";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -564,20 +564,9 @@ class UserController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      const allowedDomains = [
-        "gmail.com",
-        "yahoo.com",
-        "outlook.com",
-        "hotmail.com",
-        "live.com",
-        "icloud.com",
-        "aol.com",
-        "zoho.com",
-        "raisoni.net"
-      ];
-
-      let payload
-      let studentId = req?.body?._valid?._id
+     
+      let payload;
+      let studentId = req?.body?._valid?._id;
 
       payload = {
         ...req.body,
@@ -589,23 +578,26 @@ class UserController {
         aadhar: req.body?.aadhar ? String(req?.body?.aadhar) : null,
         name: normalizeFullName(req?.body?.studentName),
         gender: req.body?.gender?.replace(/\s+/g, "").toLowerCase(),
-        dob: excelDateToJSDate(req?.body?.dob)?.success === true ? excelDateToJSDate(req?.body?.dob)?.date : excelDateToJSDate(req?.body?.dob),
-      }
+        dob:
+          excelDateToJSDate(req?.body?.dob)?.success === true
+            ? excelDateToJSDate(req?.body?.dob)?.date
+            : excelDateToJSDate(req?.body?.dob),
+      };
 
-      delete payload._valid
-      delete payload.studentName
+      delete payload._valid;
+      delete payload.studentName;
       const schema = Joi.object({
         name: Joi.string().required().messages({
           "any.required": "Student Name is required",
         }),
         gender: Joi.string().required(),
         divyang: Joi.boolean().allow(null),
-        enroll: Joi.string().allow('', null),
-        identification: Joi.string().allow('', null),
-        medical: Joi.string().allow('', null),
-        allergyProblem: Joi.string().allow('', null),
-        category: Joi.string().allow('', null),
-        cast: Joi.string().allow('', null),
+        enroll: Joi.string().allow("", null),
+        identification: Joi.string().allow("", null),
+        medical: Joi.string().allow("", null),
+        allergyProblem: Joi.string().allow("", null),
+        category: Joi.string().allow("", null),
+        cast: Joi.string().allow("", null),
         email: Joi.string()
           .email({ tlds: { allow: false } })
           .custom((value, helpers) => {
@@ -619,15 +611,15 @@ class UserController {
           .required()
           .messages({
             "string.email": "Invalid email format",
-            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
-            "any.required": "Email is required"
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(
+              ", "
+            )}`,
+            "any.required": "Email is required",
           }),
-        dob: Joi.date()
-          .required()
-          .messages({
-            "any.required": "Date of Birth is required",
-            "date.base": "Invalid Date format for Date of Birth",
-          }),
+        dob: Joi.date().required().messages({
+          "any.required": "Date of Birth is required",
+          "date.base": "Invalid Date format for Date of Birth",
+        }),
         phone: Joi.string()
           .trim()
           .custom((value, helpers) => {
@@ -647,11 +639,11 @@ class UserController {
           }),
         // aadhar:Joi.string().allow('', null),
         aadhar: Joi.string()
-          .allow('', null)
+          .allow("", null)
           .pattern(/^\d{12}$/)
           .optional()
           .messages({
-            'string.pattern.base': 'Aadhar must be exactly 12 digits'
+            "string.pattern.base": "Aadhar must be exactly 12 digits",
           }),
         address: Joi.string().allow(" ", null),
         country: Joi.string().required().messages({
@@ -682,7 +674,8 @@ class UserController {
           .required()
           .messages({
             "any.invalid": "Father's Mobile Number must contain digits only",
-            "number.length": "Father's Mobile Number must be between 8 to 15 digits",
+            "number.length":
+              "Father's Mobile Number must be between 8 to 15 digits",
             "any.required": "Father's Mobile Number is required",
           }),
         motherName: Joi.string().max(70).required().messages({
@@ -703,32 +696,31 @@ class UserController {
           .required()
           .messages({
             "any.invalid": "Mother's Mobile Number must contain digits only",
-            "number.length": "Mother's Mobile Number must be between 8 to 15 digits",
+            "number.length":
+              "Mother's Mobile Number must be between 8 to 15 digits",
             "any.required": "Mother's Mobile Number is required",
           }),
-        guardianName: Joi.string().max(70).optional().allow('', null),
-        guardianRelation: Joi.string().max(100).optional().allow('', null),
-        occuption: Joi.string().max(70).optional().allow('', null),
-        guardianAddress: Joi.string().optional().allow('', null),
-        image: Joi.string().required().allow('', null)
+        guardianName: Joi.string().max(70).optional().allow("", null),
+        guardianRelation: Joi.string().max(100).optional().allow("", null),
+        occuption: Joi.string().max(70).optional().allow("", null),
+        guardianAddress: Joi.string().optional().allow("", null),
+        image: Joi.string().required().allow("", null),
       });
 
       const { error } = schema.validate(payload, {
-        abortEarly: false,   // collect all errors
+        abortEarly: false, // collect all errors
       });
       if (error) {
         return res.status(400).json({
           statusCode: 400,
-          message: error?.details
-        })
-
+          message: error?.details,
+        });
       }
       if (!mongoose.isValidObjectId(studentId)) {
         throw new Error(INVALID_ID);
       }
 
-
-      let studentData: any
+      let studentData: any;
 
       let familiyDetails = {
         motherName: normalizeFullName(payload?.motherName),
@@ -737,12 +729,12 @@ class UserController {
         motherNumber: String(payload?.motherPhone),
         guardianName: String(payload?.guardianName),
         relationship: String(payload?.guardianRelation),
-        address: String(payload?.guardianAddress)
-      }
+        address: String(payload?.guardianAddress),
+      };
 
       let documentsDetails = {
-        aadhaarNumber: payload?.aadhar
-      }
+        aadhaarNumber: payload?.aadhar,
+      };
       studentData = {
         ...payload,
         bulkCity: payload?.city,
@@ -753,7 +745,7 @@ class UserController {
         medicalIssue: payload?.medical,
         permanentAddress: payload?.address,
         documents: documentsDetails,
-        identificationMark: payload?.identification
+        identificationMark: payload?.identification,
       };
 
       delete studentData.city;
@@ -1052,11 +1044,10 @@ class UserController {
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
-
     const familyDetailsSchema = Joi.object({
       fatherName: Joi.string().required().messages({
-        'string.base': 'Father name must be a string',
-        'string.empty': 'Father name is required',
+        "string.base": "Father name must be a string",
+        "string.empty": "Father name is required",
       }),
       // fatherNumber: Joi.number().min(1000000000).required().messages({
       //   'number.base': 'Father number must be a number',
@@ -1066,12 +1057,12 @@ class UserController {
       // fatherEmail: Joi.string().email({ tlds: { allow: false } }).allow('', null).messages({
       //   'string.email': 'Father email must be a valid email address',
       // }),
-      fatherOccuption: Joi.string().allow('', null).messages({
-        'string.base': 'Father occupation must be a string',
+      fatherOccuption: Joi.string().allow("", null).messages({
+        "string.base": "Father occupation must be a string",
       }),
 
       motherName: Joi.string().required().messages({
-        'string.empty': 'Mother name is required',
+        "string.empty": "Mother name is required",
       }),
       // motherNumber: Joi.number().min(1000000000).required().messages({
       //   'number.min': 'Mother number must be at least 10 digits',
@@ -1081,16 +1072,19 @@ class UserController {
       //   'string.email': 'Mother email must be valid',
       // }),
 
-      guardianName: Joi.string().allow('', null),
+      guardianName: Joi.string().allow("", null),
       guardianContactNo: Joi.number().min(1000000000).allow(null).messages({
-        'number.min': 'Guardian contact must be at least 10 digits',
+        "number.min": "Guardian contact must be at least 10 digits",
       }),
-      relationship: Joi.string().allow('', null),
-      occuption: Joi.string().allow('', null),
-      guardianEmail: Joi.string().email({ tlds: { allow: false } }).allow('', null).messages({
-        'string.email': 'Guardian email must be valid',
-      }),
-      address: Joi.string().allow('', null),
+      relationship: Joi.string().allow("", null),
+      occuption: Joi.string().allow("", null),
+      guardianEmail: Joi.string()
+        .email({ tlds: { allow: false } })
+        .allow("", null)
+        .messages({
+          "string.email": "Guardian email must be valid",
+        }),
+      address: Joi.string().allow("", null),
     });
     const vehicleDetails = Joi.array()
       .items(
@@ -1111,7 +1105,8 @@ class UserController {
             .pattern(/^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/i) // e.g. MH49S6439
             .required()
             .messages({
-              "string.pattern.base": "Vehicle number must be in valid format (e.g. MH49S6439)",
+              "string.pattern.base":
+                "Vehicle number must be in valid format (e.g. MH49S6439)",
               "any.required": "Vehicle number is required",
             }),
 
@@ -1120,7 +1115,8 @@ class UserController {
             .required()
             .messages({
               "any.required": "Vehicle type is required",
-              "any.only": "Vehicle type must be car, bike, bus, truck, or other",
+              "any.only":
+                "Vehicle type must be car, bike, bus, truck, or other",
             }),
         })
       )
@@ -1129,27 +1125,27 @@ class UserController {
       .default([])
       .messages({
         "array.base": "Vehicle details must be an array",
-      })
+      });
 
     const schema = Joi.object({
-      name: Joi.string()
-        .alphanum()
-        .min(3)
-        .max(30)
-        .required(),
+      name: Joi.string().alphanum().min(3).max(30).required(),
       // image: '',
-      phone: Joi.number().integer().min(1000000000).max(9999999999).required().messages({
-        "string.pattern.base": "Mobile Number must be exactly 10 digits",
-        "any.required": "Mobile Number is required",
-        "number.min": "Mobile Number must be exactly 10 digits",
-        "number.max": "Mobile Number must be exactly 10 digits",
-      }),
-      email: Joi.string()
-        .email().optional().allow(null),
-      dob: Joi.date().iso().less('now').required().messages({
-        'date.base': 'DOB must be a valid date',
-        'date.less': 'DOB must be in the past',
-        'any.required': 'DOB is required',
+      phone: Joi.number()
+        .integer()
+        .min(1000000000)
+        .max(9999999999)
+        .required()
+        .messages({
+          "string.pattern.base": "Mobile Number must be exactly 10 digits",
+          "any.required": "Mobile Number is required",
+          "number.min": "Mobile Number must be exactly 10 digits",
+          "number.max": "Mobile Number must be exactly 10 digits",
+        }),
+      email: Joi.string().email().optional().allow(null),
+      dob: Joi.date().iso().less("now").required().messages({
+        "date.base": "DOB must be a valid date",
+        "date.less": "DOB must be in the past",
+        "any.required": "DOB is required",
       }),
       enrollmentNumber: Joi.string().optional().allow(null),
       bloodGroup: Joi.string().optional().allow(null),
@@ -1170,16 +1166,16 @@ class UserController {
       city: Joi.object().required(),
       cast: Joi.object().required(),
       permanentAddress: Joi.string().required().messages({
-        'string.base': 'Permanent address must be a text',
-        'string.empty': 'Permanent address is required',
-        'any.required': 'Permanent address is required',
+        "string.base": "Permanent address must be a text",
+        "string.empty": "Permanent address is required",
+        "any.required": "Permanent address is required",
       }),
       familiyDetails: familyDetailsSchema.required(),
       academicDetails: { academicYear: null },
       vechicleDetails: vehicleDetails,
       buildingNumber: Joi.number().optional().allow(null),
       roomNumber: Joi.number().optional().allow(null),
-    })
+    });
     const { error, value } = schema.validate(req.body, { abortEarly: false });
     if (error) {
       // error.details.forEach((err: any) => {
@@ -1354,14 +1350,12 @@ class UserController {
     }
   }
 
-
   //SECTION Controller method to handle user bulk upload
   async userBulkUpload(
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse> | void> {
     try {
-
       const staffId = req.body._valid._id;
       const hostelId = req.body._valid?.hostelId;
 
@@ -1396,27 +1390,33 @@ class UserController {
       const jsonData = await excelToJson(file.buffer);
       // Call the function to handle bulk upload of the data
       const data = jsonData.map((item: any) => {
-
         return {
           ...item,
           Email: item?.Email,
-          "Full Name of Student": normalizeFullName(item["Full Name of Student"]),
+          "Full Name of Student": normalizeFullName(
+            item["Full Name of Student"]
+          ),
           "Father's Name": normalizeFullName(item["Father's Name"]),
           "Mother's Name": normalizeFullName(item["Mother's Name"]),
-          "Date of Birth": excelDateToJSDate(item["Date of Birth"])?.success === true ? excelDateToJSDate(item["Date of Birth"])?.date : excelDateToJSDate(item["Date of Birth"]),
+          "Date of Birth":
+            excelDateToJSDate(item["Date of Birth"])?.success === true
+              ? excelDateToJSDate(item["Date of Birth"])?.date
+              : excelDateToJSDate(item["Date of Birth"]),
           "Permanent Address": String(item["Permanent Address"]),
           "Aadhaar Number": Number(item["Aadhaar Number"]),
           "Blood Group": String(item["Blood Group"])
             .replace(/\s+/g, "") // remove all spaces inside string
             .toUpperCase(), // optional normalize case => B+
           "Mobile No.": String(item["Mobile No."]),
-          Gender: String(item?.Gender).trim().toLowerCase()
-        }
-      })
+          Gender: String(item?.Gender).trim().toLowerCase(),
+        };
+      });
 
       data.forEach((item: any) => {
         delete item.Timestamp,
-          item["Aadhaar Number"] = item["Aadhaar Number"] ? item["Aadhaar Number"] : ""
+          (item["Aadhaar Number"] = item["Aadhaar Number"]
+            ? item["Aadhaar Number"]
+            : "");
       });
       await userBulkUpload(data, staffId, hostelId, universityId, url);
     } catch (error: any) {
@@ -1509,52 +1509,37 @@ class UserController {
         floorNumber,
         roomNumber,
         bedNumber,
-        hostelId
+        hostelId,
       } = req.body;
 
-      const allowedDomains = [
-        "gmail.com",
-        "yahoo.com",
-        "outlook.com",
-        "hotmail.com",
-        "live.com",
-        "icloud.com",
-        "aol.com",
-        "zoho.com",
-        "raisoni.net"
-      ];
+  
       let data = {
         ...req?.body,
-      }
-      delete data._valid
+      };
+      delete data._valid;
 
       const vechicleDetailsSchema = Joi.object({
         vechicleType: Joi.string()
           .valid("bicycle", "bike", "car")
           .required()
           .messages({
-            "any.only": "Vehicle type must be one of 'bicycle', 'bike', or 'car'",
+            "any.only":
+              "Vehicle type must be one of 'bicycle', 'bike', or 'car'",
             "any.required": "Vehicle type is required",
           }),
 
-        engineType: Joi.string()
-          .required()
-          .messages({
-            "string.base": "Engine type must be a string",
-            "any.required": "Engine type is required",
-          }),
+        engineType: Joi.string().required().messages({
+          "string.base": "Engine type must be a string",
+          "any.required": "Engine type is required",
+        }),
 
-        vechicleNumber: Joi.string()
-          .allow("", null)
-          .messages({
-            "string.base": "Vehicle number must be a string",
-          }),
-        modelName: Joi.string()
-          .required()
-          .messages({
-            "string.base": "Model name must be a string",
-            "any.required": "Model name is required",
-          }),
+        vechicleNumber: Joi.string().allow("", null).messages({
+          "string.base": "Vehicle number must be a string",
+        }),
+        modelName: Joi.string().required().messages({
+          "string.base": "Model name must be a string",
+          "any.required": "Model name is required",
+        }),
       });
       const documentsSchema = {
         aadharNumber: Joi.string()
@@ -1563,24 +1548,45 @@ class UserController {
             then: Joi.string()
               .pattern(/^\d{12}$/)
               .messages({
-                "string.pattern.base": "Aadhaar Number must be exactly 12 digits",
+                "string.pattern.base":
+                  "Aadhaar Number must be exactly 12 digits",
               }),
           }),
-        aadhaarCard: Joi.string().uri().optional().messages({
-          "string.uri": "Aadhaar Card must be a valid URL",
-        }).allow('', null),
-        voterCard: Joi.string().uri().optional().messages({
-          "string.uri": "Voter Card must be a valid URL",
-        }).allow('', null),
-        passport: Joi.string().uri().optional().messages({
-          "string.uri": "Passport must be a valid URL",
-        }).allow('', null),
-        drivingLicense: Joi.string().uri().optional().messages({
-          "string.uri": "Driving License must be a valid URL",
-        }).allow('', null),
-        panCard: Joi.string().uri().optional().messages({
-          "string.uri": "PAN Card must be a valid URL",
-        }).allow('', null),
+        aadhaarCard: Joi.string()
+          .uri()
+          .optional()
+          .messages({
+            "string.uri": "Aadhaar Card must be a valid URL",
+          })
+          .allow("", null),
+        voterCard: Joi.string()
+          .uri()
+          .optional()
+          .messages({
+            "string.uri": "Voter Card must be a valid URL",
+          })
+          .allow("", null),
+        passport: Joi.string()
+          .uri()
+          .optional()
+          .messages({
+            "string.uri": "Passport must be a valid URL",
+          })
+          .allow("", null),
+        drivingLicense: Joi.string()
+          .uri()
+          .optional()
+          .messages({
+            "string.uri": "Driving License must be a valid URL",
+          })
+          .allow("", null),
+        panCard: Joi.string()
+          .uri()
+          .optional()
+          .messages({
+            "string.uri": "PAN Card must be a valid URL",
+          })
+          .allow("", null),
       };
 
       const academicDetailsSchema = {
@@ -1589,19 +1595,22 @@ class UserController {
           .messages({
             "string.pattern.base": "University ID must be a valid ObjectId",
             "any.required": "University ID is required",
-          }).allow('', null),
+          })
+          .allow("", null),
 
         courseId: Joi.string()
           .pattern(/^[0-9a-fA-F]{24}$/)
           .messages({
             "string.pattern.base": "Course ID must be a valid ObjectId",
             "any.required": "Course ID is required",
-          }).allow('', null),
+          })
+          .allow("", null),
 
         academicYear: Joi.string()
           .messages({
             "any.required": "Academic Year is required",
-          }).allow('', null),
+          })
+          .allow("", null),
 
         semester: Joi.number()
           .valid(1, 2, 3, 4, 5, 6, 7, 8)
@@ -1609,7 +1618,7 @@ class UserController {
           .messages({
             "any.only": "Semester must be one of 1, 2, 3, 4, 5, 6, 7, or 8",
             "number.base": "Semester must be a number",
-          })
+          }),
       };
 
       const familyDetailsSchema = {
@@ -1631,7 +1640,8 @@ class UserController {
           .required()
           .messages({
             "any.invalid": "Father's Mobile Number must contain digits only",
-            "number.length": "Father's Mobile Number must be between 8 to 15 digits",
+            "number.length":
+              "Father's Mobile Number must be between 8 to 15 digits",
             "any.required": "Father's Mobile Number is required",
           }),
         motherName: Joi.string().max(70).required().messages({
@@ -1652,29 +1662,30 @@ class UserController {
           .required()
           .messages({
             "any.invalid": "Mother's Mobile Number must contain digits only",
-            "number.length": "Mother's Mobile Number must be between 8 to 15 digits",
+            "number.length":
+              "Mother's Mobile Number must be between 8 to 15 digits",
             "any.required": "Mother's Mobile Number is required",
           }),
-        guardianName: Joi.string().max(70).optional().allow('', null),
-        relationship: Joi.string().max(100).optional().allow('', null),
-        occuption: Joi.string().max(70).optional().allow('', null),
-        address: Joi.string().optional().allow('', null),
+        guardianName: Joi.string().max(70).optional().allow("", null),
+        relationship: Joi.string().max(100).optional().allow("", null),
+        occuption: Joi.string().max(70).optional().allow("", null),
+        address: Joi.string().optional().allow("", null),
       };
       const schema = Joi.object({
         image: Joi.any().allow("", null),
-        hostelId: Joi.string().required().allow('', null),
+        hostelId: Joi.string().required().allow("", null),
         name: Joi.string().required().messages({
           "any.required": "Student Name is required",
         }),
-        buildingNumber: Joi.string().required().allow('', null),
+        buildingNumber: Joi.string().required().allow("", null),
         gender: Joi.string().required(),
         divyang: Joi.boolean().allow(null),
-        enrollmentNumber: Joi.string().allow('', null),
-        identificationMark: Joi.string().allow('', null),
-        medicalIssue: Joi.string().allow('', null),
-        allergyProblem: Joi.string().allow('', null),
-        category: Joi.string().allow('', null),
-        cast: Joi.string().allow('', null),
+        enrollmentNumber: Joi.string().allow("", null),
+        identificationMark: Joi.string().allow("", null),
+        medicalIssue: Joi.string().allow("", null),
+        allergyProblem: Joi.string().allow("", null),
+        category: Joi.string().allow("", null),
+        cast: Joi.string().allow("", null),
         email: Joi.string()
           .email({ tlds: { allow: false } })
           .custom((value, helpers) => {
@@ -1688,15 +1699,15 @@ class UserController {
           .required()
           .messages({
             "string.email": "Invalid email format",
-            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
-            "any.required": "Email is required"
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(
+              ", "
+            )}`,
+            "any.required": "Email is required",
           }),
-        dob: Joi.date()
-          .required()
-          .messages({
-            "any.required": "Date of Birth is required",
-            "date.base": "Invalid Date format for Date of Birth",
-          }),
+        dob: Joi.date().required().messages({
+          "any.required": "Date of Birth is required",
+          "date.base": "Invalid Date format for Date of Birth",
+        }),
         phone: Joi.string()
           .trim()
           .custom((value, helpers) => {
@@ -1721,15 +1732,11 @@ class UserController {
             "any.required": "Country name is required",
           }),
 
-          iso2: Joi.string()
-            .length(2)
-            .uppercase()
-            .required()
-            .messages({
-              "string.length": "ISO2 code must be exactly 2 characters",
-              "string.base": "ISO2 code must be a string",
-              "any.required": "ISO2 code is required",
-            }),
+          iso2: Joi.string().length(2).uppercase().required().messages({
+            "string.length": "ISO2 code must be exactly 2 characters",
+            "string.base": "ISO2 code must be a string",
+            "any.required": "ISO2 code is required",
+          }),
 
           countryId: Joi.number().integer().required().messages({
             "number.base": "Country ID must be a number",
@@ -1742,30 +1749,22 @@ class UserController {
             "any.required": "Country is required",
           }),
         state: Joi.object({
-          stateId: Joi.number()
-            .integer()
-            .required()
-            .messages({
-              "number.base": "State ID must be a number",
-              "any.required": "State ID is required",
-            }),
+          stateId: Joi.number().integer().required().messages({
+            "number.base": "State ID must be a number",
+            "any.required": "State ID is required",
+          }),
 
-          name: Joi.string()
-            .required()
-            .messages({
-              "string.base": "State name must be a string",
-              "any.required": "State name is required",
-            }),
+          name: Joi.string().required().messages({
+            "string.base": "State name must be a string",
+            "any.required": "State name is required",
+          }),
 
-          iso2: Joi.string()
-            .length(2)
-            .uppercase()
-            .required()
-            .messages({
-              "string.length": "State ISO2 code must be exactly 2 uppercase letters",
-              "string.base": "State ISO2 code must be a string",
-              "any.required": "State ISO2 code is required",
-            }),
+          iso2: Joi.string().length(2).uppercase().required().messages({
+            "string.length":
+              "State ISO2 code must be exactly 2 uppercase letters",
+            "string.base": "State ISO2 code must be a string",
+            "any.required": "State ISO2 code is required",
+          }),
         })
           .required()
           .messages({
@@ -1773,20 +1772,15 @@ class UserController {
             "any.required": "State is  required",
           }),
         city: Joi.object({
-          cityId: Joi.number()
-            .integer()
-            .required()
-            .messages({
-              "number.base": "City ID must be a number",
-              "any.required": "City ID is required",
-            }),
+          cityId: Joi.number().integer().required().messages({
+            "number.base": "City ID must be a number",
+            "any.required": "City ID is required",
+          }),
 
-          name: Joi.string()
-            .required()
-            .messages({
-              "string.base": "City name must be a string",
-              "any.required": "City name is required",
-            }),
+          name: Joi.string().required().messages({
+            "string.base": "City name must be a string",
+            "any.required": "City name is required",
+          }),
         })
           .required()
           .messages({
@@ -1805,18 +1799,17 @@ class UserController {
           }),
         documents: Joi.object(documentsSchema).required(),
         academicDetails: Joi.object(academicDetailsSchema).optional(),
-        familiyDetails: Joi.object(familyDetailsSchema).required()
+        familiyDetails: Joi.object(familyDetailsSchema).required(),
       });
 
       const { error } = schema.validate(data, {
-        abortEarly: false,   // collect all errors
+        abortEarly: false, // collect all errors
       });
-
 
       if (error) {
         return res.status(400).json({
           statusCode: 400,
-          message: error?.details.map((item: any) => item?.message)
+          message: error?.details.map((item: any) => item?.message),
         });
       }
       // Call the service to update a user
@@ -1849,7 +1842,7 @@ class UserController {
         floorNumber,
         roomNumber,
         bedNumber,
-        aadharNumber,
+        aadharNumber
       );
 
       const successResponse: HttpResponse = {
@@ -1872,17 +1865,7 @@ class UserController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      const allowedDomains = [
-        "gmail.com",
-        "yahoo.com",
-        "outlook.com",
-        "hotmail.com",
-        "live.com",
-        "icloud.com",
-        "aol.com",
-        "zoho.com",
-        "raisoni.net"
-      ];
+  
       const schema = Joi.object({
         Gender: Joi.string().required().messages({
           "any.required": "Gender is required",
@@ -1900,22 +1883,19 @@ class UserController {
           .required()
           .messages({
             "string.email": "Invalid email format",
-            "any.invalid": `Only these domains allowed: ${allowedDomains.join(", ")}`,
-            "any.required": "Email is required"
+            "any.invalid": `Only these domains allowed: ${allowedDomains.join(
+              ", "
+            )}`,
+            "any.required": "Email is required",
           }),
-        dob: Joi.date()
-          .required()
-          .messages({
-            "any.required": "Date of Birth is required",
-            "date.base": "Invalid Date format for Date of Birth",
-          }),
-        studentName: Joi.string()
-          .max(70)
-          .required()
-          .messages({
-            "string.max": "Full Name must not exceed 70 characters",
-            "any.required": "Full Name is required",
-          }),
+        dob: Joi.date().required().messages({
+          "any.required": "Date of Birth is required",
+          "date.base": "Invalid Date format for Date of Birth",
+        }),
+        studentName: Joi.string().max(70).required().messages({
+          "string.max": "Full Name must not exceed 70 characters",
+          "any.required": "Full Name is required",
+        }),
         "Mobile Number of Student": Joi.string()
           .trim()
           .custom((value, helpers) => {
@@ -1933,23 +1913,18 @@ class UserController {
             "number.length": "Mobile Number must be between 8 to 15 digits",
             "any.required": "Mobile Number is required",
           }),
-        fatherName: Joi.string()
-          .max(70)
-          .required()
-          .messages({
-            "string.max": "Full Name must not exceed 70 characters",
-            "any.required": "Full Name is required",
-          }),
-        motherName: Joi.string()
-          .max(70)
-          .required()
-          .messages({
-            "string.max": "Full Name must not exceed 70 characters",
-            "any.required": "Full Name is required",
-          }),
+        fatherName: Joi.string().max(70).required().messages({
+          "string.max": "Full Name must not exceed 70 characters",
+          "any.required": "Full Name is required",
+        }),
+        motherName: Joi.string().max(70).required().messages({
+          "string.max": "Full Name must not exceed 70 characters",
+          "any.required": "Full Name is required",
+        }),
         permanentAddress: Joi.string().required(),
         "Hostel Name": Joi.string().required(),
-        "Aadhaar Number": Joi.number().allow("", null) // allow empty
+        "Aadhaar Number": Joi.number()
+          .allow("", null) // allow empty
           .integer()
           .required()
           .custom((value, helpers) => {
@@ -1973,9 +1948,9 @@ class UserController {
             // "any.required": "Aadhaar Number is required",
             "number.base": "Aadhaar Number must be a number",
           }),
-        "Country": Joi.string().required(),
-        "State": Joi.string().required(),
-        "City": Joi.string().required(),
+        Country: Joi.string().required(),
+        State: Joi.string().required(),
+        City: Joi.string().required(),
         "Mother's Mobile Number": Joi.number()
           .integer()
           .required()
@@ -1996,7 +1971,8 @@ class UserController {
           })
           .messages({
             "any.invalid": "Mother's Mobile Number must contain digits only",
-            "number.length": "Mother's Mobile Number must be between 8 to 15 digits",
+            "number.length":
+              "Mother's Mobile Number must be between 8 to 15 digits",
             "any.required": "Mother's Mobile Number is required",
             "number.base": "Mother's Mobile Number must be a number",
           }),
@@ -2020,14 +1996,15 @@ class UserController {
           })
           .messages({
             "any.invalid": "Father's Mobile Number must contain digits only",
-            "number.length": "Father's Mobile Number must be between 8 to 15 digits",
+            "number.length":
+              "Father's Mobile Number must be between 8 to 15 digits",
             "any.required": "Father's Mobile Number is required",
             "number.base": "Father's Mobile Number must be a number",
           }),
         "Room Number": Joi.number().integer().required(),
         "Floor Number": Joi.number().integer().required(),
         "Blood Group": Joi.string().required(),
-        "Bed Number": Joi.string().required()
+        "Bed Number": Joi.string().required(),
       });
       const successResponse: HttpResponse = {
         statusCode: 200,
@@ -2096,7 +2073,10 @@ class UserController {
       const staffId = req.body._valid?._id;
       const { studentId, status } = req.body;
 
-      if (!mongoose.isValidObjectId(staffId) || !mongoose.isValidObjectId(studentId))
+      if (
+        !mongoose.isValidObjectId(staffId) ||
+        !mongoose.isValidObjectId(studentId)
+      )
         throw new Error(INVALID_ID);
 
       const { staff } = await getStaffById(staffId);
@@ -2124,11 +2104,11 @@ class UserController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      const { id } = req?.params
+      const { id } = req?.params;
       if (!mongoose.isValidObjectId(id)) {
         throw new Error(INVALID_ID);
       }
-      await deleteStudent(id)
+      await deleteStudent(id);
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: DELETE_DATA,
@@ -2149,7 +2129,6 @@ class UserController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-
       const schema = Joi.object({
         email: Joi.string().email().required(),
       });
@@ -2162,7 +2141,7 @@ class UserController {
         };
         return res.status(400).json(errorResponse);
       }
-      const user = await userRequestDelete(value?.email)
+      const user = await userRequestDelete(value?.email);
 
       const successResponse: HttpResponse = {
         statusCode: 200,
@@ -2180,37 +2159,83 @@ class UserController {
     }
   }
 
+  //SECTION: Controller Method to verify user OTP.
+  //   async userVerifyOtp(
+  //     req: Request,
+  //     res: Response
+  //   ): Promise<Response<HttpResponse>> {
+  //     try {
+  //       const schema = Joi.object({
+  //         email: Joi.string().email(),
+  //         otp: Joi.number().required(),
+  //       });
+
+  //       const { error, value } = schema.validate(req?.body);
+  //       if (error) {
+  //         const errorResponse: HttpResponse = {
+  //           statusCode: 400,
+  //           message: `${error?.details[0]?.message}`,
+  //         };
+  //         return res.status(400).json(errorResponse);
+  //       }
+  //       await verifyOTP(value?.otp, value?.email)
+  //       const successResponse: HttpResponse = {
+  //         statusCode: 200,
+  //         message: "OTP Verified Successfully",
+  //       };
+  //       return res.status(200).json(successResponse);
+  //     } catch (error: any) {
+  //       const errorMessage = error.message ?? SERVER_ERROR;
+  //       const errorResponse: HttpResponse = {
+  //         statusCode: 400,
+  //         message: errorMessage,
+  //       };
+  //       return res.status(400).json(errorResponse);
+  //     }
+  // }
+
+  //Here we are updating the userVerifyOtp method to handle both email and phone OTP verification.
+
   async userVerifyOtp(
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
       const schema = Joi.object({
-        email: Joi.string().email().required(),
+        email: Joi.string().email(),
+        phone: Joi.string()
+          .trim()
+          .pattern(/^\+?\d{7,15}$/),
         otp: Joi.number().required(),
-      });
+      }).or("email", "phone"); // at least one required
 
-      const { error, value } = schema.validate(req?.body);
+      const { error, value } = schema.validate(req.body);
       if (error) {
-        const errorResponse: HttpResponse = {
+        return res.status(400).json({
           statusCode: 400,
-          message: `${error?.details[0]?.message}`,
-        };
-        return res.status(400).json(errorResponse);
+          message: error.details[0].message,
+        });
       }
-      await verifyOTP(value?.otp, value?.email)
-      const successResponse: HttpResponse = {
+
+      const { email, phone, otp } = value;
+
+      if (email) {
+        // email OTP verify
+        await verifyOTP(otp, email);
+      } else if (phone) {
+        // phone OTP verify
+        await verifyPhoneOTP(otp, phone);
+      }
+
+      return res.status(200).json({
         statusCode: 200,
         message: "OTP Verified Successfully",
-      };
-      return res.status(200).json(successResponse);
+      });
     } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
+      return res.status(400).json({
         statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
+        message: error.message ?? "Server error",
+      });
     }
   }
 
@@ -2231,7 +2256,7 @@ class UserController {
         };
         return res.status(400).json(errorResponse);
       }
-      await userRequestDeactivate(value?.email)
+      await userRequestDeactivate(value?.email);
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: "Your request has been Sent",
@@ -2247,7 +2272,5 @@ class UserController {
     }
   }
 }
-
-
 
 export default new UserController();
