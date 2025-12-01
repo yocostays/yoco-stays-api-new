@@ -27,11 +27,12 @@ const {
   userDeleteRequest,
   updateUserFromApp,
   userVerifyOtp,
-  userRequestDeactivate
+  userRequestDeactivate,
 } = UserController;
 
 const userRouter = Router();
-
+// ========== Mobile App Routes (Student & Staff) ==========
+// Routes primarily used by the mobile application (students and mobile staff)
 userRouter.post("/register", registerUserFromApp);
 userRouter.get("/", validateToken, getAllUsersWithPagination);
 userRouter.get(
@@ -49,6 +50,8 @@ userRouter.patch(
   validateToken,
   updateStudentVechicleDetailsForApp
 ); //TODO - only use in app for
+// ========== Web App Routes (Warden / Admin / Warden Panel) ==========
+// Routes used by the warden/admin panel or web clients
 userRouter.patch(
   "/update-indisciplinary",
   validateToken,
@@ -86,8 +89,8 @@ userRouter.post(
   fetchUsersBasedOnHostelAndAcademic
 ); //TODO - use in warden panel for fetch users
 userRouter.post("/update-status", validateToken, updateUserStatus);
-userRouter.delete("/:id",validateToken,deleteUsers)
-userRouter.post("/request-account-deletion",userDeleteRequest)
-userRouter.post("/request-otp-verify",userVerifyOtp)
-userRouter.patch('/request-account-deactivate',userRequestDeactivate)
+userRouter.delete("/:id", validateToken, deleteUsers);
+userRouter.post("/request-account-deletion", userDeleteRequest);
+userRouter.post("/request-otp-verify", userVerifyOtp); //verify otp for app and otp varify account delete for user
+userRouter.patch("/request-account-deactivate", userRequestDeactivate);
 export default userRouter;

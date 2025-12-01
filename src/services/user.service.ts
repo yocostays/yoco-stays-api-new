@@ -60,6 +60,7 @@ import BookMeals from "../models/bookMeal.model";
 import nodemailer from "nodemailer";
 import { generateSecureOtp, getExpiryDate } from "../utils/otpService";
 import Otp from "../models/otp.model";
+import { allowedDomains } from "../constants/allowedDomains";
 
 const { getRoleByName } = RoleService;
 const { checkTemplateExist } = TemplateService;
@@ -378,7 +379,7 @@ class UserService {
             studentId: ele._id,
             hostelId: ele.hostelId._id,
           })
-            .select("joiningDate roomNumber floorNumber")
+            .select("joiningDate roomNumber floorNumber bedNumber")
             .sort({ createdAt: -1 })
             .lean();
 
@@ -395,6 +396,7 @@ class UserService {
             hostel: (ele?.hostelId as any)?.name ?? null,
             roomNumber: room ? room?.roomNumber : null,
             floorNumber: room ? room?.floorNumber : null,
+            bedNumber: room ? room?.bedNumber : null,
             isVerified: ele?.isVerified,
             isAuthorized: ele?.isAuthorized,
             authorizRole: ele?.authorizRole ?? null,
@@ -1579,9 +1581,7 @@ class UserService {
     }
   };
 
-  
-
- //here we upload user bulk upload  and send mail with id and password
+  //here we do user bulk upload  and send welcome mail with id and password
   userBulkUpload = async (
     jsonData: any[],
     staffId: string,
@@ -1591,18 +1591,7 @@ class UserService {
   ) => {
     let successArray: any[] = [];
     let errorArray: any[] = [];
-    const allowedDomains = [
-      "gmail.com",
-      "yahoo.com",
-      "outlook.com",
-      "hotmail.com",
-      "live.com",
-      "icloud.com",
-      "aol.com",
-      "zoho.com",
-      "raisoni.net",
-      "ghrce.raisoni.net",
-    ];
+
     try {
       // const validGenders = ["male", "female", "other", "not selected"];
       // Schema Validation
@@ -1967,7 +1956,7 @@ class UserService {
             const plainPassword = generateRandomPassword(8);
             const hashedPassword = await hashPassword(plainPassword);
 
-            console.log("password");
+            // console.log("password");
 
             const newUser = new User({
               roleId: role._id,
@@ -2003,21 +1992,17 @@ class UserService {
             });
 
             await newUser.save();
-            // console.log("IN LOOP, item index:" );
+            // console.log("IN LOOP, item index:");
             // console.log("data.Email inside loop:");
             // Queue email only after successful save
             if (data?.Email) {
-              console.log(
-                "Queuing welcome email for:",
-                data.Email,
-                uniqueId
-              );
+              // console.log("Queuing welcome email for:", data.Email, uniqueId);
 
               welcomeMailQueue.push({
                 email: data.Email,
                 name,
                 uniqueId,
-                plainPassword
+                plainPassword,
               });
             }
             await Hostel.findOneAndUpdate(
@@ -2074,16 +2059,16 @@ class UserService {
       // console.log("successArray after processing", successArray);
 
       // Send welcome emails for all newly created students
-      // for (const mailJob of welcomeMailQueue) {
-      //   try {
-      //     await sendStudentWelcomeEmail(mailJob);
-      //   } catch (err) {
-      //     console.error(
-      //       `Failed to send welcome email to ${mailJob.email}:`,
-      //       (err as Error).message
-      //     );
-      //   }
-      // }
+      // await Promise.allSettled(
+      //   welcomeMailQueue.map((mailJob) =>
+      //     sendStudentWelcomeEmail(mailJob).catch((err) => {
+      //       console.error(
+      //         `Failed to send welcome email to ${mailJob.email}:`,
+      //         err.message
+      //       );
+      //     })
+      //   )
+      // );
 
       // console.log("welcomeMailQueue after sending", welcomeMailQueue);
 
@@ -2818,6 +2803,7 @@ class UserService {
     }
   };
 
+  //generate OTP and send email to user for delete account
   userRequestDelete = async (email: String) => {
     const userDetails: any = await User.findOne({ email: email });
     if (!userDetails) throw new Error(RECORD_NOT_FOUND("Email"));
@@ -2877,28 +2863,124 @@ class UserService {
     }
   };
 
-  verifyOTP = async (otp: number, email: string) => {
-    try {
-      // Check if OTP exists
-      const otpExists = await Otp.findOne({ email });
-      if (Number(otpExists?.otp) !== Number(otp)) {
-        throw new Error("OTP not found");
-      }
-      if (!otpExists) throw new Error("OTP Expired");
-      if (otpExists?.isVerified) throw new Error("OTP already verified");
-      // if(!otpExists) throw new Error(OTP_NOT_VERIFIED);
-      if (otpExists) {
-        await Otp.findOneAndUpdate(
-          { userId: new mongoose.Types.ObjectId(otpExists?.userId) },
-          {
-            isVerified: true,
-            updatedBy: otpExists?.userId,
-          },
-          { upsert: true, new: true }
-        );
+  // verify OTP for user delete account
+  // verifyOTP = async (otp: number, email: string) => {
+  //   console.log("inside varify otp");
+  //   try {
+  //     // Check if OTP exists
+  //     console.log("email in verifyOTP", email);
+  //     const otpExists = await Otp.findOne({ email });
+  //     console.log("otpExists", otpExists);
+  //     if (Number(otpExists?.otp) !== Number(otp)) {
+  //       throw new Error("OTP not found");
+  //     }
+  //     if (!otpExists) throw new Error("OTP Expired");
+  //     if (otpExists?.isVerified) throw new Error("OTP already verified");
+  //     // if(!otpExists) throw new Error(OTP_NOT_VERIFIED);
+  //     if (otpExists) {
+  //       await Otp.findOneAndUpdate(
+  //         { userId: new mongoose.Types.ObjectId(otpExists?.userId) },
+  //         {
+  //           isVerified: true,
+  //           updatedBy: otpExists?.userId,
+  //         },
+  //         { upsert: true, new: true }
+  //       );
 
+  //       return "OTP Verified";
+  //     }
+  //   } catch (error: any) {
+  //     throw new Error(error.message || "Failed to Verify OTP");
+  //   }
+  // };
+
+  // Improved verifyOTP method for user delete account and other verifications using email
+  verifyOTP = async (otp: string | number, email: string) => {
+    if (!email) throw new Error("Email is required for OTP verification");
+    if (otp === undefined || otp === null || String(otp).trim() === "")
+      throw new Error("OTP is required");
+
+    try {
+      const otpStr = String(otp).trim();
+      const now = new Date();
+
+      // Atomic verify: match by email, otp, not already verified and not expired
+      const filter: any = {
+        email,
+        otp: otpStr,
+        isVerified: false,
+      };
+
+      // if your schema uses expiryTime, include expiry check; otherwise remove this
+      filter.expiryTime = { $gt: now };
+
+      const update = {
+        $set: {
+          isVerified: true,
+          updatedAt: now,
+        },
+      };
+
+      const opts = { new: true };
+
+      const verifiedDoc = await Otp.findOneAndUpdate(
+        filter,
+        update,
+        opts
+      ).lean();
+
+      if (verifiedDoc) {
         return "OTP Verified";
       }
+
+      // If atomic update returned null, figure out why for a clear error message
+      const latest = await Otp.findOne({ email })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      if (!latest) throw new Error("No OTP found for provided email");
+
+      if (latest.expiryTime && new Date(latest.expiryTime) <= now)
+        throw new Error("OTP Expired");
+
+      if (latest.isVerified) throw new Error("OTP already verified");
+
+      // OTP exists, not expired and not verified => mismatch
+      throw new Error("OTP does not match");
+    } catch (err: any) {
+      // surface precise messages; do not leak internals in production logs
+      throw new Error(err?.message || "Failed to verify OTP");
+    }
+  };
+
+  //This method is used to verify phone OTP
+
+  verifyPhoneOTP = async (otp: number, phone: string) => {
+    try {
+      const otpExists = await Otp.findOne({ phone });
+
+      if (!otpExists) {
+        throw new Error("OTP Expired");
+      }
+
+      if (Number(otpExists.otp) !== Number(otp)) {
+        throw new Error("Please enter valid OTP");
+      }
+
+      if (otpExists.isVerified) {
+        throw new Error("OTP already verified");
+      }
+
+      await Otp.findOneAndUpdate(
+        { userId: new mongoose.Types.ObjectId(otpExists.userId) },
+        {
+          isVerified: true,
+          updatedBy: otpExists.userId,
+        },
+        { upsert: true, new: true }
+      );
+
+      return "OTP Verified";
     } catch (error: any) {
       throw new Error(error.message || "Failed to Verify OTP");
     }
