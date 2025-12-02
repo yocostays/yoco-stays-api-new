@@ -19,6 +19,7 @@ import { uploadFileToCloudStorage } from "../utils/awsUploadService";
 import Joi from "joi";
 import moment from "moment";
 import { allowedDomains } from "../constants/allowedDomains";
+import User from "../models/user.model";
 
 const { getStaffById } = StaffService;
 const {
@@ -47,6 +48,9 @@ const {
   verifyPhoneOTP,
   userRequestDeactivate,
 } = UserService;
+import authService from "../services/auth.service";
+import Otp from "../models/otp.model";
+const { generateOtp, generateOtpMail } = authService;
 
 const {
   FETCH_SUCCESS,
@@ -564,7 +568,6 @@ class UserController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-     
       let payload;
       let studentId = req?.body?._valid?._id;
 
@@ -1512,7 +1515,6 @@ class UserController {
         hostelId,
       } = req.body;
 
-  
       let data = {
         ...req?.body,
       };
@@ -1865,7 +1867,6 @@ class UserController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-  
       const schema = Joi.object({
         Gender: Joi.string().required().messages({
           "any.required": "Gender is required",
@@ -2269,6 +2270,399 @@ class UserController {
         message: errorMessage,
       };
       return res.status(400).json(errorResponse);
+    }
+  }
+
+  //This function is used to genarte otp for phone number change and mail change
+  async generateOtpForAccountChange(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const userId =
+        (req as any).user?._id ||
+        (req as any).user?.id ||
+        req.body?._valid?._id;
+      if (!userId || !mongoose.isValidObjectId(userId)) {
+        return res.status(401).json({
+          statusCode: 401,
+          message: "Unauthenticated or invalid user",
+        });
+      }
+
+      const { email, phone } = req.body;
+      if (!email && !phone) {
+        return res
+          .status(400)
+          .json({ statusCode: 400, message: "Provide either email or phone" });
+      }
+
+      const normalizeEmail = (e: string) => String(e).trim();
+      const digitsOnly = (s: string) => String(s).replace(/\D+/g, "");
+
+      const me = await User.findById(userId).select("email phone").lean();
+      const myEmail = (me?.email || "").toString().trim().toLowerCase();
+      const myPhoneRaw = (me?.phone || "").toString().trim();
+      const myPhoneDigits = myPhoneRaw ? digitsOnly(myPhoneRaw) : "";
+
+      // ---------- EMAIL FLOW ----------
+      if (email) {
+        const normalizedEmail = normalizeEmail(email);
+
+        if (myEmail && myEmail === normalizedEmail) {
+          return res
+            .status(200)
+            .json({
+              statusCode: 200,
+              message: "Email already set",
+              data: { email: myEmail },
+            });
+        }
+
+        const existing = await User.findOne({
+          email: normalizedEmail,
+          _id: { $ne: userId },
+        }).lean();
+        if (existing) {
+          return res
+            .status(422)
+            .json({ statusCode: 422, message: "Email already in use" });
+        }
+
+        try {
+          const sendResult = await generateOtpMail(userId, normalizedEmail);
+
+          return res.status(200).json({
+            statusCode: 200,
+            message: "OTP sent to email",
+            data: sendResult ?? { email: normalizedEmail },
+          });
+        } catch (sendErr: any) {
+          console.error("generateOtpForAccountChange: email send error:", {
+            userId,
+            email: normalizedEmail,
+            errMessage: sendErr?.message || sendErr,
+            stack: sendErr?.stack,
+          });
+
+          return res.status(500).json({
+            statusCode: 500,
+            message: "Failed to send OTP email",
+            error: sendErr?.message ?? "Email provider error",
+          });
+        }
+      }
+
+      // ---------- PHONE FLOW ----------
+      if (phone) {
+        const phoneRaw = String(phone).trim();
+        const phoneDigits = digitsOnly(phoneRaw);
+
+        if (!phoneDigits || phoneDigits.length < 7 || phoneDigits.length > 15) {
+          return res
+            .status(400)
+            .json({ statusCode: 400, message: "Invalid phone number format" });
+        }
+
+        if (myPhoneDigits && myPhoneDigits === phoneDigits) {
+          return res
+            .status(200)
+            .json({
+              statusCode: 200,
+              message: "Phone already set",
+              data: { phone: myPhoneRaw },
+            });
+        }
+
+        const phonePathInstance =
+          (User &&
+            (User as any).schema &&
+            (User as any).schema.path("phone")?.instance) ||
+          null;
+        const phoneStoredAsNumber = phonePathInstance === "Number";
+
+        let existing: any = null;
+        if (phoneStoredAsNumber) {
+          const phoneAsNumber = Number(phoneDigits);
+          if (!Number.isNaN(phoneAsNumber)) {
+            existing = await User.findOne({
+              _id: { $ne: userId },
+              phone: phoneAsNumber,
+            }).lean();
+          }
+        } else {
+          existing = await User.findOne({
+            _id: { $ne: userId },
+            $or: [{ phone: phoneRaw }, { phone: phoneDigits }],
+          }).lean();
+          if (!existing) {
+            existing = await User.findOne({
+              _id: { $ne: userId },
+              phone: { $regex: new RegExp(phoneDigits + "$") },
+            }).lean();
+          }
+        }
+
+        if (existing) {
+          return res
+            .status(422)
+            .json({ statusCode: 422, message: "Phone already in use" });
+        }
+
+        try {
+          const sendResult = await generateOtp(userId, phoneRaw);
+          return res.status(200).json({
+            statusCode: 200,
+            message: "OTP sent to phone",
+          });
+        } catch (smsErr: any) {
+          console.error("generateOtpForAccountChange: sms send error:", {
+            userId,
+            phone: phoneRaw,
+            errMessage: smsErr?.message || smsErr,
+            stack: smsErr?.stack,
+          });
+
+          return res.status(500).json({
+            statusCode: 500,
+            message: "Failed to send OTP SMS",
+            error: smsErr?.message ?? "SMS provider error",
+          });
+        }
+      }
+
+      return res
+        .status(400)
+        .json({ statusCode: 400, message: "Invalid request" });
+    } catch (error: any) {
+      console.error("generateOtpForAccountChange error:", error);
+      const errorMessage = error?.message ?? "Server error";
+      return res.status(400).json({ statusCode: 400, message: errorMessage });
+    }
+  }
+
+  async verifyOtpForAccountChange(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const userId =
+        (req as any).user?._id ||
+        (req as any).user?.id ||
+        req.body?._valid?._id ||
+        req.body.userId;
+      if (!userId || !mongoose.isValidObjectId(userId)) {
+        return res
+          .status(401)
+          .json({
+            statusCode: 401,
+            message: "Unauthenticated or invalid user",
+          });
+      }
+
+      const { otp: otpRaw, email, phone } = req.body;
+      if (!otpRaw || (!email && !phone)) {
+        return res.status(400).json({
+          statusCode: 400,
+          message: "Provide otp and either email or phone",
+        });
+      }
+
+      const otpStr = String(otpRaw).trim();
+      const otpNum = Number(otpRaw);
+      const normalizeEmail = (e: string) => String(e).trim().toLowerCase();
+      const digitsOnly = (s: string) => String(s).replace(/\D+/g, "");
+      const now = new Date();
+
+      const markOtpVerifiedAtomically = async (filter: any) => {
+        const update = {
+          $set: {
+            isVerified: true,
+            status: false,
+            verifiedAt: new Date(),
+            updatedAt: new Date(),
+            lastVerifyAttemptAt: new Date(),
+          },
+          $inc: { verifyAttempts: 1 },
+        };
+
+        return await Otp.findOneAndUpdate(filter, update, {
+          new: true,
+          runValidators: false,
+        }).exec();
+      };
+
+      // ---- EMAIL FLOW ----
+      if (email) {
+        const normalizedEmail = normalizeEmail(email);
+
+        const otpDoc =
+          (await Otp.findOne({
+            userId: new mongoose.Types.ObjectId(userId),
+            email: normalizedEmail,
+            otp: otpStr,
+          }).exec()) ||
+          (Number.isFinite(otpNum)
+            ? await Otp.findOne({
+                userId: new mongoose.Types.ObjectId(userId),
+                email: normalizedEmail,
+                otp: otpNum,
+              }).exec()
+            : null);
+
+        if (!otpDoc) {
+          return res
+            .status(400)
+            .json({
+              statusCode: 400,
+              message: "Invalid OTP or no OTP request found",
+            });
+        }
+
+        if (otpDoc.isVerified) {
+          return res
+            .status(400)
+            .json({ statusCode: 400, message: "OTP already verified" });
+        }
+
+        if (otpDoc.expiryTime && otpDoc.expiryTime < now) {
+          await Otp.updateOne(
+            { _id: otpDoc._id },
+            {
+              $inc: { verifyAttempts: 1 },
+              $set: { lastVerifyAttemptAt: new Date() },
+            }
+          ).exec();
+          return res
+            .status(400)
+            .json({ statusCode: 400, message: "OTP has expired" });
+        }
+
+        const after = await markOtpVerifiedAtomically({
+          _id: otpDoc._id,
+          isVerified: false,
+        });
+
+        if (!after || !after.isVerified) {
+          return res
+            .status(400)
+            .json({
+              statusCode: 400,
+              message: "Failed to verify OTP; it may already be used",
+            });
+        }
+
+        // Update user email
+        await User.updateOne(
+          { _id: new mongoose.Types.ObjectId(userId) },
+          { $set: { email: normalizedEmail } }
+        ).exec();
+
+        return res.status(200).json({
+          statusCode: 200,
+          message: "Email updated and OTP verified",
+          data: { email: normalizedEmail },
+        });
+      }
+
+      // ---- PHONE FLOW ----
+      if (phone) {
+        const phoneRaw = String(phone).trim();
+        const phoneDigits = digitsOnly(phoneRaw);
+
+        if (!phoneDigits || phoneDigits.length < 7 || phoneDigits.length > 15) {
+          return res
+            .status(400)
+            .json({ statusCode: 400, message: "Invalid phone number format" });
+        }
+
+        let otpDoc =
+          (await Otp.findOne({
+            userId: new mongoose.Types.ObjectId(userId),
+            otp: otpStr,
+            $or: [{ phone: phoneRaw }, { phone: phoneDigits }],
+          }).exec()) ||
+          (Number.isFinite(otpNum)
+            ? await Otp.findOne({
+                userId: new mongoose.Types.ObjectId(userId),
+                otp: otpNum,
+                $or: [{ phone: phoneRaw }, { phone: phoneDigits }],
+              }).exec()
+            : null);
+
+        if (!otpDoc) {
+          otpDoc = await Otp.findOne({
+            userId: new mongoose.Types.ObjectId(userId),
+            $or: [
+              { otp: otpStr },
+              Number.isFinite(otpNum) ? { otp: otpNum } : { _id: null },
+            ],
+            phone: { $regex: new RegExp(phoneDigits + "$") },
+          }).exec();
+        }
+
+        if (!otpDoc) {
+          return res
+            .status(400)
+            .json({
+              statusCode: 400,
+              message: "Invalid OTP or no OTP request found",
+            });
+        }
+
+        if (otpDoc.isVerified) {
+          return res
+            .status(400)
+            .json({ statusCode: 400, message: "OTP already verified" });
+        }
+
+        if (otpDoc.expiryTime && otpDoc.expiryTime < now) {
+          await Otp.updateOne(
+            { _id: otpDoc._id },
+            {
+              $inc: { verifyAttempts: 1 },
+              $set: { lastVerifyAttemptAt: new Date() },
+            }
+          ).exec();
+          return res
+            .status(400)
+            .json({ statusCode: 400, message: "OTP has expired" });
+        }
+
+        const after = await markOtpVerifiedAtomically({
+          _id: otpDoc._id,
+          isVerified: false,
+        });
+        if (!after || !after.isVerified) {
+          return res
+            .status(400)
+            .json({
+              statusCode: 400,
+              message: "Failed to verify OTP; it may already be used",
+            });
+        }
+
+        // Update user's phone (preserve formatting provided)
+        await User.updateOne(
+          { _id: new mongoose.Types.ObjectId(userId) },
+          { $set: { phone: phoneRaw } }
+        ).exec();
+
+        return res.status(200).json({
+          statusCode: 200,
+          message: "Phone updated and OTP verified",
+          data: { phone: phoneRaw },
+        });
+      }
+
+      return res
+        .status(400)
+        .json({ statusCode: 400, message: "Invalid request" });
+    } catch (err: any) {
+      console.error("verifyOtpForAccountChange error:", err);
+      return res
+        .status(400)
+        .json({ statusCode: 400, message: err.message || "Server error" });
     }
   }
 }

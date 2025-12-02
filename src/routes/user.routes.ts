@@ -28,6 +28,8 @@ const {
   updateUserFromApp,
   userVerifyOtp,
   userRequestDeactivate,
+  generateOtpForAccountChange,
+  verifyOtpForAccountChange
 } = UserController;
 
 const userRouter = Router();
@@ -94,3 +96,12 @@ userRouter.post("/request-account-deletion", userDeleteRequest);
 userRouter.post("/request-otp-verify", userVerifyOtp); //verify otp for app and otp varify account delete for user
 userRouter.patch("/request-account-deactivate", userRequestDeactivate);
 export default userRouter;
+
+
+//endpoints for change mail id and phone number otp request in app
+userRouter.post("/update/request-otp", validateToken, generateOtpForAccountChange);
+userRouter.post(
+  "/update/verify-otp",
+  validateToken,
+  verifyOtpForAccountChange 
+);

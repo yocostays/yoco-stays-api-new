@@ -80,6 +80,9 @@ const validateToken = async (
       }
     }
 
+    let rawAuth = (req.headers.authorization as string) || "";
+if (/^Bearer\s+/i.test(rawAuth)) rawAuth = rawAuth.replace(/^Bearer\s+/i, "").trim();
+(req as any).user = { id: decoded._id, userType: tokenFromDb.accountType };
     req.body._valid = { ...decoded, userType: tokenFromDb.accountType };
     next();
   } catch (err) {
