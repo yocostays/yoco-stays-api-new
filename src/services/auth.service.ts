@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import nodemailer from "nodemailer";
 import Staff from "../models/staff.model";
 import User from "../models/user.model";
 import Otp from "../models/otp.model";
@@ -204,36 +205,75 @@ class AuthService {
     }
   };
 
-  //SECTION: Method to generate Otp for mail  but we are useing userRequest delete function
+//SECTION: Method to generate Otp for mail  but we are useing userRequest delete function
 
-  // generateOtpMail = async (
-  //   userId: string,
-  //   phone: string
-  // ): Promise<{ otp: number }> => {
-  //   try {
-  //     const otp = generateSecureOtp();
-  //     const expiryTime = getExpiryDate(5, "M");
+transporter = nodemailer.createTransport({
+    service: process.env.EMAIL_HOST,
+  auth: {
+     user: process.env.EMAIL_USER,
+     pass: process.env.EMAIL_PASS,
+   
+  }
+});
 
-  //     // Upsert OTP document for the user
-  //     await Otp.findOneAndUpdate(
-  //       { userId: new mongoose.Types.ObjectId(userId) },
-  //       {
-  //         otp,
-  //         expiryTime,
-  //         isVerified: false,
-  //         status: true,
-  //         updatedBy: userId,
-  //       },
-  //       { upsert: true, new: true }
-  //     );
+// generic email OTP sender for change email id
+generateOtpMail = async (userId: string, email: string) => {
+  if (!email || typeof email !== "string") {
+    throw new Error("Invalid email address");
+  }
 
-  //     //NOTE: Send otp to the User.
-  //     await sendSMS(phone, otp);
-  //     return { otp };
-  //   } catch (error: any) {
-  //     throw new Error(`User OTP geenerate: ${error.message}`);
-  //   }
-  // };
+  try {
+    // Ensure transporter is valid
+    await this.transporter.verify();
+
+    // 1) Generate OTP + expiry
+    const otp = await generateSecureOtp();      // typically 4–6 digits
+    const expiryTime = getExpiryDate(5, "M");   // 5 minutes
+
+    // 2) Upsert OTP record
+    await Otp.findOneAndUpdate(
+      { userId: new mongoose.Types.ObjectId(userId) },
+      {
+        otp,
+        expiryTime,
+        isVerified: false,
+        email,
+        phone: null,
+        status: true,
+        createdBy: userId,
+        updatedBy: userId
+      },
+      { upsert: true, new: true }
+    );
+
+    // 3) Build HTML content
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; background: #f9fafb; padding: 20px; border-radius: 10px; text-align: center; color: #333;">
+        <p style="font-size: 16px; margin-bottom: 10px;">Your OTP Code:</p>
+        <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #007bff; background: #fff; padding: 10px 20px; border-radius: 8px; display: inline-block;">
+          ${otp}
+        </div>
+      </div>
+    `;
+
+    // 4) Send email
+    await this.transporter.sendMail({
+      from: '"Yoco Stays" <sandeep.nandanwar@raisoni.net>',
+      to: email,
+      subject: "Your OTP Code",
+      html: htmlContent
+    });
+
+    return {
+      userId: userId,
+      emailSent: email
+    };
+
+  } catch (err: any) {
+    console.error("Email OTP error:", err.message || err);
+    throw new Error("Failed to send OTP email");
+  }
+}
 
 
 

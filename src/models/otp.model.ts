@@ -14,6 +14,8 @@ export interface IOtp extends Document {
   updatedBy?: mongoose.Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
+  verifyAttempts?: number;        // << ADDED By Mayur for tracking OTP verify attempts
+  lastVerifyAttemptAt?: Date | null;
 }
 
 const OtpSchema: Schema = new Schema<IOtp>(
@@ -53,6 +55,15 @@ const OtpSchema: Schema = new Schema<IOtp>(
       type: Boolean,
       default: false,
     },
+     verifyAttempts: {                 
+      type: Number,                  
+      default: 0,                    
+    },                               
+
+    lastVerifyAttemptAt: {            
+      type: Date,                     
+      default: null,                  
+    },               
     status: {
       type: Boolean,
       default: true,
