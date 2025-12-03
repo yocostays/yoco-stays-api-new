@@ -2099,6 +2099,7 @@ class UserService {
             ...(successFileUrl && { successFile: successFileUrl }),
             ...(errorFileUrl && { errorFile: errorFileUrl }),
             updatedAt: getCurrentISTTime(),
+            createdAt: getCurrentISTTime(),
           },
         });
         // } else {
