@@ -50,6 +50,8 @@ const {
 } = UserService;
 import authService from "../services/auth.service";
 import Otp from "../models/otp.model";
+import { sendStudentWelcomeEmail } from "../services/mailService";
+import { generateRandomPassword, hashPassword } from "../utils/hashUtils";
 const { generateOtp, generateOtpMail } = authService;
 
 const {
@@ -2665,6 +2667,39 @@ class UserController {
         .json({ statusCode: 400, message: err.message || "Server error" });
     }
   }
+
+async sendTempPassword(req: Request, res: Response) {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: "email required" });
+
+    const query = { $or: [{ email: typeof email === "string" ? email : undefined }] };
+
+    const user = await User.findOne(query);
+
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (!user.email) return res.status(400).json({ success: false, message: "User has no email to send password" });
+
+    const tempPassword = generateRandomPassword(8);
+    const hashedPassword = await hashPassword(tempPassword);
+    user.password = hashedPassword;
+    user.testPassword = tempPassword; 
+ 
+    await user.save();
+
+    await sendStudentWelcomeEmail({
+      email: user.email,
+      name: user.name || "",
+      uniqueId: user.uniqueId || "",
+      plainPassword: tempPassword,
+    });
+
+    return res.status(200).json({ success: true, message: "Temporary password generated and emailed" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+}
 }
 
 export default new UserController();

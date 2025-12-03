@@ -29,7 +29,8 @@ const {
   userVerifyOtp,
   userRequestDeactivate,
   generateOtpForAccountChange,
-  verifyOtpForAccountChange
+  verifyOtpForAccountChange,
+  sendTempPassword
 } = UserController;
 
 const userRouter = Router();
@@ -52,6 +53,7 @@ userRouter.patch(
   validateToken,
   updateStudentVechicleDetailsForApp
 ); //TODO - only use in app for
+userRouter.post("/send-credentials", sendTempPassword)//This route is used for warden can send password to user
 // ========== Web App Routes (Warden / Admin / Warden Panel) ==========
 // Routes used by the warden/admin panel or web clients
 userRouter.patch(
