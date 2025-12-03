@@ -53,7 +53,7 @@ userRouter.patch(
   validateToken,
   updateStudentVechicleDetailsForApp
 ); //TODO - only use in app for
-userRouter.post("/send-credentials", sendTempPassword)//This route is used for warden can send password to user
+userRouter.post("/send-credentials",validateToken, sendTempPassword)//This route is used for warden can send password to user
 // ========== Web App Routes (Warden / Admin / Warden Panel) ==========
 // Routes used by the warden/admin panel or web clients
 userRouter.patch(
