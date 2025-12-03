@@ -553,7 +553,7 @@ class UserService {
       // const hashedPassword = await hashPassword("123456789");
       const plainPassword = generateRandomPassword(8);
       const hashedPassword = await hashPassword(plainPassword);
-      console.log("password", plainPassword, hashedPassword);
+      // console.log("password", plainPassword, hashedPassword);
 
       // Generate billingCycleDetails based on the billing cycle type
       const billingDetails = createBillingCycleDetails(
@@ -695,6 +695,10 @@ class UserService {
       delete safeData.email;
       delete safeData.phone;
       delete safeData.image;
+
+      if (safeData.testPassword === undefined) {
+        safeData.testPassword = studentExists.testPassword ?? null;
+      }
       // Merge safe fields
       payload = { ...payload, ...safeData };
 
@@ -2062,10 +2066,7 @@ class UserService {
       await Promise.allSettled(
         welcomeMailQueue.map((mailJob) =>
           sendStudentWelcomeEmail(mailJob).catch((err) => {
-            console.error(
-              `Failed to send welcome email to:`,
-              err.message
-            );
+            console.error(`Failed to send welcome email to:`, err.message);
           })
         )
       );
