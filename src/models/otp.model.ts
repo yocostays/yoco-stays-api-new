@@ -35,7 +35,7 @@ const OtpSchema: Schema = new Schema<IOtp>(
     userModel: {
       type: String,
       enum: Object.values(SchemeReferenceModelTypes),
-      required: true,
+      required: false,
       default: null, 
     },
     phone: {
@@ -86,22 +86,19 @@ const OtpSchema: Schema = new Schema<IOtp>(
 
 OtpSchema.index(
   { email: 1 },
-  
   {
-    unique: true,
     partialFilterExpression: {
-      email: { $exists: true, $nin: ["", null] }
+      email: { $type: "string" }
     }
   }
 );
 
+
 OtpSchema.index(
   { phone: 1 },
-  
   {
-    unique: true,
     partialFilterExpression: {
-      phone: { $exists: true, $nin: ["", null] }
+      phone: { $type: "string" } 
     }
   }
 );
