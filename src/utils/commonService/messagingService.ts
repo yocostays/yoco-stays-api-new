@@ -14,10 +14,11 @@ const BaseUrl = process.env.BASE_URL;
 const DltTemplateId = process.env.DltSmsTemplateId;
 
 //SECTION: Method to send sms to user.
-export async function sendSMS(phone: string, otp: number) {
+export async function sendSMS(phone: string, otp: string | number) {
   try {
     //NOTE: Encode the message which is user in below url.
-    const encodedMessage = encodeURIComponent(otpVerificationMessage(otp));
+     const otpStr = typeof otp === "number" ? String(otp).padStart(6, "0") : String(otp);
+    const encodedMessage = encodeURIComponent(otpVerificationMessage(Number(otpStr)));
 
     const url = `${BaseUrl}?sender=${Sender}&numbers=91${phone}&message=${encodedMessage}&messagetype=${MessageType}&response=Y`;
 
