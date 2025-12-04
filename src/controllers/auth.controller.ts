@@ -323,7 +323,7 @@ class AuthController {
 
       // Else: email path (email is present)
       if (email) {
-      
+
         const schema = Joi.object({
           email: Joi.string()
             .email({ tlds: { allow: false } })
@@ -364,7 +364,7 @@ class AuthController {
 
         try {
           await userRequestDelete(emailLower);
-        } catch (e) {}
+        } catch (e) { }
 
         const successResponse: HttpResponse = {
           statusCode: 200,
@@ -392,7 +392,7 @@ class AuthController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-    
+
       const schema = Joi.object({
         email: Joi.string()
           .email({ tlds: { allow: false } })
@@ -418,11 +418,18 @@ class AuthController {
           .required()
           .messages({ "any.required": "OTP is required" }),
 
+        // password: Joi.string()
+        //   .pattern(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/)
+        //   .required()
+        //   .messages({
+        //     "string.pattern.base": "Password must contain letters and numbers",
+        //   }),
         password: Joi.string()
-          .pattern(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/)
+          .pattern(/^(?=.*[A-Za-z])(?=.*\d).{4,}$/)
           .required()
           .messages({
-            "string.pattern.base": "Password must contain letters and numbers",
+            "string.pattern.base":
+              "Password must contain at least one letter and one number, and be at least 4 characters long",
           }),
       })
         .or("email", "phone")
@@ -436,7 +443,6 @@ class AuthController {
         };
         return res.status(400).json(errorResponse);
       }
-
       const { email, phone, otp: rawOtp, password } = req.body;
       const otp = String(rawOtp).trim();
 
@@ -512,8 +518,8 @@ class AuthController {
         type === "staff"
           ? STAFF_FOLDER
           : type === "sample"
-          ? SAMPLE_FILE
-          : COMPLAIN_FILES;
+            ? SAMPLE_FILE
+            : COMPLAIN_FILES;
 
       const url = await uploadFileInApp(file, folderName);
 
