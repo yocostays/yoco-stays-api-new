@@ -67,7 +67,7 @@ const TemplateSchema: Schema = new Schema<ITemplate>(
 );
 
 //Add compound indexing with hostelId and templateType
-TemplateSchema.index({ hostelId: 1, templateType: 1 });
+TemplateSchema.index({ hostelId: 1, templateType: 1 }, { unique: true });
 
 const Template = model<ITemplate>("Template", TemplateSchema);
 
