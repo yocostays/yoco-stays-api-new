@@ -362,9 +362,8 @@ class AuthController {
             .json({ statusCode: 400, message: "Email not registered" });
         }
 
-        try {
+        
           await userRequestDelete(emailLower);
-        } catch (e) { }
 
         const successResponse: HttpResponse = {
           statusCode: 200,
