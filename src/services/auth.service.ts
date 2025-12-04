@@ -276,37 +276,39 @@ generateOtpMail = async (userId: string, email: string) => {
 }
 
 
-
-//generate Otp for phone number 
- generateOtp = async (
+// generate Otp for phone number 
+generateOtp = async (
   userId: string | null | undefined,
   phone: string | null | undefined
-): Promise<{ otp: number }> => {
+): Promise<{ otp: string }> => {          
   try {
     if (!phone || String(phone).trim().length === 0) {
       throw new Error("Phone number is required for SMS OTP");
     }
 
     const phoneTrimmed = String(phone).trim();
-    // keep your existing regex for validation
     if (!/^\+?\d{7,15}$/.test(phoneTrimmed)) {
       throw new Error("Invalid phone number format");
     }
 
-    const otp = generateSecureOtp(); // number
-    const expiryTime = getExpiryDate(5, "M");
+   
+    const otpNumber = generateSecureOtp();
+    const otp = String(otpNumber).padStart(6, "0");
 
-    // Build filter: prefer phone; fall back to userId if phone not provided
+    const expiryTime = getExpiryDate(5, "M"); 
+
+ 
     let filter: any = null;
-    if (phoneTrimmed) {
-      filter = { phone: phoneTrimmed };
-    } else if (userId) {
+    let userIdObj: mongoose.Types.ObjectId | null = null;
+    if (userId) {
       if (!mongoose.Types.ObjectId.isValid(userId)) {
         throw new Error("Invalid userId");
       }
-      filter = { userId: new mongoose.Types.ObjectId(userId) };
+      userIdObj = new mongoose.Types.ObjectId(userId);
+      filter = { userId: userIdObj };
     } else {
-      throw new Error("Either phone or valid userId is required to generate OTP");
+     
+      filter = { phone: phoneTrimmed };
     }
 
     const setObj: any = {
@@ -314,12 +316,11 @@ generateOtpMail = async (userId: string, email: string) => {
       expiryTime,
       isVerified: false,
       status: true,
-      updatedBy: userId ? new mongoose.Types.ObjectId(userId) : null,
+      updatedBy: userIdObj,
       failedAttempts: 0,
       sent: false,
     };
 
-    // only add phone when present
     if (phoneTrimmed) {
       setObj.phone = phoneTrimmed;
     }
@@ -327,24 +328,28 @@ generateOtpMail = async (userId: string, email: string) => {
     const update: any = {
       $set: setObj,
       $setOnInsert: {
-        createdBy: userId ? new mongoose.Types.ObjectId(userId) : null,
-        userId: userId ? new mongoose.Types.ObjectId(userId) : null,
+        createdBy: userIdObj,
+        userId: userIdObj,
       },
     };
 
-    await Otp.findOneAndUpdate(filter, update, {
+   
+    const otpDoc = await Otp.findOneAndUpdate(filter, update, {
       upsert: true,
       new: true,
       setDefaultsOnInsert: true,
     }).exec();
 
-
-    // Send SMS (prefer queue in production). If send succeeds, mark sent=true.
+   
     try {
       await sendSMS(phoneTrimmed, otp);
-      await Otp.updateOne(filter, { $set: { sent: true } }).exec();
+      if (otpDoc && otpDoc._id) {
+        await Otp.updateOne({ _id: otpDoc._id }, { $set: { sent: true } }).exec();
+      } else {
+        await Otp.updateOne(filter, { $set: { sent: true } }).exec();
+      }
     } catch (smsErr: any) {
-      // keep sent=false so you can retry or investigate; do not throw to avoid leaking provider issues
+      console.error("SMS send failed (otp still stored):", smsErr?.message || smsErr);
     }
 
     return { otp };
@@ -352,6 +357,7 @@ generateOtpMail = async (userId: string, email: string) => {
     throw new Error(`User OTP generate: ${error.message}`);
   }
 };
+
 
   //SECTION: Method to reset student password
   resetStudentPassword = async (
