@@ -297,7 +297,7 @@ export enum TemplateTypes {
   //LINK: User
   PROFILE_UPDATED = "profile updated",
   USER_ROLE_UPDATED = "user role updated",
-  PASSWORD_RESET = "passsword reset",
+  PASSWORD_RESET = "password reset",
 
   //LINK: Leave
   LEAVE_REQUEST_SUBMITTED = "leave request submitted",
