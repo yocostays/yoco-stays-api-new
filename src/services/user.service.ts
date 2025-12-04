@@ -2833,10 +2833,12 @@ class UserService {
       );
 
       const transporter = nodemailer.createTransport({
-        service: "gmail",
+        host: process.env.EMAIL_HOST,
+        port: process.env.EMAL_PORT ? parseInt(process.env.EMAL_PORT) : 465,
+        secure: true,
         auth: {
-          user: "sandeep.nandanwar@raisoni.net",
-          pass: "hkop aywb mcra ergi", // Gmail app password
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
         },
       });
 
@@ -2851,7 +2853,7 @@ class UserService {
         </div>
       `;
       await transporter.sendMail({
-        from: '"Yoco Stays" <sandeep.nandanwar@raisoni.net>',
+        from: `"Yoco Stays" ${process.env.EMAIL_FROM}`,
         to: email,
         subject: "Your OTP Code 🔐",
         html: htmlContent,
