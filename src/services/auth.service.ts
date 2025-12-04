@@ -207,14 +207,16 @@ class AuthService {
 
 //SECTION: Method to generate Otp for mail  but we are useing userRequest delete function
 
-transporter = nodemailer.createTransport({
-    service: process.env.EMAIL_HOST,
+ transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAL_PORT ? parseInt(process.env.EMAL_PORT) : 465,
+  secure: true,
   auth: {
-     user: process.env.EMAIL_USER,
-     pass: process.env.EMAIL_PASS,
-   
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
 });
+
 
 // generic email OTP sender for change email id
 generateOtpMail = async (userId: string, email: string) => {
@@ -257,12 +259,13 @@ generateOtpMail = async (userId: string, email: string) => {
     `;
 
     // 4) Send email
-    await this.transporter.sendMail({
-      from: '"Yoco Stays" <sandeep.nandanwar@raisoni.net>',
-      to: email,
-      subject: "Your OTP Code",
-      html: htmlContent
-    });
+ 
+  await this.transporter.sendMail({
+    from: `Yoco Stays ${process.env.EMAIL_FROM}`,
+    to: email,
+    subject: "Your OTP Code 🔐",
+    html: htmlContent,
+  });
 
     return {
       userId: userId,
