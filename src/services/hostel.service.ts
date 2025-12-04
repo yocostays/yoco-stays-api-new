@@ -39,6 +39,8 @@ import {
 } from "../utils/s3bucketFolder";
 import BulkUpload from "../models/bulkUpload.model";
 import { normalizeBedNumber } from "../utils/normalizeBedNumber";
+import Template from "../models/template.model";
+import { defaultTemplates } from "../config/defaultTemplates";
 
 const {
   DUPLICATE_RECORD,
@@ -101,7 +103,6 @@ class HostelService {
         }
         return false;
       });
-
       if (hasInvalidVisitingHours)
         throw new Error(INVALID_TIME_FORMAT("visitors"));
 
@@ -117,7 +118,6 @@ class HostelService {
         )
           throw new Error(INVALID_TIME_FORMAT("security Details"));
       }
-
       const hostelImages = await Promise.all(
         image.map(async (imageUrl) => {
           if (imageUrl?.url && imageUrl?.url.includes("base64")) {
@@ -130,7 +130,6 @@ class HostelService {
           }
         })
       );
-
       // Calculate total capacity from bedDetails
       const totalCapacity = bedDetails.reduce((total, bedDetail) => {
         return total + (bedDetail?.totalBeds || 0);
@@ -167,7 +166,26 @@ class HostelService {
       });
 
       // Step 4: Save the new hostel
-      return await newHostel.save();
+      const savedHostel = await newHostel.save();
+
+      try {
+        // Create default templates
+        const templatesToCreate = defaultTemplates.map((template) => ({
+          ...template,
+          hostelId: savedHostel._id,
+          createdBy,
+          createdAt: getCurrentISTTime(),
+          updatedAt: getCurrentISTTime(),
+        }));
+
+        await Template.insertMany(templatesToCreate);
+      } catch (templateError) {
+        // Manual rollback: Delete the created hostel if template creation fails
+        await Hostel.findByIdAndDelete(savedHostel._id);
+        throw new Error("Failed to create default templates. Hostel creation rolled back.");
+      }
+
+      return savedHostel;
     } catch (error: any) {
       throw new Error(error.message);
     }
