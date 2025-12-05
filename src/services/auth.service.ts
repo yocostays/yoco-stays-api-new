@@ -326,6 +326,7 @@ generateOtp = async (
 
     if (phoneTrimmed) {
       setObj.phone = phoneTrimmed;
+      setObj.email = null;
     }
 
     const update: any = {
