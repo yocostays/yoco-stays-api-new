@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "yoco-api",
+       name: "staging",
       script: "dist/server.js",
       instances: 1,
       autorestart: true,
@@ -9,6 +9,7 @@ module.exports = {
       max_memory_restart: "1G",
       env: {
         NODE_ENV: "production",
+    PORT: 4040
       },
     },
     {
@@ -21,6 +22,8 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         WORKER_ID: "worker-1",
+    PORT: 4000
+    
       },
     },
   ],
