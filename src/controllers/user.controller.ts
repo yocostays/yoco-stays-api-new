@@ -2694,7 +2694,12 @@ async sendTempPassword(req: Request, res: Response) {
       plainPassword: tempPassword,
     });
 
-    return res.status(200).json({ success: true, message: "Temporary password generated and emailed" });
+      const successResponse: HttpResponse = {
+        statusCode: 200,
+        message: "Temporary password generated and emailed",
+      };
+
+    return res.status(200).json(successResponse);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: "Internal server error" });
