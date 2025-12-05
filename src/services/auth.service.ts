@@ -370,26 +370,7 @@ generateOtp = async (
   ): Promise<string> => {
     try {
 
-      //NOTE - find otp
-      // const existingOtp: any = await Otp.findOne({
-      //   userId,
-      //   otp,
-      // });
-
-      // if (!existingOtp) throw new Error(OTP_NOT_VERIFIED);
-
-      // const expiryTimeDate = new Date(existingOtp.expiryTime);
-
-      // if (expiryTimeDate <= currentDate || existingOtp.isVerified)
-      //   throw new Error(OTP_EXPIRED);
-
-      // //NOTE: otp verifed sucessfully
-      // await Otp.findByIdAndUpdate(existingOtp._id, {
-      //   $set: { status: false, isVerified: true },
-      // });
-    
-      // Step 2: Hash the password
-      const hashedPassword = await hashPassword(newPassword);
+       const hashedPassword = await hashPassword(newPassword);
 
       //reset user password
       const reset = await User.findOneAndUpdate(

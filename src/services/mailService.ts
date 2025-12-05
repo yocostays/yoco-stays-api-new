@@ -1,15 +1,32 @@
 import nodemailer from "nodemailer";
 
+const port = process.env.EMAL_PORT ? parseInt(process.env.EMAL_PORT) : 465;
+const secure = port === 465; 
+
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
-  port: process.env.EMAL_PORT ? parseInt(process.env.EMAL_PORT) : 465,
-  secure: true,
+  port: port,
+  secure: secure,
+  pool: true,
+  maxConnections: parseInt(process.env.EMAIL_CONCURRENCY || "5"),
+  maxMessages: 100, 
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: process.env.NODE_ENV === "production"
   }
 });
 
+export async function verifyConnection() {
+  try {
+    await transporter.verify();
+    return true;
+  } catch (error: any) {
+    return false;
+  }
+}
 
 export async function sendStudentWelcomeEmail(params: {
   email: string;
@@ -18,10 +35,6 @@ export async function sendStudentWelcomeEmail(params: {
   plainPassword: string;
 }) {
   const { email, name, uniqueId, plainPassword } = params;
-
-
-  // Verify SMTP connection (SES)
-  await transporter.verify();
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; background:#f9fafb; padding:20px; border-radius:10px; color:#111;">
@@ -74,12 +87,30 @@ export async function sendStudentWelcomeEmail(params: {
     </div>
   `;
 
+  const textContent = `
+Welcome to Yoco Stays
 
-  await transporter.sendMail({
-    from: `"Yoco Stays" ${process.env.EMAIL_FROM}`,
+Dear ${name},
+
+Your student account has been created successfully.
+
+Student ID: ${uniqueId}
+Temporary Password: ${plainPassword}
+
+For security, please log in and change this password immediately after your first login.
+
+Download the Yoco Stays App: https://play.google.com/store/apps/details?id=com.colladome.yoco
+
+Regards,
+Yoco Stays Team
+  `;
+
+  return await transporter.sendMail({
+    from: `"Yoco Stays" <${process.env.EMAIL_FROM}>`, 
     to: email,
     subject: "Your Yoco Stays account credentials",
     html: htmlContent,
+    text: textContent,
   });
 
 }

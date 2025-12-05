@@ -43,6 +43,7 @@ import {
   VehicleEngineTypes,
 } from "../utils/enum";
 import { USER_FOLDER, USER_BULK_UPLOAD_FILES } from "../utils/s3bucketFolder";
+import EmailQueue from "../models/emailQueue.model";
 import {
   deleteFromS3,
   getSignedUrl,
@@ -1832,12 +1833,12 @@ class UserService {
         throw new Error("Failed to create bulk upload entry.");
       }
 
-      const welcomeMailQueue: {
-        email: string;
-        name: string;
-        uniqueId: string;
-        plainPassword: string;
-      }[] = [];
+      // const welcomeMailQueue: {
+      //   email: string;
+      //   name: string;
+      //   uniqueId: string;
+      //   plainPassword: string;
+      // }[] = [];
 
       // console.log("welcomqueue", welcomeMailQueue);
       // console.log("successArray", successArray);
@@ -2002,11 +2003,20 @@ class UserService {
             if (data?.Email) {
               // console.log("Queuing welcome email for:", data.Email, uniqueId);
 
-              welcomeMailQueue.push({
+              // welcomeMailQueue.push({
+              //   email: data.Email,
+              //   name,
+              //   uniqueId,
+              //   plainPassword,
+              // });
+
+              // Persist to MongoDB Queue
+              await EmailQueue.create({
                 email: data.Email,
                 name,
                 uniqueId,
                 plainPassword,
+                status: "pending",
               });
             }
             await Hostel.findOneAndUpdate(
@@ -2063,13 +2073,13 @@ class UserService {
       // console.log("successArray after processing", successArray);
 
       // Send welcome emails for all newly created students
-      await Promise.allSettled(
-        welcomeMailQueue.map((mailJob) =>
-          sendStudentWelcomeEmail(mailJob).catch((err) => {
-            console.error(`Failed to send welcome email to:`, err.message);
-          })
-        )
-      );
+      // await Promise.allSettled(
+      //   welcomeMailQueue.map((mailJob) =>
+      //     sendStudentWelcomeEmail(mailJob).catch((err) => {
+      //       console.error(`Failed to send welcome email to:`, err.message);
+      //     })
+      //   )
+      // );
 
       // console.log("welcomeMailQueue after sending", welcomeMailQueue);
 
@@ -2980,6 +2990,8 @@ class UserService {
         {
           isVerified: true,
           updatedBy: otpExists.userId,
+          phone: phone,
+          email: null,
         },
         { upsert: true, new: true }
       );
