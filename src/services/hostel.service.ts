@@ -1265,7 +1265,6 @@ class HostelService {
           },
           { new: true }
         );
-        console.log("created");
       }
       // Upload result filess
       let successFileUrl: string | null = null;
