@@ -32,7 +32,7 @@ const EmailQueueSchema: Schema = new Schema(
     maxAttempts: { type: Number, default: 5 },
     lastError: { type: String },
     nextAttempt: { type: Date, default: Date.now, index: true },
-    processingAt: { type: Date, index: true }, // For lease management
+    processingAt: { type: Date }, // For lease management
     processingBy: { type: String }, // Worker ID
   },
   { timestamps: true }
