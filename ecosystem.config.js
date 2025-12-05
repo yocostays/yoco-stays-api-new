@@ -14,6 +14,7 @@ module.exports = {
     {
       name: "yoco-email-worker",
       script: "dist/worker.js",
+      cwd: "./", // Ensure it runs from project root
       instances: 1, 
       autorestart: true,
       watch: false,
