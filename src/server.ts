@@ -34,10 +34,7 @@ mongoose.connect(process.env.MONGO_URI || '')
     // Start the server only after the connection is successful
     app.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
-      
-      // Start Email Worker
-      const { startEmailWorker } = require("./services/emailWorker.service");
-      startEmailWorker();
+    
     });
   })
   .catch(err => {
