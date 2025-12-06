@@ -63,7 +63,8 @@ const {
   DELETE_DATA,
 } = SUCCESS_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
-const { INVALID_ID, REQUIRED_FIELD } = VALIDATION_MESSAGES;
+const { INVALID_ID, REQUIRED_FIELD, ALREADY_EXIST_FIELD_ONE } =
+  VALIDATION_MESSAGES;
 const PHONE_REGEX = /^\+?\d{7,15}$/;
 
 const normalizeFullName = (name: string) => {
@@ -2312,13 +2313,7 @@ class UserController {
         const normalizedEmail = normalizeEmail(email);
 
         if (myEmail && myEmail === normalizedEmail) {
-          return res
-            .status(200)
-            .json({
-              statusCode: 200,
-              message: "Email already set",
-              data: { email: myEmail },
-            });
+          throw new Error(ALREADY_EXIST_FIELD_ONE("Email"));
         }
 
         const existing = await User.findOne({
@@ -2328,7 +2323,7 @@ class UserController {
         if (existing) {
           return res
             .status(422)
-            .json({ statusCode: 422, message: "Email already in use" });
+            .json({ statusCode: 422, message: "Email already exists." });
         }
 
         try {
@@ -2337,20 +2332,11 @@ class UserController {
           return res.status(200).json({
             statusCode: 200,
             message: "OTP sent to email",
-            data: sendResult ?? { email: normalizedEmail },
           });
         } catch (sendErr: any) {
-          console.error("generateOtpForAccountChange: email send error:", {
-            userId,
-            email: normalizedEmail,
-            errMessage: sendErr?.message || sendErr,
-            stack: sendErr?.stack,
-          });
-
           return res.status(500).json({
             statusCode: 500,
             message: "Failed to send OTP email",
-            error: sendErr?.message ?? "Email provider error",
           });
         }
       }
@@ -2367,13 +2353,7 @@ class UserController {
         }
 
         if (myPhoneDigits && myPhoneDigits === phoneDigits) {
-          return res
-            .status(200)
-            .json({
-              statusCode: 200,
-              message: "Phone already set",
-              data: { phone: myPhoneRaw },
-            });
+          throw new Error(ALREADY_EXIST_FIELD_ONE("Phone"));
         }
 
         const phonePathInstance =
@@ -2397,18 +2377,17 @@ class UserController {
             _id: { $ne: userId },
             $or: [{ phone: phoneRaw }, { phone: phoneDigits }],
           }).lean();
+
           if (!existing) {
             existing = await User.findOne({
               _id: { $ne: userId },
               phone: { $regex: new RegExp(phoneDigits + "$") },
             }).lean();
           }
-        }
 
-        if (existing) {
-          return res
-            .status(422)
-            .json({ statusCode: 422, message: "Phone already in use" });
+          if (existing) {
+            throw new Error(ALREADY_EXIST_FIELD_ONE("Phone"));
+          }
         }
 
         try {
@@ -2418,17 +2397,9 @@ class UserController {
             message: "OTP sent to phone",
           });
         } catch (smsErr: any) {
-          console.error("generateOtpForAccountChange: sms send error:", {
-            userId,
-            phone: phoneRaw,
-            errMessage: smsErr?.message || smsErr,
-            stack: smsErr?.stack,
-          });
-
           return res.status(500).json({
             statusCode: 500,
             message: "Failed to send OTP SMS",
-            error: smsErr?.message ?? "SMS provider error",
           });
         }
       }
@@ -2437,7 +2408,6 @@ class UserController {
         .status(400)
         .json({ statusCode: 400, message: "Invalid request" });
     } catch (error: any) {
-      console.error("generateOtpForAccountChange error:", error);
       const errorMessage = error?.message ?? "Server error";
       return res.status(400).json({ statusCode: 400, message: errorMessage });
     }
@@ -2454,12 +2424,10 @@ class UserController {
         req.body?._valid?._id ||
         req.body.userId;
       if (!userId || !mongoose.isValidObjectId(userId)) {
-        return res
-          .status(401)
-          .json({
-            statusCode: 401,
-            message: "Unauthenticated or invalid user",
-          });
+        return res.status(401).json({
+          statusCode: 401,
+          message: "Unauthenticated or invalid user",
+        });
       }
 
       const { otp: otpRaw, email, phone } = req.body;
@@ -2513,12 +2481,10 @@ class UserController {
             : null);
 
         if (!otpDoc) {
-          return res
-            .status(400)
-            .json({
-              statusCode: 400,
-              message: "Invalid OTP or no OTP request found",
-            });
+          return res.status(400).json({
+            statusCode: 400,
+            message: "Invalid OTP or no OTP request found",
+          });
         }
 
         if (otpDoc.isVerified) {
@@ -2546,12 +2512,10 @@ class UserController {
         });
 
         if (!after || !after.isVerified) {
-          return res
-            .status(400)
-            .json({
-              statusCode: 400,
-              message: "Failed to verify OTP; it may already be used",
-            });
+          return res.status(400).json({
+            statusCode: 400,
+            message: "Failed to verify OTP; it may already be used",
+          });
         }
 
         // Update user email
@@ -2604,12 +2568,10 @@ class UserController {
         }
 
         if (!otpDoc) {
-          return res
-            .status(400)
-            .json({
-              statusCode: 400,
-              message: "Invalid OTP or no OTP request found",
-            });
+          return res.status(400).json({
+            statusCode: 400,
+            message: "Invalid OTP or no OTP request found",
+          });
         }
 
         if (otpDoc.isVerified) {
@@ -2636,12 +2598,10 @@ class UserController {
           isVerified: false,
         });
         if (!after || !after.isVerified) {
-          return res
-            .status(400)
-            .json({
-              statusCode: 400,
-              message: "Failed to verify OTP; it may already be used",
-            });
+          return res.status(400).json({
+            statusCode: 400,
+            message: "Failed to verify OTP; it may already be used",
+          });
         }
 
         // Update user's phone (preserve formatting provided)
@@ -2668,43 +2628,57 @@ class UserController {
     }
   }
 
-async sendTempPassword(req: Request, res: Response) {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: "email required" });
+  async sendTempPassword(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+      if (!email)
+        return res
+          .status(400)
+          .json({ success: false, message: "email required" });
 
-    const query = { $or: [{ email: typeof email === "string" ? email : undefined }] };
+      const query = {
+        $or: [{ email: typeof email === "string" ? email : undefined }],
+      };
 
-    const user = await User.findOne(query);
+      const user = await User.findOne(query);
 
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
-    if (!user.email) return res.status(400).json({ success: false, message: "User has no email to send password" });
+      if (!user)
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      if (!user.email)
+        return res.status(400).json({
+          success: false,
+          message: "User has no email to send password",
+        });
 
-    const tempPassword = generateRandomPassword(8);
-    const hashedPassword = await hashPassword(tempPassword);
-    user.password = hashedPassword;
-    user.testPassword = tempPassword; 
- 
-    await user.save();
+      const tempPassword = generateRandomPassword(8);
+      const hashedPassword = await hashPassword(tempPassword);
+      user.password = hashedPassword;
+      user.testPassword = tempPassword;
 
-    await sendStudentWelcomeEmail({
-      email: user.email,
-      name: user.name || "",
-      uniqueId: user.uniqueId || "",
-      plainPassword: tempPassword,
-    });
+      await user.save();
+
+      await sendStudentWelcomeEmail({
+        email: user.email,
+        name: user.name || "",
+        uniqueId: user.uniqueId || "",
+        plainPassword: tempPassword,
+      });
 
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: "Temporary password generated and emailed",
       };
 
-    return res.status(200).json(successResponse);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+      return res.status(200).json(successResponse);
+    } catch (err) {
+      console.error(err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Internal server error" });
+    }
   }
-}
 }
 
 export default new UserController();

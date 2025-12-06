@@ -205,51 +205,50 @@ class AuthService {
     }
   };
 
-//SECTION: Method to generate Otp for mail  but we are useing userRequest delete function
+  //SECTION: Method to generate Otp for mail  but we are useing userRequest delete function
 
- transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: process.env.EMAL_PORT ? parseInt(process.env.EMAL_PORT) : 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
+  transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: process.env.EMAL_PORT ? parseInt(process.env.EMAL_PORT) : 465,
+    secure: true,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
 
+  // generic email OTP sender for change email id
+  generateOtpMail = async (userId: string, email: string) => {
+    if (!email || typeof email !== "string") {
+      throw new Error("Invalid email address");
+    }
 
-// generic email OTP sender for change email id
-generateOtpMail = async (userId: string, email: string) => {
-  if (!email || typeof email !== "string") {
-    throw new Error("Invalid email address");
-  }
+    try {
+      // Ensure transporter is valid
+      await this.transporter.verify();
 
-  try {
-    // Ensure transporter is valid
-    await this.transporter.verify();
+      // 1) Generate OTP + expiry
+      const otp = await generateSecureOtp(); // typically 4–6 digits
+      const expiryTime = getExpiryDate(5, "M"); // 5 minutes
 
-    // 1) Generate OTP + expiry
-    const otp = await generateSecureOtp();      // typically 4–6 digits
-    const expiryTime = getExpiryDate(5, "M");   // 5 minutes
+      // 2) Upsert OTP record
+      await Otp.findOneAndUpdate(
+        { userId: new mongoose.Types.ObjectId(userId) },
+        {
+          otp,
+          expiryTime,
+          isVerified: false,
+          email,
+          phone: null,
+          status: true,
+          createdBy: userId,
+          updatedBy: userId,
+        },
+        { upsert: true, new: true }
+      );
 
-    // 2) Upsert OTP record
-    await Otp.findOneAndUpdate(
-      { userId: new mongoose.Types.ObjectId(userId) },
-      {
-        otp,
-        expiryTime,
-        isVerified: false,
-        email,
-        phone: null,
-        status: true,
-        createdBy: userId,
-        updatedBy: userId
-      },
-      { upsert: true, new: true }
-    );
-
-    // 3) Build HTML content
-    const htmlContent = `
+      // 3) Build HTML content
+      const htmlContent = `
       <div style="font-family: Arial, sans-serif; background: #f9fafb; padding: 20px; border-radius: 10px; text-align: center; color: #333;">
         <p style="font-size: 16px; margin-bottom: 10px;">Your OTP Code:</p>
         <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #007bff; background: #fff; padding: 10px 20px; border-radius: 8px; display: inline-block;">
@@ -258,119 +257,123 @@ generateOtpMail = async (userId: string, email: string) => {
       </div>
     `;
 
-    // 4) Send email
- 
-  await this.transporter.sendMail({
-    from: `Yoco Stays ${process.env.EMAIL_FROM}`,
-    to: email,
-    subject: "Your OTP Code 🔐",
-    html: htmlContent,
-  });
+      // 4) Send email
 
-    return {
-      userId: userId,
-      emailSent: email
-    };
+      await this.transporter.sendMail({
+        from: `Yoco Stays ${process.env.EMAIL_FROM}`,
+        to: email,
+        subject: "Your OTP Code 🔐",
+        html: htmlContent,
+      });
 
-  } catch (err: any) {
-    console.error("Email OTP error:", err.message || err);
-    throw new Error("Failed to send OTP email");
-  }
-}
-
-
-// generate Otp for phone number 
-generateOtp = async (
-  userId: string | null | undefined,
-  phone: string | null | undefined
-): Promise<{ otp: string }> => {          
-  try {
-    if (!phone || String(phone).trim().length === 0) {
-      throw new Error("Phone number is required for SMS OTP");
+      return {
+        userId: userId,
+        emailSent: email,
+      };
+    } catch (err: any) {
+      console.error("Email OTP error:", err.message || err);
+      throw new Error("Failed to send OTP email");
     }
+  };
 
-    const phoneTrimmed = String(phone).trim();
-    if (!/^\+?\d{7,15}$/.test(phoneTrimmed)) {
-      throw new Error("Invalid phone number format");
-    }
-
-   
-    const otpNumber = generateSecureOtp();
-    const otp = String(otpNumber).padStart(6, "0");
-
-    const expiryTime = getExpiryDate(5, "M"); 
-
- 
-    let filter: any = null;
-    let userIdObj: mongoose.Types.ObjectId | null = null;
-    if (userId) {
-      if (!mongoose.Types.ObjectId.isValid(userId)) {
-        throw new Error("Invalid userId");
-      }
-      userIdObj = new mongoose.Types.ObjectId(userId);
-      filter = { userId: userIdObj };
-    } else {
-     
-      filter = { phone: phoneTrimmed };
-    }
-
-    const setObj: any = {
-      otp,
-      expiryTime,
-      isVerified: false,
-      status: true,
-      updatedBy: userIdObj,
-      failedAttempts: 0,
-      sent: false,
-    };
-
-    if (phoneTrimmed) {
-      setObj.phone = phoneTrimmed;
-      setObj.email = null;
-    }
-
-    const update: any = {
-      $set: setObj,
-      $setOnInsert: {
-        createdBy: userIdObj,
-        userId: userIdObj,
-      },
-    };
-
-   
-    const otpDoc = await Otp.findOneAndUpdate(filter, update, {
-      upsert: true,
-      new: true,
-      setDefaultsOnInsert: true,
-    }).exec();
-
-   
+  // generate Otp for phone number
+  generateOtp = async (
+    userId: string | null | undefined,
+    phone: string | null | undefined
+  ): Promise<{ otp: string }> => {
     try {
-      await sendSMS(phoneTrimmed, otp);
-      if (otpDoc && otpDoc._id) {
-        await Otp.updateOne({ _id: otpDoc._id }, { $set: { sent: true } }).exec();
-      } else {
-        await Otp.updateOne(filter, { $set: { sent: true } }).exec();
+      if (!phone || String(phone).trim().length === 0) {
+        throw new Error("Phone number is required for SMS OTP");
       }
-    } catch (smsErr: any) {
-      console.error("SMS send failed (otp still stored):", smsErr?.message || smsErr);
+
+      const phoneTrimmed = String(phone).trim();
+      if (!/^\+?\d{7,15}$/.test(phoneTrimmed)) {
+        throw new Error("Invalid phone number format");
+      }
+
+      const otpNumber = generateSecureOtp();
+      const otp = String(otpNumber).padStart(6, "0");
+
+      const expiryTime = getExpiryDate(5, "M");
+
+      let filter: any = null;
+      let userIdObj: mongoose.Types.ObjectId | null = null;
+      if (userId) {
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+          throw new Error("Invalid userId");
+        }
+        userIdObj = new mongoose.Types.ObjectId(userId);
+        filter = { userId: userIdObj };
+      } else {
+        filter = { phone: phoneTrimmed };
+      }
+
+      const setObj: any = {
+        otp,
+        expiryTime,
+        isVerified: false,
+        status: true,
+        updatedBy: userIdObj ?? undefined,
+        verifyAttempts: 0,  
+        sent: false,
+      };
+
+   
+
+      if (phoneTrimmed) {
+        setObj.phone = phoneTrimmed;
+      }
+
+      const update: any = {
+        $set: setObj,
+        $setOnInsert: {},
+      };
+
+          if (userIdObj) {
+      update.$setOnInsert.createdBy = userIdObj;
+      update.$setOnInsert.userId = userIdObj;
     }
 
-    return { otp };
-  } catch (error: any) {
-    throw new Error(`User OTP generate: ${error.message}`);
-  }
-};
+      if (!userId && phoneTrimmed) {
+        update.$unset = { email: "" };
+      }
 
+      const otpDoc = await Otp.findOneAndUpdate(filter, update, {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+      }).exec();
+
+      try {
+        await sendSMS(phoneTrimmed, otp);
+        if (otpDoc && otpDoc._id) {
+          await Otp.updateOne(
+            { _id: otpDoc._id },
+            { $set: { sent: true } }
+          ).exec();
+        } else {
+          await Otp.updateOne(filter, { $set: { sent: true } }).exec();
+        }
+      } catch (smsErr: any) {
+        console.error(
+          "SMS send failed (otp still stored):",
+          smsErr?.message || smsErr
+        );
+      }
+
+      return { otp };
+    } catch (error: any) {
+      throw new Error(`User OTP generate: ${error.message}`);
+    }
+  };
 
   //SECTION: Method to reset student password
   resetStudentPassword = async (
     users: any,
-    newPassword: string,
+    newPassword: string
   ): Promise<string> => {
     try {
-
-       const hashedPassword = await hashPassword(newPassword);
+      const hashedPassword = await hashPassword(newPassword);
 
       //reset user password
       const reset = await User.findOneAndUpdate(
@@ -500,10 +503,10 @@ generateOtp = async (
         type === BulkUploadTypes.MEAL
           ? process.env.MESS_BULK_UPLOAD_SAMPLE_FILE
           : type === BulkUploadTypes.FOOD_WASTAGE
-            ? process.env.FOOD_WASTAGE_BULK_UPLOAD_SAMPLE_FILE
-            : type === BulkUploadTypes.HOSTEL_ROOM_MAP
-              ? process.env.HOSTEL_ROOM_MAP_BULK_UPLOAD_SAMPLE_FILES
-              : process.env.STUDENT_BULK_UPLOAD_SAMPLE_FILE;
+          ? process.env.FOOD_WASTAGE_BULK_UPLOAD_SAMPLE_FILE
+          : type === BulkUploadTypes.HOSTEL_ROOM_MAP
+          ? process.env.HOSTEL_ROOM_MAP_BULK_UPLOAD_SAMPLE_FILES
+          : process.env.STUDENT_BULK_UPLOAD_SAMPLE_FILE;
 
       const url = await getSignedUrl(originalFile as string);
 
