@@ -2318,7 +2318,6 @@ class UserController {
 
         const existing = await User.findOne({
           email: normalizedEmail,
-          _id: { $ne: userId },
         }).lean();
         if (existing) {
           return res
@@ -2327,7 +2326,7 @@ class UserController {
         }
 
         try {
-          const sendResult = await generateOtpMail(userId, normalizedEmail);
+           await generateOtpMail(userId, normalizedEmail);
 
           return res.status(200).json({
             statusCode: 200,
@@ -2352,9 +2351,7 @@ class UserController {
             .json({ statusCode: 400, message: "Invalid phone number format" });
         }
 
-        if (myPhoneDigits && myPhoneDigits === phoneDigits) {
-          throw new Error(ALREADY_EXIST_FIELD_ONE("Phone"));
-        }
+
 
         const phonePathInstance =
           (User &&
@@ -2368,26 +2365,23 @@ class UserController {
           const phoneAsNumber = Number(phoneDigits);
           if (!Number.isNaN(phoneAsNumber)) {
             existing = await User.findOne({
-              _id: { $ne: userId },
               phone: phoneAsNumber,
             }).lean();
           }
         } else {
           existing = await User.findOne({
-            _id: { $ne: userId },
             $or: [{ phone: phoneRaw }, { phone: phoneDigits }],
           }).lean();
 
           if (!existing) {
             existing = await User.findOne({
-              _id: { $ne: userId },
               phone: { $regex: new RegExp(phoneDigits + "$") },
             }).lean();
           }
+        }
 
-          if (existing) {
-            throw new Error(ALREADY_EXIST_FIELD_ONE("Phone"));
-          }
+        if (existing) {
+          throw new Error(ALREADY_EXIST_FIELD_ONE("Phone"));
         }
 
         try {
