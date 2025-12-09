@@ -1,15 +1,46 @@
 import { Router } from "express";
+import validateToken from "../middlewares/validateToken";
+import { checkSuperAdmin } from "../middlewares/checkSuperAdmin";
+import GlobalTemplateController from "../controllers/globalTemplate.controller";
 import TemplateController from "../controllers/template.controller";
+
+const {
+  createTempletCategories,
+  getAllCategories,
+  createSubcategory,
+  getHostelTemplatesSummary,
+  getHostelCategoriesForEdit,
+  addSubcategoryToHostelTemplate,
+  deleteGlobalCategory,
+} = GlobalTemplateController;
+
 const {
   createNewTemplate,
   getAllTemplate,
   getTemplateById,
   updateTemplateDetails,
 } = TemplateController;
-import validateToken from "../middlewares/validateToken";
 
 const templateRouter = Router();
 
+// Global Category Routes (Specific) - Superadmin Only
+//1. this is for creaeting global template categories
+templateRouter.post("/create-category", validateToken, checkSuperAdmin, createTempletCategories);
+templateRouter.get("/get-categories", validateToken, checkSuperAdmin, getAllCategories); //get all categories with subcategories
+templateRouter.post("/:categoryId/subcategories", validateToken, checkSuperAdmin, createSubcategory);//create subcategory under specific category
+//here we are deleting global category and all its subcategories if any hostel are not using them
+templateRouter.delete("/delete-category/:categoryId", validateToken, checkSuperAdmin, deleteGlobalCategory);
+
+// Hostel Templates Summary Route for hostel list view - Superadmin Only
+templateRouter.get("/hostel-templates/details", validateToken, checkSuperAdmin, getHostelTemplatesSummary);
+
+// Hostel Categories for Edit Route - Superadmin Only
+templateRouter.get("/hostel/:hostelId/categories", validateToken, checkSuperAdmin, getHostelCategoriesForEdit);
+
+// Add not applied Subcategory to Hostel Template Route (auto-creates category if needed) - Superadmin Only
+templateRouter.post("/hostel/add-subcategory", validateToken, checkSuperAdmin, addSubcategoryToHostelTemplate);
+
+// Template Routes (Generic/Parameterized)
 templateRouter.post("/create", validateToken, createNewTemplate);
 templateRouter.get("/", validateToken, getAllTemplate);
 templateRouter.get("/:id", validateToken, getTemplateById);

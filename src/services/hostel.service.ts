@@ -41,6 +41,9 @@ import BulkUpload from "../models/bulkUpload.model";
 import { normalizeBedNumber } from "../utils/normalizeBedNumber";
 import Template from "../models/template.model";
 import { defaultTemplates } from "../config/defaultTemplates";
+import HostelTemplateService from "./hostelTemplate.service";
+
+const { initializeHostelTemplates } = HostelTemplateService;
 
 const {
   DUPLICATE_RECORD,
@@ -168,6 +171,8 @@ class HostelService {
       // Step 4: Save the new hostel
       const savedHostel = await newHostel.save();
 
+      /*
+      //  NEW HOSTEL TEMPLATE SYSTEM
       try {
         // Create default templates
         const templatesToCreate = defaultTemplates.map((template) => ({
@@ -184,6 +189,10 @@ class HostelService {
         await Hostel.findByIdAndDelete(savedHostel._id);
         throw new Error("Failed to create default templates. Hostel creation rolled back.");
       }
+      */
+
+      // NEW: Initialize Hostel Templates from Global Templates
+      await initializeHostelTemplates(savedHostel._id as mongoose.Types.ObjectId, savedHostel.name, savedHostel.identifier);
 
       return savedHostel;
     } catch (error: any) {
