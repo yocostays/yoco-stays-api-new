@@ -62,6 +62,7 @@ import nodemailer from "nodemailer";
 import { generateSecureOtp, getExpiryDate } from "../utils/otpService";
 import Otp from "../models/otp.model";
 import { allowedDomains } from "../constants/allowedDomains";
+import Token from "../models/token.model";
 
 const { getRoleByName } = RoleService;
 const { checkTemplateExist } = TemplateService;
@@ -405,8 +406,8 @@ class UserService {
               ele?.status && ele?.isVerified
                 ? "active"
                 : ele?.status && !ele?.isVerified
-                ? "pending"
-                : "in-active",
+                  ? "pending"
+                  : "in-active",
             status: ele?.status,
             createdBy: (ele?.createdBy as any)?.name ?? null,
             createdAt: ele?.createdAt ?? null,
@@ -1106,9 +1107,8 @@ class UserService {
                   email: user.email ?? null,
                   phone: user.phone ?? null,
                   image: user.image ? await getSignedUrl(user.image) : null,
-                  roomDetails: `${mate.roomNumber ?? null}/${
-                    mate.bedNumber ?? null
-                  }`,
+                  roomDetails: `${mate.roomNumber ?? null}/${mate.bedNumber ?? null
+                    }`,
                 };
               }
 
@@ -2801,10 +2801,13 @@ class UserService {
 
       const userExist = await User.findOneAndDelete({ _id: id });
       if (userExist) {
-        await StudentLeave.findOneAndDelete({ userId: id });
-        await Complaint.findOneAndDelete({ userId: id });
-        await BookMeals.findOneAndDelete({ studentId: id });
-        await StudentHostelAllocation.findOneAndDelete({ studentId: id });
+        await Promise.all([
+          StudentLeave.deleteMany({ userId: id }),
+          Complaint.deleteMany({ userId: id }),
+          BookMeals.deleteMany({ studentId: id }),
+          StudentHostelAllocation.findOneAndDelete({ studentId: id }),
+          Token.findOneAndDelete({ userId: id })
+        ]);
 
         return DELETE_DATA;
       } else {
