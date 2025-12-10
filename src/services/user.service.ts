@@ -2225,6 +2225,13 @@ class UserService {
           throw new Error("Email already exist");
         }
       }
+
+       if (student?.phone !== phone) {
+        const student = await User.findOne({ phone });
+        if (student) {
+          throw new Error("Phone already exist");
+        }
+      }
       // Step 2: Validate university
       if (academicDetails.universityId) {
         const university = await College.findById(
