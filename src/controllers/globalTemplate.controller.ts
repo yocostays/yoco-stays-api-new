@@ -65,7 +65,7 @@ class GlobalTemplateController {
           const isUpdate = !!item._id;
 
           const template = await createGlobalTemplate({
-            ...item,
+            title: item?.title,
             createdBy: isUpdate ? undefined : createdBy,
             updatedBy: isUpdate ? createdBy : undefined,
           });
