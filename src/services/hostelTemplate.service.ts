@@ -48,10 +48,11 @@ const initializeHostelTemplates = async (
       hostelCode,
       subcategories: gt.subcategories.map((sub: any) => ({
         _id: new Types.ObjectId(), // New ID for the hostel copy
-        originalSubcategoryId: sub._id ? new Types.ObjectId(sub._id) : undefined, // Cast ensuring it handles string/ObjectId
+        originalSubcategoryId: sub._id ? new Types.ObjectId(sub._id) : undefined,
         title: sub.title,
         slug: sub.slug,
         description: sub.description,
+        notificationTemplate: sub.notificationTemplate, // ✅ COPY notification template!
         isActive: sub.isActive
       })),
       isActive: true,
@@ -64,12 +65,12 @@ const initializeHostelTemplates = async (
       await HostelTemplate.insertMany(hostelTemplatesData, { ordered: false });
       console.log(`[HostelTemplate] Successfully initialized ${hostelTemplatesData.length} templates for hostel ${hostelId}`);
     } catch (error: any) {
-        // If some duplicates exist (E11000), just ignore them and log access
-        if (error.code === 11000 || error.writeErrors?.some((e: any) => e.code === 11000)) {
-            console.log(`[HostelTemplate] Templates already partially existed for hostel ${hostelId}, skipped duplicates.`);
-        } else {
-            throw error;
-        }
+      // If some duplicates exist (E11000), just ignore them and log access
+      if (error.code === 11000 || error.writeErrors?.some((e: any) => e.code === 11000)) {
+        console.log(`[HostelTemplate] Templates already partially existed for hostel ${hostelId}, skipped duplicates.`);
+      } else {
+        throw error;
+      }
     }
 
   } catch (error: any) {
@@ -90,13 +91,13 @@ const getHostelTemplatesSummary = async (
   try {
     const skip = (page - 1) * limit;
 
-   
+
     const matchStage: any = { isDeleted: false };
     if (hostelId && Types.ObjectId.isValid(hostelId)) {
       matchStage.hostelId = new Types.ObjectId(hostelId);
     }
 
-  
+
     const pipeline: any[] = [
       // Filter out deleted templates
       { $match: matchStage },
@@ -180,7 +181,7 @@ const getHostelTemplatesSummary = async (
         { $skip: skip },
         { $limit: limit }
       ]).allowDiskUse(true),
-      
+
       HostelTemplate.aggregate([
         ...pipeline,
         { $count: "total" }
@@ -298,7 +299,7 @@ const addSubcategoryToHostelTemplate = async (
     const hostelObjectId = new Types.ObjectId(hostelId);
     const globalTemplateObjectId = new Types.ObjectId(globalTemplateId);
 
-    const slug = subcategoryData.slug || 
+    const slug = subcategoryData.slug ||
       subcategoryData.title.toLowerCase()
         .trim()
         .replace(/[^a-z0-9\s-]/g, '')
@@ -380,7 +381,7 @@ const addSubcategoryToHostelTemplate = async (
       success: true,
       hostelTemplate: updatedTemplate,
       newSubcategory,
-      categoryWasCreated: !hostelTemplate._id 
+      categoryWasCreated: !hostelTemplate._id
     };
 
   } catch (error: any) {
@@ -390,9 +391,9 @@ const addSubcategoryToHostelTemplate = async (
 };
 
 export default {
-    upsertHostelTemplate,
-    initializeHostelTemplates,
-    getHostelTemplatesSummary,
-    getHostelCategoriesForEdit,
-    addSubcategoryToHostelTemplate
+  upsertHostelTemplate,
+  initializeHostelTemplates,
+  getHostelTemplatesSummary,
+  getHostelCategoriesForEdit,
+  addSubcategoryToHostelTemplate
 };
