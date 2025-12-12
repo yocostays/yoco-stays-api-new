@@ -161,7 +161,7 @@ class TemplateService {
         }
         payload.image = null;
       }
-      
+
       // Handle image if signed url
       if (image && image.includes("amazonaws.com")) {
         payload.image = template?.image;
@@ -192,23 +192,50 @@ class TemplateService {
     }
   }
 
-  //SECTION: Method to check template exists or not
+  //SECTION: Method to check template exists or not (NEW SYSTEM - Uses GlobalTemplate/HostelTemplate)
   async checkTemplateExist(
     hostelId: string,
     templateType: TemplateTypes
   ): Promise<{ template: any }> {
     try {
-      const exists: any = await Template.findOne({
-        hostelId,
-        templateType,
-      }).select("title description image");
+      const notificationTemplateAdapter =
+        require("./notificationTemplateAdapter.service").default;
 
-      if (exists?.image) {
-        exists.image = await getSignedUrl(exists.image);
+      const notificationData =
+        await notificationTemplateAdapter.getNotificationTemplate(
+          templateType,
+          hostelId
+        );
+
+      if (!notificationData) {
+        return { template: null };
       }
-      return { template: exists };
+
+      // Format to match expected structure
+      const template = {
+        title: notificationData.heading,
+        description: notificationData.body,
+        image: notificationData.image,
+        _templateType: templateType, // Keep for reference
+      };
+
+      return { template };
     } catch (error: any) {
-      throw new Error(error.message);
+      // If new system fails, try old Template model as fallback
+      try {
+        const exists: any = await Template.findOne({
+          hostelId,
+          templateType,
+        }).select("title description image");
+
+        if (exists?.image) {
+          exists.image = await getSignedUrl(exists.image);
+        }
+
+        return { template: exists };
+      } catch (fallbackError: any) {
+        throw new Error(error.message);
+      }
     }
   }
 }

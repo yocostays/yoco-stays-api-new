@@ -1,6 +1,9 @@
-import HostelTemplate, { IHostelTemplate } from "../models/hostelTemplate.model";
+import HostelTemplate, {
+  IHostelTemplate,
+} from "../models/hostelTemplate.model";
 import GlobalTemplate from "../models/globalTemplate.model";
 import { Types } from "mongoose";
+import Hostel from "../models/hostel.model";
 
 // Upsert (Insert or Update) a HostelTemplate based on hostelId and globalTemplateId
 const upsertHostelTemplate = async (
@@ -27,18 +30,20 @@ const initializeHostelTemplates = async (
   try {
     // Fetch all active Global Templates (Scope: Global)
     const globalTemplates = await GlobalTemplate.find({
-      scope: 'global',
+      scope: "global",
       isDeleted: false,
-      isActive: true
+      isActive: true,
     }).lean();
 
     if (globalTemplates.length === 0) {
-      console.log(`[HostelTemplate] No global templates found to copy for hostel ${hostelId}`);
+      console.log(
+        `[HostelTemplate] No global templates found to copy for hostel ${hostelId}`
+      );
       return;
     }
 
     // Prepare HostelTemplate documents
-    const hostelTemplatesData = globalTemplates.map(gt => ({
+    const hostelTemplatesData = globalTemplates.map((gt) => ({
       hostelId: new Types.ObjectId(hostelId),
       globalTemplateId: gt._id,
       title: gt.title,
@@ -47,38 +52,42 @@ const initializeHostelTemplates = async (
       hostelName,
       hostelCode,
       subcategories: gt.subcategories.map((sub: any) => ({
-        _id: new Types.ObjectId(), // New ID for the hostel copy
-        originalSubcategoryId: sub._id ? new Types.ObjectId(sub._id) : undefined,
+        _id: new Types.ObjectId(),
+        originalSubcategoryId: sub._id
+          ? new Types.ObjectId(sub._id)
+          : undefined,
         title: sub.title,
         slug: sub.slug,
         description: sub.description,
-        notificationTemplate: sub.notificationTemplate, // ✅ COPY notification template!
-        isActive: sub.isActive
+        notificationTemplate: sub.notificationTemplate,
+        isActive: sub.isActive,
       })),
       isActive: true,
-      isDeleted: false
+      isDeleted: false,
     }));
 
-    // Bulk Insert (ordered: false to ignore duplicates gracefully if any exist partially)
-    // Using insertMany for performance
     try {
       await HostelTemplate.insertMany(hostelTemplatesData, { ordered: false });
-      console.log(`[HostelTemplate] Successfully initialized ${hostelTemplatesData.length} templates for hostel ${hostelId}`);
+      console.log(
+        `[HostelTemplate] Successfully initialized ${hostelTemplatesData.length} templates for hostel ${hostelId}`
+      );
     } catch (error: any) {
-      // If some duplicates exist (E11000), just ignore them and log access
-      if (error.code === 11000 || error.writeErrors?.some((e: any) => e.code === 11000)) {
-        console.log(`[HostelTemplate] Templates already partially existed for hostel ${hostelId}, skipped duplicates.`);
+      if (
+        error.code === 11000 ||
+        error.writeErrors?.some((e: any) => e.code === 11000)
+      ) {
+        console.log(
+          `[HostelTemplate] Templates already partially existed for hostel ${hostelId}, skipped duplicates.`
+        );
       } else {
         throw error;
       }
     }
-
   } catch (error: any) {
-    console.error(`[HostelTemplate] Failed to initialize templates for hostel ${hostelId}:`, error);
-    // We do NOT throw here to prevent rolling back the Hostel creation itself? 
-    // Requirement said "automatically ... create", implying it should happen. 
-    // If it fails, strictly speaking the transaction is incomplete, but often we don't want to block hostel creation.
-    // However, for data integrity, I will catch and log only. Re-trying is complex without a queue.
+    console.error(
+      `[HostelTemplate] Failed to initialize templates for hostel ${hostelId}:`,
+      error
+    );
   }
 };
 
@@ -89,116 +98,94 @@ const getHostelTemplatesSummary = async (
   limit: number = 10
 ) => {
   try {
-    const skip = (page - 1) * limit;
-
-
-    const matchStage: any = { isDeleted: false };
+    const hostelMatchStage: any = { status: true };
     if (hostelId && Types.ObjectId.isValid(hostelId)) {
-      matchStage.hostelId = new Types.ObjectId(hostelId);
+      hostelMatchStage._id = new Types.ObjectId(hostelId);
     }
 
+    const aggregatePipeline: any[] = [
+      { $match: hostelMatchStage },
 
-    const pipeline: any[] = [
-      // Filter out deleted templates
-      { $match: matchStage },
-
-      // Ensure hostelId is ObjectId 
-      {
-        $addFields: {
-          hostelObjectId: {
-            $cond: {
-              if: { $eq: [{ $type: "$hostelId" }, "objectId"] },
-              then: "$hostelId",
-              else: { $toObjectId: "$hostelId" }
-            }
-          }
-        }
-      },
-
-      //Group by hostelId to count templates and subcategories
-      {
-        $group: {
-          _id: "$hostelObjectId",
-          templateCount: { $sum: 1 },
-          subCategoryCount: {
-            $sum: {
-              $cond: {
-                if: { $isArray: "$subcategories" },
-                then: { $size: "$subcategories" },
-                else: 0
-              }
-            }
-          },
-          // Get sample hostel details from first document
-          hostelName: { $first: "$hostelName" },
-          hostelCode: { $first: "$hostelCode" }
-        }
-      },
-
-      //Lookup hostel details from Hostel collection
+      //Lookup HostelTemplates for this hostel
       {
         $lookup: {
-          from: "hostels",
-          localField: "_id",
-          foreignField: "_id",
-          as: "hostelDetails"
-        }
+          from: "hosteltemplates",
+          let: { hostelId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$hostelId", "$$hostelId"] },
+                isDeleted: false,
+              },
+            },
+          ],
+          as: "hostelTemplates",
+        },
       },
 
-      // Unwind the hostel details array
+      //Calculate counts
       {
-        $unwind: {
-          path: "$hostelDetails",
-          preserveNullAndEmptyArrays: true
-        }
+        $addFields: {
+          templateCount: { $size: "$hostelTemplates" },
+          subCategoryCount: {
+            $sum: {
+              $map: {
+                input: "$hostelTemplates",
+                as: "template",
+                in: {
+                  $cond: {
+                    if: { $isArray: "$$template.subcategories" },
+                    then: { $size: "$$template.subcategories" },
+                    else: 0,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
 
-      //  final structure
+      //Project final structure
       {
         $project: {
           _id: 0,
           hostelId: "$_id",
-          hostelName: {
-            $ifNull: ["$hostelDetails.name", "$hostelName"]
-          },
-          hostelCode: {
-            $ifNull: ["$hostelDetails.identifier", "$hostelCode"]
-          },
-          status: { $ifNull: ["$hostelDetails.status", false] },
+          hostelName: "$name",
+          hostelCode: "$identifier",
+          status: "$status",
           templateCount: 1,
-          subCategoryCount: 1
-        }
+          subCategoryCount: 1,
+        },
       },
 
-      // Sort by hostel name
-      { $sort: { hostelName: 1 } }
+      //Sort by hostel name
+      { $sort: { hostelName: 1 } },
     ];
 
-    // Execute aggregation with pagination
-    const [dataResult, countResult] = await Promise.all([
-      HostelTemplate.aggregate([
-        ...pipeline,
-        { $skip: skip },
-        { $limit: limit }
-      ]).allowDiskUse(true),
-
-      HostelTemplate.aggregate([
-        ...pipeline,
-        { $count: "total" }
-      ]).allowDiskUse(true)
-    ]);
-
-    const totalHostels = countResult.length > 0 ? countResult[0].total : 0;
-
-    return {
-      totalHostels,
+    const options = {
       page,
       limit,
-      data: dataResult
     };
 
+    // Use aggregatePaginate
+    const result: any = await (Hostel as any).aggregatePaginate(
+      Hostel.aggregate(aggregatePipeline),
+      options
+    );
+
+    return {
+      totalHostels: result.totalDocs,
+      page: result.page,
+      limit: result.limit,
+      totalPages: result.totalPages,
+      hasNextPage: result.hasNextPage,
+      hasPrevPage: result.hasPrevPage,
+      data: result.docs,
+    };
   } catch (error: any) {
-    throw new Error(`Failed to retrieve hostel templates summary: ${error.message}`);
+    throw new Error(
+      `Failed to retrieve hostel templates summary: ${error.message}`
+    );
   }
 };
 
@@ -214,25 +201,29 @@ const getHostelCategoriesForEdit = async (hostelId: string) => {
     // Fetch applied categories (HostelTemplates for this hostel)
     const appliedCategories = await HostelTemplate.find({
       hostelId: hostelObjectId,
-      isDeleted: false
+      isDeleted: false,
     })
-      .select('_id globalTemplateId title slug description subcategories isActive')
+      .select(
+        "_id globalTemplateId title slug description subcategories isActive"
+      )
       .lean();
 
     // Get the globalTemplateIds that are already applied
-    const appliedGlobalTemplateIds = appliedCategories.map(cat => cat.globalTemplateId.toString());
+    const appliedGlobalTemplateIds = appliedCategories.map((cat) =>
+      cat.globalTemplateId.toString()
+    );
 
     // Fetch all global templates
     const allGlobalTemplates = await GlobalTemplate.find({
-      scope: 'global',
+      scope: "global",
       isDeleted: false,
-      isActive: true
+      isActive: true,
     })
-      .select('_id title slug description subcategories isActive')
+      .select("_id title slug description subcategories isActive")
       .lean();
 
     // Split into applied and not applied
-    const applied = appliedCategories.map(cat => ({
+    const applied = appliedCategories.map((cat) => ({
       _id: cat._id,
       categoryId: cat.globalTemplateId,
       categoryTitle: cat.title,
@@ -240,12 +231,12 @@ const getHostelCategoriesForEdit = async (hostelId: string) => {
       description: cat.description,
       subcategories: cat.subcategories,
       isActive: cat.isActive,
-      applied: true
+      applied: true,
     }));
 
     const notApplied = allGlobalTemplates
-      .filter(gt => !appliedGlobalTemplateIds.includes(gt._id.toString()))
-      .map(gt => ({
+      .filter((gt) => !appliedGlobalTemplateIds.includes(gt._id.toString()))
+      .map((gt) => ({
         _id: gt._id,
         categoryId: gt._id,
         categoryTitle: gt.title,
@@ -253,16 +244,15 @@ const getHostelCategoriesForEdit = async (hostelId: string) => {
         description: gt.description,
         subcategories: gt.subcategories,
         isActive: gt.isActive,
-        applied: false
+        applied: false,
       }));
 
     return {
       applied,
       notApplied,
       totalApplied: applied.length,
-      totalNotApplied: notApplied.length
+      totalNotApplied: notApplied.length,
     };
-
   } catch (error: any) {
     throw new Error(`Failed to retrieve categories: ${error.message}`);
   }
@@ -299,27 +289,29 @@ const addSubcategoryToHostelTemplate = async (
     const hostelObjectId = new Types.ObjectId(hostelId);
     const globalTemplateObjectId = new Types.ObjectId(globalTemplateId);
 
-    const slug = subcategoryData.slug ||
-      subcategoryData.title.toLowerCase()
+    const slug =
+      subcategoryData.slug ||
+      subcategoryData.title
+        .toLowerCase()
         .trim()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-");
 
     // Check if HostelTemplate exists for this category
     let hostelTemplate = await HostelTemplate.findOne({
       hostelId: hostelObjectId,
       globalTemplateId: globalTemplateObjectId,
-      isDeleted: false
+      isDeleted: false,
     });
 
     // If category not applied to hostel, apply it first
     if (!hostelTemplate) {
       const globalTemplate = await GlobalTemplate.findOne({
         _id: globalTemplateObjectId,
-        scope: 'global',
+        scope: "global",
         isDeleted: false,
-        isActive: true
+        isActive: true,
       }).lean();
 
       if (!globalTemplate) {
@@ -337,14 +329,16 @@ const addSubcategoryToHostelTemplate = async (
         hostelCode,
         subcategories: globalTemplate.subcategories.map((sub: any) => ({
           _id: new Types.ObjectId(),
-          originalSubcategoryId: sub._id ? new Types.ObjectId(sub._id) : undefined,
+          originalSubcategoryId: sub._id
+            ? new Types.ObjectId(sub._id)
+            : undefined,
           title: sub.title,
           slug: sub.slug,
           description: sub.description,
-          isActive: sub.isActive
+          isActive: sub.isActive,
         })),
         isActive: true,
-        isDeleted: false
+        isDeleted: false,
       };
 
       hostelTemplate = await HostelTemplate.create(hostelTemplateData);
@@ -356,7 +350,9 @@ const addSubcategoryToHostelTemplate = async (
     );
 
     if (existingSubcategory) {
-      throw new Error("Subcategory with this title already exists for this category");
+      throw new Error(
+        "Subcategory with this title already exists for this category"
+      );
     }
 
     // Create new subcategory
@@ -364,15 +360,15 @@ const addSubcategoryToHostelTemplate = async (
       _id: new Types.ObjectId(),
       title: subcategoryData.title.trim(),
       slug,
-      description: subcategoryData.description || '',
-      isActive: subcategoryData.isActive !== false // Default to true
+      description: subcategoryData.description || "",
+      isActive: subcategoryData.isActive !== false, // Default to true
     };
 
     // Add subcategory to HostelTemplate
     const updatedTemplate = await HostelTemplate.findByIdAndUpdate(
       hostelTemplate._id,
       {
-        $push: { subcategories: newSubcategory }
+        $push: { subcategories: newSubcategory },
       },
       { new: true }
     );
@@ -381,9 +377,8 @@ const addSubcategoryToHostelTemplate = async (
       success: true,
       hostelTemplate: updatedTemplate,
       newSubcategory,
-      categoryWasCreated: !hostelTemplate._id
+      categoryWasCreated: !hostelTemplate._id,
     };
-
   } catch (error: any) {
     console.error(`[HostelTemplate] Failed to add subcategory:`, error);
     throw new Error(error.message || "Failed to add subcategory");
@@ -395,5 +390,5 @@ export default {
   initializeHostelTemplates,
   getHostelTemplatesSummary,
   getHostelCategoriesForEdit,
-  addSubcategoryToHostelTemplate
+  addSubcategoryToHostelTemplate,
 };
