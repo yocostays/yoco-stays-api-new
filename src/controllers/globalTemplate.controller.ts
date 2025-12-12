@@ -250,14 +250,16 @@ class GlobalTemplateController {
         pageNum,
         limitNum
       );
-
       return res.status(200).json({
         statusCode: 200,
         message: FETCH_SUCCESS,
         totalHostels: result.totalHostels,
         page: result.page,
+        nextPage:result.hasNextPage,
+        prevPage:result.hasPrevPage,
         limit: result.limit,
         data: result.data,
+        
       });
     } catch (error: any) {
       return res.status(500).json({
