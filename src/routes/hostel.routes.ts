@@ -69,6 +69,7 @@ hostelRouter.post(
   validateToken,
   fetchRoomsByMulipleFloorNumbers
 );
+//room bulk upload
 hostelRouter.post(
   "/bulk-upload",
   uploadFileWithMulter.single("file"),
