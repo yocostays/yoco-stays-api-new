@@ -258,20 +258,11 @@ const getHostelCategoriesForEdit = async (hostelId: string) => {
   }
 };
 
-/**
- * Add a subcategory to a hostel category.
- * If the category is not yet applied to the hostel, it will be applied first.
- * Then the subcategory is added to that HostelTemplate.
- */
+//Add a SPECIFIC subcategory (by ID) from Global Template to Hostel Template.
 const addSubcategoryToHostelTemplate = async (
   hostelId: string,
   globalTemplateId: string,
-  subcategoryData: {
-    title: string;
-    slug?: string;
-    description?: string;
-    isActive?: boolean;
-  },
+  subcategoryId: string,
   hostelName?: string,
   hostelCode?: string
 ) => {
@@ -282,21 +273,33 @@ const addSubcategoryToHostelTemplate = async (
     if (!Types.ObjectId.isValid(globalTemplateId)) {
       throw new Error("Invalid globalTemplateId");
     }
-    if (!subcategoryData.title || !subcategoryData.title.trim()) {
-      throw new Error("Subcategory title is required");
+    if (!Types.ObjectId.isValid(subcategoryId)) {
+      throw new Error("Invalid subcategoryId");
     }
 
     const hostelObjectId = new Types.ObjectId(hostelId);
     const globalTemplateObjectId = new Types.ObjectId(globalTemplateId);
 
-    const slug =
-      subcategoryData.slug ||
-      subcategoryData.title
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-");
+    //Fetch Global Template to get the source subcategory
+    const globalTemplate = await GlobalTemplate.findOne({
+      _id: globalTemplateObjectId,
+      scope: "global",
+      isDeleted: false,
+      isActive: true,
+    }).lean();
+
+    if (!globalTemplate) {
+      throw new Error("Global template not found or inactive");
+    }
+
+    // Find the specific subcategory to copy
+    const targetSubcategory = globalTemplate.subcategories.find(
+      (sub: any) => sub._id.toString() === subcategoryId
+    );
+
+    if (!targetSubcategory) {
+      throw new Error("Subcategory not found in the global template");
+    }
 
     // Check if HostelTemplate exists for this category
     let hostelTemplate = await HostelTemplate.findOne({
@@ -305,20 +308,18 @@ const addSubcategoryToHostelTemplate = async (
       isDeleted: false,
     });
 
-    // If category not applied to hostel, apply it first
+    const newHostelSubcategory = {
+      _id: new Types.ObjectId(),
+      originalSubcategoryId: targetSubcategory._id,
+      title: targetSubcategory.title,
+      slug: targetSubcategory.slug,
+      description: targetSubcategory.description,
+      isActive: targetSubcategory.isActive,
+      notificationTemplate: targetSubcategory.notificationTemplate,
+    };
+
+    // If category not applied to hostel, create it with SINGLE subcategory
     if (!hostelTemplate) {
-      const globalTemplate = await GlobalTemplate.findOne({
-        _id: globalTemplateObjectId,
-        scope: "global",
-        isDeleted: false,
-        isActive: true,
-      }).lean();
-
-      if (!globalTemplate) {
-        throw new Error("Global template not found or inactive");
-      }
-
-      // Create HostelTemplate
       const hostelTemplateData = {
         hostelId: hostelObjectId,
         globalTemplateId: globalTemplate._id,
@@ -327,48 +328,39 @@ const addSubcategoryToHostelTemplate = async (
         description: globalTemplate.description,
         hostelName,
         hostelCode,
-        subcategories: globalTemplate.subcategories.map((sub: any) => ({
-          _id: new Types.ObjectId(),
-          originalSubcategoryId: sub._id
-            ? new Types.ObjectId(sub._id)
-            : undefined,
-          title: sub.title,
-          slug: sub.slug,
-          description: sub.description,
-          isActive: sub.isActive,
-        })),
+        subcategories: [newHostelSubcategory],
         isActive: true,
         isDeleted: false,
       };
 
       hostelTemplate = await HostelTemplate.create(hostelTemplateData);
+
+      return {
+        success: true,
+        hostelTemplate,
+        newSubcategory: newHostelSubcategory,
+        categoryWasCreated: true,
+      };
     }
 
-    // Check if subcategory with same slug already exists
-    const existingSubcategory = hostelTemplate.subcategories.find(
-      (sub: any) => sub.slug === slug
+    // If category exists, append subcategory if not duplicate
+    // Check duplication by originalSubcategoryId (best) or slug
+    const isDuplicate = hostelTemplate.subcategories.some(
+      (sub: any) =>
+        (sub.originalSubcategoryId &&
+          sub.originalSubcategoryId.toString() === subcategoryId) ||
+        sub.slug === targetSubcategory.slug
     );
 
-    if (existingSubcategory) {
-      throw new Error(
-        "Subcategory with this title already exists for this category"
-      );
+    if (isDuplicate) {
+      throw new Error("This subcategory is already applied to this hostel");
     }
-
-    // Create new subcategory
-    const newSubcategory = {
-      _id: new Types.ObjectId(),
-      title: subcategoryData.title.trim(),
-      slug,
-      description: subcategoryData.description || "",
-      isActive: subcategoryData.isActive !== false, // Default to true
-    };
 
     // Add subcategory to HostelTemplate
     const updatedTemplate = await HostelTemplate.findByIdAndUpdate(
       hostelTemplate._id,
       {
-        $push: { subcategories: newSubcategory },
+        $push: { subcategories: newHostelSubcategory },
       },
       { new: true }
     );
@@ -376,8 +368,8 @@ const addSubcategoryToHostelTemplate = async (
     return {
       success: true,
       hostelTemplate: updatedTemplate,
-      newSubcategory,
-      categoryWasCreated: !hostelTemplate._id,
+      newSubcategory: newHostelSubcategory,
+      categoryWasCreated: false,
     };
   } catch (error: any) {
     console.error(`[HostelTemplate] Failed to add subcategory:`, error);

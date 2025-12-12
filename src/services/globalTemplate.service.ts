@@ -345,10 +345,69 @@ const deleteGlobalTemplate = async (categoryId: string) => {
   };
 };
 
+// Delete a subcategory from a GLOBAL template.
+const deleteGlobalSubcategory = async (
+  categoryId: string,
+  subcategoryId: string
+) => {
+  if (
+    !Types.ObjectId.isValid(categoryId) ||
+    !Types.ObjectId.isValid(subcategoryId)
+  ) {
+    throw new Error("Invalid ID(s) provided");
+  }
+
+  const category = await GlobalTemplate.findOne({
+    _id: categoryId,
+    isDeleted: false,
+  });
+
+  if (!category) {
+    throw new Error("Global Category not found");
+  }
+
+  // Check if subcategory exists in the global template
+  const subcategoryExists = category.subcategories.some(
+    (sub: any) => sub._id.toString() === subcategoryId
+  );
+
+  if (!subcategoryExists) {
+    throw new Error("Subcategory not found in this category");
+  }
+
+  const { default: HostelTemplate } = await import(
+    "../models/hostelTemplate.model"
+  );
+
+  const usageCount = await HostelTemplate.countDocuments({
+    "subcategories.originalSubcategoryId": new Types.ObjectId(subcategoryId),
+    isDeleted: false,
+  });
+
+  if (usageCount > 0) {
+    throw new Error(
+      `Cannot delete subcategory. It is currently used in ${usageCount} hostel(s)`
+    );
+  }
+
+  const updatedCategory = await GlobalTemplate.findOneAndUpdate(
+    { _id: categoryId },
+    { $pull: { subcategories: { _id: new Types.ObjectId(subcategoryId) } } },
+    { new: true }
+  );
+
+  return {
+    success: true,
+    message: "Subcategory deleted successfully from Global Template",
+    data: updatedCategory,
+  };
+};
+
 export default {
   createGlobalTemplate,
   getGlobalTemplates,
   getGlobalTemplateById,
   bulkUpsertSubcategories,
   deleteGlobalTemplate,
+  deleteGlobalSubcategory,
 };

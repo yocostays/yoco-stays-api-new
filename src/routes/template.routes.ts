@@ -12,6 +12,7 @@ const {
   getHostelCategoriesForEdit,
   addSubcategoryToHostelTemplate,
   deleteGlobalCategory,
+  deleteGlobalSubcategory,
 } = GlobalTemplateController;
 
 const {
@@ -49,6 +50,13 @@ templateRouter.delete(
   validateToken,
   checkSuperAdmin,
   deleteGlobalCategory
+);
+
+templateRouter.delete(
+  "/delete-subcategory",
+  validateToken,
+  checkSuperAdmin,
+  deleteGlobalSubcategory
 );
 
 // Hostel Templates Summary Route for hostel list view - Superadmin Only

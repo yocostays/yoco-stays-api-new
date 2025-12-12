@@ -20,13 +20,15 @@ const {
   getGlobalTemplateById,
   bulkUpsertSubcategories,
   deleteGlobalTemplate,
+  deleteGlobalSubcategory,
 } = GlobalTemplateService;
 const { getHostelTemplatesSummary, addSubcategoryToHostelTemplate } =
   HostelTemplateService;
 
 const { CREATE_DATA, FETCH_SUCCESS } = SUCCESS_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
-const { ALREADY_EXIST_FIELD_ONE } = VALIDATION_MESSAGES;
+const { ALREADY_EXIST_FIELD_ONE, REQUIRED_FIELD, INVALID_FIELD } =
+  VALIDATION_MESSAGES;
 
 class GlobalTemplateController {
   //this function handles bulk create/update of global template categories (accepts single or array)
@@ -94,13 +96,6 @@ class GlobalTemplateController {
         return res.status(200).json({
           statusCode: 200,
           message: `Processed ${inputData.length} categories: ${createdCount} created, ${updatedCount} updated, ${failedCount} failed`,
-          summary: {
-            total: inputData.length,
-            created: createdCount,
-            updated: updatedCount,
-            failed: failedCount,
-          },
-          results,
         });
       } else {
         // Single item response (backward compatible)
@@ -113,7 +108,6 @@ class GlobalTemplateController {
                 results[0].operation === "create"
                   ? CREATE_DATA
                   : "Category updated successfully",
-              data: results[0].data,
             });
         } else {
           const error = results[0].error;
@@ -223,8 +217,6 @@ class GlobalTemplateController {
       return res.status(200).json({
         statusCode: 200,
         message: `Processed ${result.summary.totalCategories} categories: ${result.summary.created} created, ${result.summary.updated} updated, ${result.summary.failed} failed`,
-        summary: result.summary,
-        results: result.results,
       });
     } catch (error: any) {
       return res.status(500).json({
@@ -322,10 +314,7 @@ class GlobalTemplateController {
       const {
         hostelId,
         globalTemplateId,
-        title,
-        slug,
-        description,
-        isActive,
+        subcategoryId,
         hostelName,
         hostelCode,
       } = req.body;
@@ -345,25 +334,23 @@ class GlobalTemplateController {
         });
       }
 
-      if (!title || !title.trim()) {
+      if (!subcategoryId) {
         return res.status(400).json({
           statusCode: 400,
-          message: "Subcategory title is required",
+          message: "subcategoryId is required",
         });
       }
 
       // Validate ObjectId format
-      if (!/^[0-9a-fA-F]{24}$/.test(hostelId)) {
+      const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+      if (
+        !objectIdRegex.test(hostelId) ||
+        !objectIdRegex.test(globalTemplateId) ||
+        !objectIdRegex.test(subcategoryId)
+      ) {
         return res.status(400).json({
           statusCode: 400,
-          message: "Invalid hostelId format",
-        });
-      }
-
-      if (!/^[0-9a-fA-F]{24}$/.test(globalTemplateId)) {
-        return res.status(400).json({
-          statusCode: 400,
-          message: "Invalid globalTemplateId format",
+          message: INVALID_FIELD("ID"),
         });
       }
 
@@ -371,7 +358,7 @@ class GlobalTemplateController {
       const result = await addSubcategoryToHostelTemplate(
         hostelId,
         globalTemplateId,
-        { title, slug, description, isActive },
+        subcategoryId,
         hostelName,
         hostelCode
       );
@@ -381,15 +368,13 @@ class GlobalTemplateController {
         message: result.categoryWasCreated
           ? "Category applied and subcategory added successfully"
           : "Subcategory added successfully",
-        data: {
-          hostelTemplate: result.hostelTemplate,
-          newSubcategory: result.newSubcategory,
-          categoryWasCreated: result.categoryWasCreated,
-        },
       });
     } catch (error: any) {
       // Handle specific error cases
-      if (error.message.includes("already exists")) {
+      if (
+        error.message.includes("already exists") ||
+        error.message.includes("already applied")
+      ) {
         return res.status(409).json({
           statusCode: 409,
           message: error.message,
@@ -433,7 +418,6 @@ class GlobalTemplateController {
       return res.status(200).json({
         statusCode: 200,
         message: result.message,
-        data: result.category,
       });
     } catch (error: any) {
       // Handle specific error cases
@@ -450,6 +434,63 @@ class GlobalTemplateController {
       ) {
         return res.status(404).json({
           statusCode: 404,
+          message: error.message,
+        });
+      }
+
+      return res.status(500).json({
+        statusCode: 500,
+        message: error.message ?? SERVER_ERROR,
+      });
+    }
+  }
+
+  // Delete a subcategory from a global template
+  async deleteGlobalSubcategory(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const { categoryId, subcategoryId } = req.body;
+
+      if (!categoryId || !subcategoryId) {
+        return res.status(400).json({
+          statusCode: 400,
+          message: REQUIRED_FIELD("categoryId and subcategoryId"),
+        });
+      }
+
+      const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+      if (
+        !objectIdRegex.test(categoryId) ||
+        !objectIdRegex.test(subcategoryId)
+      ) {
+        return res.status(400).json({
+          statusCode: 400,
+          message: INVALID_FIELD("ID"),
+        });
+      }
+
+      const result = await deleteGlobalSubcategory(categoryId, subcategoryId);
+
+      return res.status(200).json({
+        statusCode: 200,
+        message: result.message,
+      });
+    } catch (error: any) {
+      if (
+        error.message.includes("not found") ||
+        error.message.includes("Invalid")
+      ) {
+        return res.status(404).json({
+          statusCode: 404,
+          message: error.message,
+        });
+      }
+
+      if (error.message.includes("currently used")) {
+        return res.status(409).json({
+          statusCode: 409,
           message: error.message,
         });
       }
