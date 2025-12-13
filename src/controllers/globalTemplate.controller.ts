@@ -255,11 +255,10 @@ class GlobalTemplateController {
         message: FETCH_SUCCESS,
         totalHostels: result.totalHostels,
         page: result.page,
-        nextPage:result.hasNextPage,
-        prevPage:result.hasPrevPage,
+        nextPage: result.hasNextPage,
+        prevPage: result.hasPrevPage,
         limit: result.limit,
         data: result.data,
-        
       });
     } catch (error: any) {
       return res.status(500).json({
@@ -294,10 +293,7 @@ class GlobalTemplateController {
         message: FETCH_SUCCESS,
         totalApplied: result.totalApplied,
         totalNotApplied: result.totalNotApplied,
-        data: {
-          applied: result.applied,
-          notApplied: result.notApplied,
-        },
+        data: [...result.applied, ...result.notApplied],
       });
     } catch (error: any) {
       return res.status(500).json({
