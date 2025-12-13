@@ -4,6 +4,7 @@ import HostelTemplate, {
 import GlobalTemplate from "../models/globalTemplate.model";
 import { Types } from "mongoose";
 import Hostel from "../models/hostel.model";
+import logger from "../utils/logger";
 
 // Upsert (Insert or Update) a HostelTemplate based on hostelId and globalTemplateId
 const upsertHostelTemplate = async (
@@ -222,17 +223,67 @@ const getHostelCategoriesForEdit = async (hostelId: string) => {
       .select("_id title slug description subcategories isActive")
       .lean();
 
-    // Split into applied and not applied
-    const applied = appliedCategories.map((cat) => ({
-      _id: cat._id,
-      categoryId: cat.globalTemplateId,
-      categoryTitle: cat.title,
-      slug: cat.slug,
-      description: cat.description,
-      subcategories: cat.subcategories,
-      isActive: cat.isActive,
-      applied: true,
-    }));
+    // Process "Applied" categories
+    const applied = appliedCategories.map((hostelCat) => {
+      // Find the corresponding Global Template
+      const globalTemplate = allGlobalTemplates.find(
+        (gt) => gt._id.toString() === hostelCat.globalTemplateId.toString()
+      );
+
+      // Map of applied subcategory IDs (originalSubcategoryId -> logic)
+      const appliedSubcatMap = new Map();
+      let appliedCount = 0;
+
+      // Add existing hostel subcategories to map (Mark as APPLIED)
+      hostelCat.subcategories.forEach((sub: any) => {
+        // We use originalSubcategoryId to match back to global
+        if (sub.originalSubcategoryId) {
+          appliedSubcatMap.set(sub.originalSubcategoryId.toString(), {
+            ...sub,
+            applied: true,
+          });
+          appliedCount++;
+        }
+      });
+
+      // If global template exists, merge missing subcategories
+      let allSubcategories = [];
+      if (globalTemplate && Array.isArray(globalTemplate.subcategories)) {
+        allSubcategories = globalTemplate.subcategories.map(
+          (globalSub: any) => {
+            const globalSubId = globalSub._id.toString();
+            if (appliedSubcatMap.has(globalSubId)) {
+              return appliedSubcatMap.get(globalSubId);
+            } else {
+              // Not applied yet. Return global info with applied: false
+              return {
+                _id: globalSub._id, // This is the GLOBAL subcategory ID
+                title: globalSub.title,
+                slug: globalSub.slug,
+                description: globalSub.description,
+                notificationTemplate: globalSub.notificationTemplate,
+                isActive: globalSub.isActive,
+                applied: false,
+              };
+            }
+          }
+        );
+      } else {
+        // Fallback if global template missing (edge case), just show what we have
+        allSubcategories = Array.from(appliedSubcatMap.values());
+      }
+
+      return {
+        _id: hostelCat._id,
+        categoryId: hostelCat.globalTemplateId,
+        categoryTitle: hostelCat.title,
+        slug: hostelCat.slug,
+        description: hostelCat.description,
+        subcategories: allSubcategories,
+        isActive: hostelCat.isActive,
+        applied: true,
+      };
+    });
 
     const notApplied = allGlobalTemplates
       .filter((gt) => !appliedGlobalTemplateIds.includes(gt._id.toString()))
@@ -242,7 +293,10 @@ const getHostelCategoriesForEdit = async (hostelId: string) => {
         categoryTitle: gt.title,
         slug: gt.slug,
         description: gt.description,
-        subcategories: gt.subcategories,
+        subcategories: gt.subcategories.map((sub: any) => ({
+          ...sub,
+          applied: false,
+        })),
         isActive: gt.isActive,
         applied: false,
       }));
@@ -252,8 +306,10 @@ const getHostelCategoriesForEdit = async (hostelId: string) => {
       notApplied,
       totalApplied: applied.length,
       totalNotApplied: notApplied.length,
+      data: [...applied, ...notApplied],
     };
   } catch (error: any) {
+    logger.error(`Failed to retrieve categories: ${error.message}`);
     throw new Error(`Failed to retrieve categories: ${error.message}`);
   }
 };
