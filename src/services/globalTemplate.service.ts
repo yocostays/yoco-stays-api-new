@@ -84,9 +84,76 @@ const createGlobalTemplate = async (data: Partial<IGlobalTemplate>) => {
 
 //this function gets all global templates based on a query
 const getGlobalTemplates = async (query: FilterQuery<IGlobalTemplate> = {}) => {
-  return await GlobalTemplate.find({ ...query, isDeleted: false }).sort({
-    createdAt: -1,
+  const templates = await GlobalTemplate.find({ ...query, isDeleted: false })
+    .sort({
+      createdAt: -1,
+    })
+    .lean();
+
+  if (templates.length === 0) {
+    return [];
+  }
+
+  // Collect all subcategory IDs to check usage in one go
+  const allSubcategoryIds: Types.ObjectId[] = [];
+  const allTemplateIds: Types.ObjectId[] = [];
+
+  templates.forEach((template) => {
+    if (template._id) {
+      allTemplateIds.push(template._id as any);
+    }
+    if (template.subcategories) {
+      template.subcategories.forEach((sub: any) => {
+        if (sub._id) {
+          allSubcategoryIds.push(sub._id as any);
+        }
+      });
+    }
   });
+
+  // Import HostelTemplate dynamically to avoid circular dependency
+  const { default: HostelTemplate } = await import(
+    "../models/hostelTemplate.model"
+  );
+
+  // Check Subcategory Usage
+  let usedSubcategoryIdsSet = new Set<string>();
+  if (allSubcategoryIds.length > 0) {
+    const usedSubcategories = await HostelTemplate.distinct(
+      "subcategories.originalSubcategoryId",
+      {
+        "subcategories.originalSubcategoryId": { $in: allSubcategoryIds },
+        isDeleted: false,
+      }
+    );
+    usedSubcategoryIdsSet = new Set(
+      usedSubcategories.map((id: any) => id.toString())
+    );
+  }
+
+  // Check Main Category Usage
+  let usedTemplateIdsSet = new Set<string>();
+  if (allTemplateIds.length > 0) {
+    const usedTemplates = await HostelTemplate.distinct("globalTemplateId", {
+      globalTemplateId: { $in: allTemplateIds },
+      isDeleted: false,
+    });
+    usedTemplateIdsSet = new Set(
+      usedTemplates.map((id: any) => id.toString())
+    );
+  }
+
+  // Map flags back to templates
+  return templates.map((template) => ({
+    ...template,
+    // User Request: if main category used by any hostel make isActive true otherwise false
+    isActive: usedTemplateIdsSet.has(template._id.toString()),
+    subcategories:
+      template.subcategories?.map((sub: any) => ({
+        ...sub,
+        canDelete: !usedSubcategoryIdsSet.has(sub._id.toString()),
+      })) || [],
+  }));
 };
 
 //this function gets a global template by its ID
