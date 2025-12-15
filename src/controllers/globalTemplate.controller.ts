@@ -25,7 +25,7 @@ const {
 const { getHostelTemplatesSummary, addSubcategoryToHostelTemplate } =
   HostelTemplateService;
 
-const { CREATE_DATA, FETCH_SUCCESS } = SUCCESS_MESSAGES;
+const { CREATE_DATA, FETCH_SUCCESS, DELETE_DATA } = SUCCESS_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 const { ALREADY_EXIST_FIELD_ONE, REQUIRED_FIELD, INVALID_FIELD } =
   VALIDATION_MESSAGES;
@@ -67,7 +67,7 @@ class GlobalTemplateController {
           const isUpdate = !!item._id;
 
           const template = await createGlobalTemplate({
-            title: item?.title,
+            ...item,
             createdBy: isUpdate ? undefined : createdBy,
             updatedBy: isUpdate ? createdBy : undefined,
           });
@@ -91,14 +91,17 @@ class GlobalTemplateController {
         }
       }
 
-      // Return appropriate response
       if (isBulk) {
-        return res.status(200).json({
-          statusCode: 200,
-          message: `Processed ${inputData.length} categories: ${createdCount} created, ${updatedCount} updated, ${failedCount} failed`,
+        const allFailed = failedCount === inputData.length && inputData.length > 0;
+        const statusCode = allFailed ? 409 : 200; 
+
+        return res.status(statusCode).json({
+          statusCode,
+          message: allFailed
+            ? ALREADY_EXIST_FIELD_ONE("Category")
+            : "category creation/update completed",
         });
       } else {
-        // Single item response (backward compatible)
         if (results[0].success) {
           return res
             .status(results[0].operation === "create" ? 201 : 200)
@@ -126,7 +129,7 @@ class GlobalTemplateController {
     } catch (error: any) {
       return res
         .status(500)
-        .json({ statusCode: 500, message: error.message ?? SERVER_ERROR });
+        .json({ statusCode: 500, SERVER_ERROR });
     }
   }
 
@@ -216,7 +219,7 @@ class GlobalTemplateController {
 
       return res.status(200).json({
         statusCode: 200,
-        message: `Processed ${result.summary.totalCategories} categories: ${result.summary.created} created, ${result.summary.updated} updated, ${result.summary.failed} failed`,
+        message: CREATE_DATA,
       });
     } catch (error: any) {
       return res.status(500).json({
@@ -415,7 +418,7 @@ class GlobalTemplateController {
 
       return res.status(200).json({
         statusCode: 200,
-        message: result.message,
+        message: DELETE_DATA,
       });
     } catch (error: any) {
       // Handle specific error cases

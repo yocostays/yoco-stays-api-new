@@ -21,12 +21,18 @@ const createGlobalTemplate = async (data: Partial<IGlobalTemplate>) => {
 
   if (!slug) throw new Error("Invalid title for slug generation");
 
-  // For update: check duplicates excluding current category
-  // For create: check all duplicates
+  const scope = data.scope || "global";
+  const hostelId = scope === "hostel" ? data.hostelId : null;
+
+  const escapedTitle = data.title?.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
   const duplicateQuery: any = {
-    $or: [{ slug }, { title: { $regex: new RegExp(`^${data.title}$`, "i") } }],
-    scope: data.scope,
-    hostelId: data.scope === "hostel" ? data.hostelId : null,
+    $or: [
+      { slug },
+      { title: { $regex: new RegExp(`^${escapedTitle}$`, "i") } },
+    ],
+    scope,
+    hostelId,
     isDeleted: false,
   };
 
