@@ -4,13 +4,12 @@ import GlobalTemplate, {
 } from "../models/globalTemplate.model";
 import { FilterQuery, Types } from "mongoose";
 import { toSlug } from "../utils/slug";
+import { ERROR_MESSAGES } from "../utils/messages";
+import { error } from "console";
 
-export class DuplicateError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "DuplicateError";
-  }
-}
+const { DUPLICATE_RECORD } = ERROR_MESSAGES;
+
+
 
 //this function creates a new global template category or updates existing one
 const createGlobalTemplate = async (data: Partial<IGlobalTemplate>) => {
@@ -44,8 +43,8 @@ const createGlobalTemplate = async (data: Partial<IGlobalTemplate>) => {
   const exists = await GlobalTemplate.findOne(duplicateQuery);
 
   if (exists) {
-    throw new DuplicateError(
-      "Category already exists (Slug or Title conflict)"
+    throw new Error(
+      DUPLICATE_RECORD("category title or slug")
     );
   }
 

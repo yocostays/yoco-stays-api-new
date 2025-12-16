@@ -61,7 +61,7 @@ templateRouter.delete(
 );
 
 // Hostel Templates Summary Route for hostel list view - Superadmin Only
-templateRouter.get(
+templateRouter.post(
   "/hostel-templates/details",
   validateToken,
   checkSuperAdmin,

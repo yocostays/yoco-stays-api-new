@@ -1,7 +1,5 @@
 import { Request, Response } from "express";
-import GlobalTemplateService, {
-  DuplicateError,
-} from "../services/globalTemplate.service";
+import GlobalTemplateService from "../services/globalTemplate.service";
 import HostelTemplateService from "../services/hostelTemplate.service";
 import { HttpResponse } from "../utils/httpResponse";
 import {
@@ -11,7 +9,6 @@ import {
 } from "../utils/messages";
 import {
   createGlobalTemplateSchema,
-  createSubcategorySchema,
 } from "../utils/validators/globalTemplate.validator";
 
 const {
@@ -236,7 +233,13 @@ class GlobalTemplateController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      const { hostelId, page = "1", limit = "10" } = req.query;
+      const {
+        hostelId,
+        page = 1,
+        limit = 10,
+        search,
+        status, 
+      } = req.body;
 
       const pageNum = parseInt(page as string, 10);
       const limitNum = parseInt(limit as string, 10);
@@ -249,8 +252,14 @@ class GlobalTemplateController {
         });
       }
 
+      const filters = {
+        hostelId: hostelId as string | undefined,
+        search: search as string | undefined,
+        status: status, 
+      };
+
       const result = await getHostelTemplatesSummary(
-        hostelId as string | undefined,
+        filters,
         pageNum,
         limitNum
       );

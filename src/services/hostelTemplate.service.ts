@@ -94,18 +94,43 @@ const initializeHostelTemplates = async (
 
 //here we are getting hostel templates summary with all required details
 const getHostelTemplatesSummary = async (
-  hostelId?: string,
+  filters: {
+    hostelId?: string;
+    search?: string;
+    status?: boolean | string;
+  },
   page: number = 1,
   limit: number = 10
 ) => {
   try {
-    const hostelMatchStage: any = { status: true };
+    const { hostelId, search, status } = filters;
+    const matchStage: any = {};
+
+    // Filter by Hostel ID
     if (hostelId && Types.ObjectId.isValid(hostelId)) {
-      hostelMatchStage._id = new Types.ObjectId(hostelId);
+      matchStage._id = new Types.ObjectId(hostelId);
+    }
+
+    // Filter by Status
+    if (status !== undefined && status !== "") {
+      if (status === "active" || status === "true" || status === true) {
+        matchStage.status = true;
+      } else if (
+        status === "inactive" ||
+        status === "false" ||
+        status === false
+      ) {
+        matchStage.status = false;
+      }
+    }
+
+    // Search by Hostel Name
+    if (search && search.trim() !== "") {
+      matchStage.name = { $regex: search.trim(), $options: "i" };
     }
 
     const aggregatePipeline: any[] = [
-      { $match: hostelMatchStage },
+      { $match: matchStage },
 
       //Lookup HostelTemplates for this hostel
       {
@@ -481,7 +506,6 @@ const updateHostelSubcategoryDetails = async (
         )}. Please add them first.`
       );
     }
-   
 
     const bulkOps = updates.map((update) => {
       if (!Types.ObjectId.isValid(update.subcategoryId)) {
@@ -522,7 +546,6 @@ const updateHostelSubcategoryDetails = async (
     });
 
     const validOps = bulkOps.filter((op) => op !== null);
-
 
     const result = await HostelTemplate.bulkWrite(validOps as any);
 
