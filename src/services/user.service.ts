@@ -406,8 +406,8 @@ class UserService {
               ele?.status && ele?.isVerified
                 ? "active"
                 : ele?.status && !ele?.isVerified
-                  ? "pending"
-                  : "in-active",
+                ? "pending"
+                : "in-active",
             status: ele?.status,
             createdBy: (ele?.createdBy as any)?.name ?? null,
             createdAt: ele?.createdAt ?? null,
@@ -705,57 +705,62 @@ class UserService {
       payload = { ...payload, ...safeData };
 
       // Update the user's email and image in the database
-      await User.findByIdAndUpdate(studentId, { $set: payload }, { new: true });
-      //NOTE: Check user is updated or not.
-      // if (userUpdated) {
-      // const { playedIds, template, student, isPlayedNoticeCreated, log } =
-      //   await this.fetchPlayerNotificationConfig(
-      //     studentExists?._id,
-      //     TemplateTypes.PROFILE_UPDATED
-      //   );
+      const update = await User.findByIdAndUpdate(
+        studentId,
+        { $set: payload },
+        { new: true }
+      );
 
-      //NOTE: Get student and hostelDetails
-      // const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-      //   await this.getStudentAllocatedHostelDetails(
-      //     student?._id,
-      //     student?.hostelId,
-      //     TemplateTypes.PROFILE_UPDATED
-      //   );
+      //NOTE: Send profile update notification
+      if (update) {
+        const { playedIds, template, student, isPlayedNoticeCreated, log } =
+          await this.fetchPlayerNotificationConfig(
+            studentId.toString(), // Convert ObjectId to string
+            TemplateTypes.PROFILE_UPDATED
+          );
 
-      //NOTE: Final notice created check.
-      // const finalNoticeCreated =
-      // isPlayedNoticeCreated && isHostelNoticeCreated;
+        //NOTE: Get student and hostelDetails
+        const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+          await this.getStudentAllocatedHostelDetails(
+            student?._id,
+            student?.hostelId,
+            TemplateTypes.PROFILE_UPDATED
+          );
 
-      // NOTE: Combine available logs into an array
-      // const notificationLog = [log, hostelLogs].filter(Boolean);
+        //NOTE: Final notice created check.
+        const finalNoticeCreated =
+          isPlayedNoticeCreated && isHostelNoticeCreated;
 
-      //NOTE: Create entry in notice
-      // await Notice.create({
-      //   userId: student?._id,
-      //   hostelId: student?.hostelId,
-      //   floorNumber: hostelDetail?.floorNumber,
-      //   bedType: hostelDetail?.bedType,
-      //   roomNumber: hostelDetail?.roomNumber,
-      //   noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-      //   pushNotificationTypes: PushNotificationTypes.AUTO,
-      //   templateId: template?._id,
-      //   templateSendMessage: template?.description,
-      //   isNoticeCreated: finalNoticeCreated,
-      //   notificationLog,
-      //   createdAt: getCurrentISTTime(),
-      // });
-      //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-      // if (finalNoticeCreated) {
-      //   //NOTE: Use the send push notification function
-      //   await sendPushNotificationToUser(
-      //     playedIds,
-      //     template?.title,
-      //     template?.description,
-      //     template?.image,
-      //     TemplateTypes.PROFILE_UPDATED
-      //   );
-      // }
-      // }
+        // NOTE: Combine available logs into an array
+        const notificationLog = [log, hostelLogs].filter(Boolean);
+
+        //NOTE: Create entry in notice
+        await Notice.create({
+          userId: student?._id,
+          hostelId: student?.hostelId,
+          floorNumber: hostelDetail?.floorNumber,
+          bedType: hostelDetail?.bedType,
+          roomNumber: hostelDetail?.roomNumber,
+          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+          pushNotificationTypes: PushNotificationTypes.AUTO,
+          templateId: template?._id,
+          templateSendMessage: template?.description,
+          isNoticeCreated: finalNoticeCreated,
+          notificationLog,
+          createdAt: getCurrentISTTime(),
+        });
+        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+        if (finalNoticeCreated) {
+          //NOTE: Use the send push notification function
+          await sendPushNotificationToUser(
+            playedIds,
+            template?.title,
+            template?.description,
+            template?.image,
+            TemplateTypes.PROFILE_UPDATED
+          );
+        }
+      }
       return UPDATE_DATA;
     } catch (error: any) {
       throw new Error(error.message);
@@ -1107,8 +1112,9 @@ class UserService {
                   email: user.email ?? null,
                   phone: user.phone ?? null,
                   image: user.image ? await getSignedUrl(user.image) : null,
-                  roomDetails: `${mate.roomNumber ?? null}/${mate.bedNumber ?? null
-                    }`,
+                  roomDetails: `${mate.roomNumber ?? null}/${
+                    mate.bedNumber ?? null
+                  }`,
                 };
               }
 
@@ -1943,12 +1949,6 @@ class UserService {
             },
           ]);
 
-          console.log(
-            "Hostel result for",
-            name,
-            "=>",
-            JSON.stringify(hostel, null, 2)
-          );
           if (!hostel) {
             errorArray.push({ ...data, errors: "Bed already occupied" });
             continue; // skip to next student, don't touch successArray
@@ -1997,20 +1997,9 @@ class UserService {
             });
 
             await newUser.save();
-            // console.log("IN LOOP, item index:");
-            // console.log("data.Email inside loop:");
+
             // Queue email only after successful save
             if (data?.Email) {
-              // console.log("Queuing welcome email for:", data.Email, uniqueId);
-
-              // welcomeMailQueue.push({
-              //   email: data.Email,
-              //   name,
-              //   uniqueId,
-              //   plainPassword,
-              // });
-
-              // Persist to MongoDB Queue
               await EmailQueue.create({
                 email: data.Email,
                 name,
@@ -2068,20 +2057,6 @@ class UserService {
           errorArray.push({ ...data, errors: error.message });
         }
       }
-
-      // console.log("welcomeMailQueue before sending", welcomeMailQueue);
-      // console.log("successArray after processing", successArray);
-
-      // Send welcome emails for all newly created students
-      // await Promise.allSettled(
-      //   welcomeMailQueue.map((mailJob) =>
-      //     sendStudentWelcomeEmail(mailJob).catch((err) => {
-      //       console.error(`Failed to send welcome email to:`, err.message);
-      //     })
-      //   )
-      // );
-
-      // console.log("welcomeMailQueue after sending", welcomeMailQueue);
 
       try {
         let successFileUrl: string | null = null;
@@ -2223,6 +2198,13 @@ class UserService {
         const student = await User.findOne({ email });
         if (student) {
           throw new Error("Email already exist");
+        }
+      }
+
+      if (student?.phone !== phone) {
+        const student = await User.findOne({ phone });
+        if (student) {
+          throw new Error("Phone already exist");
         }
       }
       // Step 2: Validate university
@@ -2474,96 +2456,66 @@ class UserService {
     isPlayedNoticeCreated: boolean;
     log?: Pick<INotificationLog, "templateType" | "reason">;
   }> => {
-    let playedIds: any[] = [];
-    let template: any = null;
-    let student: any = null;
-    let isPlayedNoticeCreated = true;
-    let log: Pick<INotificationLog, "templateType" | "reason">;
-    try {
-      // NOTE: Retrieve student details
-      student = await User.findById(studentId).select(
-        "oneSignalWebId oneSignalAndoridId oneSignalIosId hostelId"
-      );
+    //NOTE: Get student details
+    const student: any = await User.findById(studentId).lean();
 
-      if (!student) {
-        log = {
-          templateType: templateTypes,
-          reason: RECORD_NOT_FOUND("Student"),
-        };
-        return {
-          playedIds,
-          template,
-          student,
-          isPlayedNoticeCreated: false,
-          log,
-        };
-      }
-      // NOTE: Check playerIds is available
-      const playerIds: any = [
-        student.oneSignalWebId,
-        student.oneSignalAndoridId,
-        student.oneSignalIosId,
-      ].filter(Boolean);
-
-      if (playerIds.length === 0) {
-        log = {
-          templateType: templateTypes,
-          reason: ONE_SIGNAL_PLAYERS_NOT_FOUND,
-        };
-        return {
-          playedIds,
-          template,
-          student,
-          isPlayedNoticeCreated: false,
-          log,
-        };
-      }
-
-      // NOTE: Check template availability
-      const result: any = await checkTemplateExist(
-        student?.hostelId,
-        templateTypes
-      );
-
-      if (!result?.template) {
-        log = {
-          templateType: templateTypes,
-          reason: RECORD_NOT_FOUND("Template"),
-        };
-        return {
-          playedIds,
-          template,
-          student,
-          isPlayedNoticeCreated: false,
-          log,
-        };
-      }
-
-      if (result?.template?.description) {
-        result.template.description = removeHtmlTags(
-          result.template.description
-        );
-      }
-
+    if (!student) {
       return {
-        playedIds: playerIds,
-        template: result.template,
-        student,
-        isPlayedNoticeCreated,
-      };
-    } catch (error: any) {
-      log = {
-        templateType: templateTypes,
-        reason: error.message,
-      };
-      return {
-        playedIds,
-        template,
-        student,
+        playedIds: [],
+        template: null,
+        student: null,
         isPlayedNoticeCreated: false,
-        log,
+        log: {
+          templateType: templateTypes,
+          reason: "student not found",
+        },
       };
     }
+
+    //NOTE: Get all OneSignal player IDs
+    const playerIds = [
+      student?.oneSignalWebId,
+      student?.oneSignalAndoridId,
+      student?.oneSignalIosId,
+    ].filter(Boolean);
+
+    if (playerIds.length === 0) {
+      return {
+        playedIds: [],
+        template: null,
+        student,
+        isPlayedNoticeCreated: false,
+        log: {
+          templateType: templateTypes,
+          reason: "OneSignal Player ids not found",
+        },
+      };
+    }
+
+    //NOTE: Check template exists
+    const result: any = await checkTemplateExist(
+      student?.hostelId,
+      templateTypes
+    );
+
+    //NOTE: Check template found or not.
+    let isPlayedNoticeCreated = true;
+
+    if (!result.template) {
+      isPlayedNoticeCreated = false;
+    } else {
+      // NOTE: Check image and get signed URL
+      if (result.template?.image) {
+        result.template.image = await getSignedUrl(result.template.description);
+      }
+    }
+
+    return {
+      playedIds: playerIds,
+      template: result.template,
+      student,
+      isPlayedNoticeCreated,
+    };
   };
 
   //SECTION: Method to get student hostel details by userId and hostelId
@@ -2806,7 +2758,7 @@ class UserService {
           Complaint.deleteMany({ userId: id }),
           BookMeals.deleteMany({ studentId: id }),
           StudentHostelAllocation.findOneAndDelete({ studentId: id }),
-          Token.findOneAndDelete({ userId: id })
+          Token.findOneAndDelete({ userId: id }),
         ]);
 
         return DELETE_DATA;
