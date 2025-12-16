@@ -433,10 +433,111 @@ const addSubcategoryToHostelTemplate = async (
   }
 };
 
+// Bulk Update notification message (body) and description for subcategories
+const updateHostelSubcategoryDetails = async (
+  hostelId: string,
+  updates: { subcategoryId: string; message?: string; description?: string }[],
+  globalTemplateId?: string
+) => {
+  try {
+    if (!Types.ObjectId.isValid(hostelId)) {
+      throw new Error("Invalid hostelId");
+    }
+    // Only validate globalTemplateId IF it is provided
+    if (globalTemplateId && !Types.ObjectId.isValid(globalTemplateId)) {
+      throw new Error("Invalid globalTemplateId");
+    }
+    if (!Array.isArray(updates) || updates.length === 0) {
+      throw new Error("Updates array is required and cannot be empty");
+    }
+
+    const hostelObjectId = new Types.ObjectId(hostelId);
+    const globalTemplateObjectId = globalTemplateId
+      ? new Types.ObjectId(globalTemplateId)
+      : null;
+
+    // --- Validation: Ensure all subcategories exist (are applied) ---
+    const uniqueSubcatIds = [...new Set(updates.map((u) => u.subcategoryId))];
+    const uniqueSubcatObjectIds = uniqueSubcatIds.map(
+      (id) => new Types.ObjectId(id)
+    );
+
+    const validationPipeline = [
+      { $match: { hostelId: hostelObjectId } },
+      { $unwind: "$subcategories" },
+      { $match: { "subcategories._id": { $in: uniqueSubcatObjectIds } } },
+      { $project: { _id: 0, subId: "$subcategories._id" } },
+    ];
+
+    const foundDocs = await HostelTemplate.aggregate(validationPipeline);
+    const foundIds = new Set(foundDocs.map((d) => d.subId.toString()));
+
+    const missingIds = uniqueSubcatIds.filter((id) => !foundIds.has(id));
+
+    if (missingIds.length > 0) {
+      throw new Error(
+        `The following subcategories are not applied to this hostel directly or are invalid: ${missingIds.join(
+          ", "
+        )}. Please add them first.`
+      );
+    }
+   
+
+    const bulkOps = updates.map((update) => {
+      if (!Types.ObjectId.isValid(update.subcategoryId)) {
+        throw new Error(`Invalid subcategoryId: ${update.subcategoryId}`);
+      }
+
+      const updateFields: any = {};
+      if (update.message !== undefined) {
+        updateFields["subcategories.$.notificationTemplate.body"] =
+          update.message;
+      }
+      if (update.description !== undefined) {
+        updateFields["subcategories.$.description"] = update.description;
+      }
+
+      // Skip if no fields to update
+      if (Object.keys(updateFields).length === 0) {
+        return null;
+      }
+
+      // Build Filter
+      const filter: any = {
+        hostelId: hostelObjectId,
+        "subcategories._id": new Types.ObjectId(update.subcategoryId),
+      };
+
+      // If globalTemplateId is provided, restrict to it (faster, but scoped)
+      if (globalTemplateObjectId) {
+        filter.globalTemplateId = globalTemplateObjectId;
+      }
+
+      return {
+        updateOne: {
+          filter,
+          update: { $set: updateFields },
+        },
+      };
+    });
+
+    const validOps = bulkOps.filter((op) => op !== null);
+
+
+    const result = await HostelTemplate.bulkWrite(validOps as any);
+
+    return result;
+  } catch (error: any) {
+    logger.log(error);
+    throw new Error(error.message || "Failed to update subcategory details");
+  }
+};
+
 export default {
   upsertHostelTemplate,
   initializeHostelTemplates,
   getHostelTemplatesSummary,
   getHostelCategoriesForEdit,
   addSubcategoryToHostelTemplate,
+  updateHostelSubcategoryDetails,
 };

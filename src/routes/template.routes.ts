@@ -13,6 +13,7 @@ const {
   addSubcategoryToHostelTemplate,
   deleteGlobalCategory,
   deleteGlobalSubcategory,
+  updateSubcategoryMessage,
 } = GlobalTemplateController;
 
 const {
@@ -81,6 +82,14 @@ templateRouter.post(
   validateToken,
   checkSuperAdmin,
   addSubcategoryToHostelTemplate
+);
+
+// Update Applied Subcategory Message Route - Superadmin Only
+templateRouter.patch(
+  "/hostel/subcategory/update-message",
+  validateToken,
+  checkSuperAdmin,
+  updateSubcategoryMessage
 );
 
 // Template Routes (Generic/Parameterized)

@@ -22,10 +22,14 @@ const {
   deleteGlobalTemplate,
   deleteGlobalSubcategory,
 } = GlobalTemplateService;
-const { getHostelTemplatesSummary, addSubcategoryToHostelTemplate } =
-  HostelTemplateService;
+const {
+  getHostelTemplatesSummary,
+  addSubcategoryToHostelTemplate,
+  updateHostelSubcategoryDetails,
+} = HostelTemplateService;
 
-const { CREATE_DATA, FETCH_SUCCESS, DELETE_DATA } = SUCCESS_MESSAGES;
+const { CREATE_DATA, FETCH_SUCCESS, DELETE_DATA, UPDATE_DATA } =
+  SUCCESS_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 const { ALREADY_EXIST_FIELD_ONE, REQUIRED_FIELD, INVALID_FIELD } =
   VALIDATION_MESSAGES;
@@ -92,14 +96,15 @@ class GlobalTemplateController {
       }
 
       if (isBulk) {
-        const allFailed = failedCount === inputData.length && inputData.length > 0;
-        const statusCode = allFailed ? 409 : 200; 
+        const allFailed =
+          failedCount === inputData.length && inputData.length > 0;
+        const statusCode = allFailed ? 409 : 200;
 
         return res.status(statusCode).json({
           statusCode,
           message: allFailed
             ? ALREADY_EXIST_FIELD_ONE("Category")
-            : "category creation/update completed",
+            : UPDATE_DATA,
         });
       } else {
         if (results[0].success) {
@@ -108,9 +113,7 @@ class GlobalTemplateController {
             .json({
               statusCode: results[0].operation === "create" ? 201 : 200,
               message:
-                results[0].operation === "create"
-                  ? CREATE_DATA
-                  : "Category updated successfully",
+                results[0].operation === "create" ? CREATE_DATA : UPDATE_DATA,
             });
         } else {
           const error = results[0].error;
@@ -127,9 +130,7 @@ class GlobalTemplateController {
         }
       }
     } catch (error: any) {
-      return res
-        .status(500)
-        .json({ statusCode: 500, SERVER_ERROR });
+      return res.status(500).json({ statusCode: 500, SERVER_ERROR });
     }
   }
 
@@ -492,6 +493,72 @@ class GlobalTemplateController {
       if (error.message.includes("currently used")) {
         return res.status(409).json({
           statusCode: 409,
+          message: error.message,
+        });
+      }
+
+      return res.status(500).json({
+        statusCode: 500,
+        message: error.message ?? SERVER_ERROR,
+      });
+    }
+  }
+
+
+  // Update notification message & description for Applied subcategories
+  async updateSubcategoryMessage(
+    req: Request,
+    res: Response
+  ): Promise<Response<HttpResponse>> {
+    try {
+      const { hostelId, globalTemplateId, updates } = req.body;
+
+      if (!hostelId) {
+        return res.status(400).json({
+          statusCode: 400,
+          message: REQUIRED_FIELD("hostelId"),
+        });
+      }
+
+      let updateItems = updates;
+      if (!updates) {
+        const { subcategoryId, message, description } = req.body;
+        if (subcategoryId) {
+          updateItems = [{ subcategoryId, message, description }];
+        }
+      }
+
+      if (!Array.isArray(updateItems) || updateItems.length === 0) {
+        return res.status(400).json({
+          statusCode: 400,
+          message: REQUIRED_FIELD(`subcategoryId, message, description`),
+        });
+      }
+
+      const result = await updateHostelSubcategoryDetails(
+        hostelId,
+        updateItems,
+        globalTemplateId
+      );
+
+      return res.status(200).json({
+        statusCode: 200,
+        message: UPDATE_DATA,
+      });
+    } catch (error: any) {
+      if (
+        error.message.includes("not found") ||
+        error.message.includes("Is it applied?")
+      ) {
+        return res.status(404).json({
+          statusCode: 404,
+          message: error.message,
+        });
+      }
+
+      if (error.message.includes("Invalid")) {
+        return res.status(400).json({
+          statusCode: 400,
           message: error.message,
         });
       }
