@@ -9,8 +9,6 @@ import { error } from "console";
 
 const { DUPLICATE_RECORD } = ERROR_MESSAGES;
 
-
-
 //this function creates a new global template category or updates existing one
 const createGlobalTemplate = async (data: Partial<IGlobalTemplate>) => {
   const isUpdate = !!data._id;
@@ -43,9 +41,7 @@ const createGlobalTemplate = async (data: Partial<IGlobalTemplate>) => {
   const exists = await GlobalTemplate.findOne(duplicateQuery);
 
   if (exists) {
-    throw new Error(
-      DUPLICATE_RECORD("category title or slug")
-    );
+    throw new Error(DUPLICATE_RECORD("category title or slug"));
   }
 
   // UPDATE existing category
@@ -63,17 +59,39 @@ const createGlobalTemplate = async (data: Partial<IGlobalTemplate>) => {
       throw new Error("Category not found or already deleted");
     }
 
+    const { subcategories, ...updateData } = data;
+
     const updatedCategory = await GlobalTemplate.findByIdAndUpdate(
       categoryId,
       {
         $set: {
-          ...data,
+          ...updateData,
           slug,
           updatedAt: new Date(),
         },
       },
       { new: true }
     );
+
+    // If subcategories provided, handle them safely (preserving IDs)
+    if (
+      subcategories &&
+      Array.isArray(subcategories) &&
+      subcategories.length > 0
+    ) {
+      await bulkUpsertSubcategories([
+        {
+          categoryId: categoryId as string,
+          subcategories: subcategories.map((sub: any) => ({
+            ...sub,
+            _id: sub._id ? sub._id.toString() : undefined,
+          })),
+        },
+      ]);
+
+      // refetch to return complete data
+      return await GlobalTemplate.findById(categoryId);
+    }
 
     return updatedCategory;
   }
@@ -143,9 +161,7 @@ const getGlobalTemplates = async (query: FilterQuery<IGlobalTemplate> = {}) => {
       globalTemplateId: { $in: allTemplateIds },
       isDeleted: false,
     });
-    usedTemplateIdsSet = new Set(
-      usedTemplates.map((id: any) => id.toString())
-    );
+    usedTemplateIdsSet = new Set(usedTemplates.map((id: any) => id.toString()));
   }
 
   // Map flags back to templates
@@ -247,12 +263,9 @@ const bulkUpsertSubcategories = async (
             continue;
           }
 
-          // Find subcategory index in array
-          const subIndex = category.subcategories.findIndex(
-            (s: any) => s._id.toString() === subData._id
-          );
+          const subDoc = (category.subcategories as any).id(subData._id);
 
-          if (subIndex === -1) {
+          if (!subDoc) {
             failedCount++;
             subcategoryResults.push({
               success: false,
@@ -265,7 +278,7 @@ const bulkUpsertSubcategories = async (
 
           // Check for duplicate slug (excluding current subcategory)
           const duplicateSlug = category.subcategories.some(
-            (s: any, idx: number) => s.slug === slug && idx !== subIndex
+            (s: any) => s.slug === slug && s._id.toString() !== subData._id
           );
 
           if (duplicateSlug) {
@@ -279,26 +292,22 @@ const bulkUpsertSubcategories = async (
             continue;
           }
 
-          // Update subcategory in array
-          category.subcategories[subIndex] = {
-            ...category.subcategories[subIndex],
-            title: subData.title.trim(),
-            slug,
-            description:
-              subData.description ||
-              category.subcategories[subIndex].description,
-            isActive:
-              subData.isActive !== undefined
-                ? subData.isActive
-                : category.subcategories[subIndex].isActive,
-            updatedAt: new Date(),
-          };
+          // Direct property assignment to preserve ID and stability
+          subDoc.title = subData.title.trim();
+          subDoc.slug = slug;
+          if (subData.description !== undefined) {
+            subDoc.description = subData.description;
+          }
+          if (subData.isActive !== undefined) {
+            subDoc.isActive = subData.isActive;
+          }
+          subDoc.updatedAt = new Date();
 
           updatedCount++;
           subcategoryResults.push({
             success: true,
             operation: "update",
-            data: category.subcategories[subIndex],
+            data: subDoc,
           });
         } else {
           // CREATE new subcategory
