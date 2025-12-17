@@ -4,9 +4,7 @@ import cors from 'cors';
 import routes from "./routes";
 import mongoose from 'mongoose';
 import path from 'path';
-import morgan from 'morgan';
-import requestID from 'express-request-id';
-import logger, { stream } from './utils/logger';
+
 
 dotenv.config();
 
@@ -24,14 +22,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase limi
 app.use(cors()); // Enable CORS for all routes
 app.use("/uploads", express.static(path.resolve("uploads")));
 
-// Request ID middleware
-app.use(requestID());
 
-// Logger middleware
-const morganFormat = process.env.NODE_ENV !== 'production' ? 'dev' : 'combined';
-// Custom format with request ID
-morgan.token('id', (req: any) => req.id);
-app.use(morgan(':id :method :url :status :res[content-length] - :response-time ms', { stream }));
 
 app.use("/api", routes);
 // Example route
@@ -42,15 +33,15 @@ app.get('/', (req: Request, res: Response) => {
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI || '')
   .then(() => {
-    logger.info('MongoDB connected');
+    console.log('MongoDB connected');
     // Start the server only after the connection is successful
     app.listen(PORT, () => {
-      logger.info(`Server is running on http://localhost:${PORT}`);
+      console.log(`Server is running on http://localhost:${PORT}`);
 
     });
   })
   .catch(err => {
-    logger.error('MongoDB connection error:', err);
+    console.error('MongoDB connection error:', err);
     process.exit(1); // Exit the process with failure
   });
 

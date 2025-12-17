@@ -4,7 +4,7 @@ import HostelTemplate, {
 import GlobalTemplate from "../models/globalTemplate.model";
 import { Types } from "mongoose";
 import Hostel from "../models/hostel.model";
-import logger from "../utils/logger";
+
 
 // Upsert (Insert or Update) a HostelTemplate based on hostelId and globalTemplateId
 const upsertHostelTemplate = async (
@@ -334,7 +334,6 @@ const getHostelCategoriesForEdit = async (hostelId: string) => {
       data: [...applied, ...notApplied],
     };
   } catch (error: any) {
-    logger.error(`Failed to retrieve categories: ${error.message}`);
     throw new Error(`Failed to retrieve categories: ${error.message}`);
   }
 };
@@ -551,7 +550,6 @@ const updateHostelSubcategoryDetails = async (
 
     return result;
   } catch (error: any) {
-    logger.log(error);
     throw new Error(error.message || "Failed to update subcategory details");
   }
 };
