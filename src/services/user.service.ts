@@ -404,8 +404,8 @@ class UserService {
               ele?.status && ele?.isVerified
                 ? "active"
                 : ele?.status && !ele?.isVerified
-                ? "pending"
-                : "in-active",
+                  ? "pending"
+                  : "in-active",
             status: ele?.status,
             createdBy: (ele?.createdBy as any)?.name ?? null,
             createdAt: ele?.createdAt ?? null,
@@ -778,14 +778,15 @@ class UserService {
       const checkUser: any = await User.findOne({
         _id: studentId,
       }).select(
-        "uniqueId name email permanentAddress category phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
+        "uniqueId name email roomNumber floorNumber permanentAddress category phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
       );
       // Fetch the room details for the student
       const studentRoomDetails = await StudentHostelAllocation.findOne({
         studentId: studentId,
         hostelId: checkUser.hostelId,
+
       })
-        .select("roomNumber")
+        .select("roomNumber floorNumber")
         .sort({ createdAt: -1 })
         .lean();
 
@@ -801,11 +802,14 @@ class UserService {
         isVerified: true,
       }).select("name email phone image hostelId");
 
+
       const roomMatesData = await Promise.all(
         roomMates.map(async (data: any) => {
           const details = await StudentHostelAllocation.findOne({
             studentId: data._id,
             hostelId: data.hostelId,
+            roomNumber: studentRoomDetails?.roomNumber,
+            floorNumber: studentRoomDetails?.floorNumber
           })
             .select("roomNumber bedNumber")
             .sort({ createdAt: -1 })
@@ -826,9 +830,7 @@ class UserService {
           return null;
         })
       );
-
       const filteredRoomMatesData = roomMatesData.filter(Boolean);
-
       // Fetch indisciplinary actions if they exist
       let indisciplinaryActions = null;
       if (checkUser.indisciplinaryAction) {
@@ -1085,11 +1087,11 @@ class UserService {
             studentId: { $ne: checkUser._id },
             hostelId: checkUser.hostelId?._id,
             roomNumber: userHostelDetails?.roomNumber,
+            floorNumber: userHostelDetails?.floorNumber
           }).select("studentId roomNumber bedNumber billingCycle");
 
           // Extract studentIds to batch fetch users
           const studentIds = roomMates.map((mate: any) => mate.studentId);
-
           // Fetch user details in one query
           const users = await User.find({
             _id: { $in: studentIds },
@@ -1110,16 +1112,14 @@ class UserService {
                   email: user.email ?? null,
                   phone: user.phone ?? null,
                   image: user.image ? await getSignedUrl(user.image) : null,
-                  roomDetails: `${mate.roomNumber ?? null}/${
-                    mate.bedNumber ?? null
-                  }`,
+                  roomDetails: `${mate.roomNumber ?? null}/${mate.bedNumber ?? null
+                    }`,
                 };
               }
 
               return null;
             })
           );
-
           // Remove null values from roomMatesData
           const filteredRoomMatesData = roomMatesData.filter(Boolean);
           response = {
