@@ -43,16 +43,16 @@ const {
   usersBasedOnHostelAndAcademic,
   updateUserStatus,
   deleteStudent,
-  userRequestDelete,
-  verifyOTP,
-  verifyPhoneOTP,
   userRequestDeactivate,
 } = UserService;
 import authService from "../services/auth.service";
 import Otp from "../models/otp.model";
 import { sendStudentWelcomeEmail } from "../services/mailService";
 import { generateRandomPassword, hashPassword } from "../utils/hashUtils";
-const { generateOtp, generateOtpMail } = authService;
+import { OtpChannel, OtpPurpose } from "../validators/otp.schema";
+import OtpLogicService from "../services/otp.service";
+
+const { generateOtp } = authService;
 
 const {
   FETCH_SUCCESS,
@@ -2145,11 +2145,20 @@ class UserController {
         };
         return res.status(400).json(errorResponse);
       }
-      const user = await userRequestDelete(value?.email);
+      const email = value?.email;
+      const user = await User.findOne({ email }).lean();
+      if (!user) {
+        return res.status(404).json({ statusCode: 404, message: "User not found" });
+      }
+
+      await generateOtp(user._id?.toString(), email, OtpChannel.EMAIL, OtpPurpose.ACCOUNT_DELETE);
 
       const successResponse: HttpResponse = {
         statusCode: 200,
-        data: user,
+        data: {
+          name: user.name,
+          userId: user.uniqueId
+        },
         message: "OTP has been sent",
       };
       return res.status(200).json(successResponse);
@@ -2222,14 +2231,13 @@ class UserController {
       }
 
       const { email, phone, otp } = value;
+      const identifier = email ? email : phone;
 
-      if (email) {
-        // email OTP verify
-        await verifyOTP(otp, email);
-      } else if (phone) {
-        // phone OTP verify
-        await verifyPhoneOTP(otp, phone);
-      }
+      await OtpLogicService.verifyOtp({
+        identifier,
+        purpose: OtpPurpose.ACCOUNT_DELETE, 
+        otp: String(otp)
+      });
 
       return res.status(200).json({
         statusCode: 200,
@@ -2304,7 +2312,7 @@ class UserController {
       const digitsOnly = (s: string) => String(s).replace(/\D+/g, "");
 
       const me = await User.findById(userId).select("email phone").lean();
-      const myEmail = (me?.email || "").toString().trim().toLowerCase();
+      const myEmail = (me?.email || "").toString().trim();
       const myPhoneRaw = (me?.phone || "").toString().trim();
       const myPhoneDigits = myPhoneRaw ? digitsOnly(myPhoneRaw) : "";
 
@@ -2326,7 +2334,7 @@ class UserController {
         }
 
         try {
-           await generateOtpMail(userId, normalizedEmail);
+          await generateOtp(userId, normalizedEmail, OtpChannel.EMAIL, OtpPurpose.CHANGE_EMAIL);
 
           return res.status(200).json({
             statusCode: 200,
@@ -2385,7 +2393,7 @@ class UserController {
         }
 
         try {
-          const sendResult = await generateOtp(userId, phoneRaw);
+          await generateOtp(userId, phoneRaw, OtpChannel.SMS, OtpPurpose.CHANGE_PHONE);
           return res.status(200).json({
             statusCode: 200,
             message: "OTP sent to phone",
@@ -2433,84 +2441,31 @@ class UserController {
       }
 
       const otpStr = String(otpRaw).trim();
-      const otpNum = Number(otpRaw);
-      const normalizeEmail = (e: string) => String(e).trim().toLowerCase();
+      const normalizeEmail = (e: string) => String(e).trim();
       const digitsOnly = (s: string) => String(s).replace(/\D+/g, "");
-      const now = new Date();
-
-      const markOtpVerifiedAtomically = async (filter: any) => {
-        const update = {
-          $set: {
-            isVerified: true,
-            status: false,
-            verifiedAt: new Date(),
-            updatedAt: new Date(),
-            lastVerifyAttemptAt: new Date(),
-          },
-          $inc: { verifyAttempts: 1 },
-        };
-
-        return await Otp.findOneAndUpdate(filter, update, {
-          new: true,
-          runValidators: false,
-        }).exec();
-      };
 
       // ---- EMAIL FLOW ----
       if (email) {
         const normalizedEmail = normalizeEmail(email);
 
-        const otpDoc =
-          (await Otp.findOne({
-            userId: new mongoose.Types.ObjectId(userId),
-            email: normalizedEmail,
-            otp: otpStr,
-          }).exec()) ||
-          (Number.isFinite(otpNum)
-            ? await Otp.findOne({
-                userId: new mongoose.Types.ObjectId(userId),
-                email: normalizedEmail,
-                otp: otpNum,
-              }).exec()
-            : null);
+        // Final check: Ensure email is not taken by someone else
+        const existingUser = await User.findOne({
+          email: normalizedEmail,
+          _id: { $ne: userId }
+        }).select("_id").lean();
 
-        if (!otpDoc) {
-          return res.status(400).json({
-            statusCode: 400,
-            message: "Invalid OTP or no OTP request found",
+        if (existingUser) {
+          return res.status(409).json({
+            statusCode: 409,
+            message: "This email is already in use by another account."
           });
         }
 
-        if (otpDoc.isVerified) {
-          return res
-            .status(400)
-            .json({ statusCode: 400, message: "OTP already verified" });
-        }
-
-        if (otpDoc.expiryTime && otpDoc.expiryTime < now) {
-          await Otp.updateOne(
-            { _id: otpDoc._id },
-            {
-              $inc: { verifyAttempts: 1 },
-              $set: { lastVerifyAttemptAt: new Date() },
-            }
-          ).exec();
-          return res
-            .status(400)
-            .json({ statusCode: 400, message: "OTP has expired" });
-        }
-
-        const after = await markOtpVerifiedAtomically({
-          _id: otpDoc._id,
-          isVerified: false,
+        await OtpLogicService.verifyOtp({
+          identifier: normalizedEmail,
+          purpose: OtpPurpose.CHANGE_EMAIL,
+          otp: otpStr
         });
-
-        if (!after || !after.isVerified) {
-          return res.status(400).json({
-            statusCode: 400,
-            message: "Failed to verify OTP; it may already be used",
-          });
-        }
 
         // Update user email
         await User.updateOne(
@@ -2536,67 +2491,25 @@ class UserController {
             .json({ statusCode: 400, message: "Invalid phone number format" });
         }
 
-        let otpDoc =
-          (await Otp.findOne({
-            userId: new mongoose.Types.ObjectId(userId),
-            otp: otpStr,
-            $or: [{ phone: phoneRaw }, { phone: phoneDigits }],
-          }).exec()) ||
-          (Number.isFinite(otpNum)
-            ? await Otp.findOne({
-                userId: new mongoose.Types.ObjectId(userId),
-                otp: otpNum,
-                $or: [{ phone: phoneRaw }, { phone: phoneDigits }],
-              }).exec()
-            : null);
+        // Final check: Ensure phone is not taken by someone else
+        // Check both raw string and numeric format just in case
+        const existingUser = await User.findOne({
+          $or: [{ phone: phoneRaw }, { phone: phoneDigits }],
+          _id: { $ne: userId }
+        }).select("_id").lean();
 
-        if (!otpDoc) {
-          otpDoc = await Otp.findOne({
-            userId: new mongoose.Types.ObjectId(userId),
-            $or: [
-              { otp: otpStr },
-              Number.isFinite(otpNum) ? { otp: otpNum } : { _id: null },
-            ],
-            phone: { $regex: new RegExp(phoneDigits + "$") },
-          }).exec();
-        }
-
-        if (!otpDoc) {
-          return res.status(400).json({
-            statusCode: 400,
-            message: "Invalid OTP or no OTP request found",
+        if (existingUser) {
+          return res.status(409).json({
+            statusCode: 409,
+            message: "This phone number is already in use by another account."
           });
         }
 
-        if (otpDoc.isVerified) {
-          return res
-            .status(400)
-            .json({ statusCode: 400, message: "OTP already verified" });
-        }
-
-        if (otpDoc.expiryTime && otpDoc.expiryTime < now) {
-          await Otp.updateOne(
-            { _id: otpDoc._id },
-            {
-              $inc: { verifyAttempts: 1 },
-              $set: { lastVerifyAttemptAt: new Date() },
-            }
-          ).exec();
-          return res
-            .status(400)
-            .json({ statusCode: 400, message: "OTP has expired" });
-        }
-
-        const after = await markOtpVerifiedAtomically({
-          _id: otpDoc._id,
-          isVerified: false,
+        await OtpLogicService.verifyOtp({
+          identifier: phoneRaw,
+          purpose: OtpPurpose.CHANGE_PHONE,
+          otp: otpStr
         });
-        if (!after || !after.isVerified) {
-          return res.status(400).json({
-            statusCode: 400,
-            message: "Failed to verify OTP; it may already be used",
-          });
-        }
 
         // Update user's phone (preserve formatting provided)
         await User.updateOne(
@@ -2607,7 +2520,6 @@ class UserController {
         return res.status(200).json({
           statusCode: 200,
           message: "Phone updated and OTP verified",
-          data: { phone: phoneRaw },
         });
       }
 
@@ -2616,6 +2528,12 @@ class UserController {
         .json({ statusCode: 400, message: "Invalid request" });
     } catch (err: any) {
       console.error("verifyOtpForAccountChange error:", err);
+      if (err.code === 11000) {
+        return res.status(409).json({
+          statusCode: 409,
+          message: "Duplicate entry. This email or phone is already in use."
+        });
+      }
       return res
         .status(400)
         .json({ statusCode: 400, message: err.message || "Server error" });

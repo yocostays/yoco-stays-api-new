@@ -2,6 +2,10 @@ import { Router } from "express";
 import UserController from "../controllers/user.controller";
 import validateToken from "../middlewares/validateToken";
 import { uploadFileWithMulter } from "../utils/configureMulterStorage";
+import {
+  otpGenerationRateLimiter,
+  otpVerificationRateLimiter,
+} from "../middlewares/otpRateLimiter";
 
 const {
   registerUserFromApp,
@@ -53,7 +57,7 @@ userRouter.patch(
   validateToken,
   updateStudentVechicleDetailsForApp
 ); //TODO - only use in app for
-userRouter.post("/send-credentials",validateToken, sendTempPassword)//This route is used for warden can send password to user
+userRouter.post("/send-credentials", validateToken, sendTempPassword)//This route is used for warden can send password to user
 // ========== Web App Routes (Warden / Admin / Warden Panel) ==========
 // Routes used by the warden/admin panel or web clients
 userRouter.patch(
@@ -95,15 +99,21 @@ userRouter.post(
 userRouter.post("/update-status", validateToken, updateUserStatus);
 userRouter.delete("/:id", validateToken, deleteUsers);
 userRouter.post("/request-account-deletion", userDeleteRequest);
-userRouter.post("/request-otp-verify", userVerifyOtp); //verify otp for app and otp varify account delete for user
+userRouter.post("/request-otp-verify",otpVerificationRateLimiter, userVerifyOtp); //verify otp for app and otp varify account delete for user
 userRouter.patch("/request-account-deactivate", userRequestDeactivate);
 export default userRouter;
 
 
-//endpoints for change mail id and phone number otp request in app
-userRouter.post("/update/request-otp", validateToken, generateOtpForAccountChange);
+//--------------- Account change OTP (email/phone update) - dual-layer protection
+userRouter.post(
+  "/update/request-otp",
+  validateToken,
+  otpGenerationRateLimiter,
+  generateOtpForAccountChange
+);
 userRouter.post(
   "/update/verify-otp",
   validateToken,
-  verifyOtpForAccountChange 
+  otpVerificationRateLimiter,
+  verifyOtpForAccountChange
 );
