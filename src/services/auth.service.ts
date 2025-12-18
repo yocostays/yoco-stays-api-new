@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import nodemailer from "nodemailer";
 import Staff from "../models/staff.model";
 import User from "../models/user.model";
-import Otp from "../models/otp.model";
 import Token from "../models/token.model";
 import { AccountType, BulkUploadTypes, LoginType } from "../utils/enum";
 import { comparePassword, hashPassword } from "../utils/hashUtils";
@@ -17,8 +16,8 @@ import {
   getSignedUrl,
   uploadFileToCloudStorage,
 } from "../utils/awsUploadService";
-import { generateSecureOtp, getExpiryDate } from "../utils/otpService";
-import { sendSMS } from "../utils/commonService/messagingService";
+import OtpLogicService from "./otp.service";
+import { OtpPurpose, OtpChannel } from "../validators/otp.schema";
 
 const { USER_LOGOUT_SUCCESS, PASSWORD_RESET_SUCCESS } = SUCCESS_MESSAGES;
 const {
@@ -32,7 +31,7 @@ const {
   OTP_NOT_FOUND,
   OTP_NOT_FOUND_With_PHONE,
 } = ERROR_MESSAGES;
-const { INVALID_PASSWORD } = VALIDATION_MESSAGES;
+const { INVALID_PASSWORD, REQUIRED_FIELD } = VALIDATION_MESSAGES;
 
 class AuthService {
   //SECTION: Method to login a staff
@@ -224,46 +223,10 @@ class AuthService {
     }
 
     try {
-      // Ensure transporter is valid
-      await this.transporter.verify();
-
-      // 1) Generate OTP + expiry
-      const otp = await generateSecureOtp(); // typically 4–6 digits
-      const expiryTime = getExpiryDate(5, "M"); // 5 minutes
-
-      // 2) Upsert OTP record
-      await Otp.findOneAndUpdate(
-        { userId: new mongoose.Types.ObjectId(userId) },
-        {
-          otp,
-          expiryTime,
-          isVerified: false,
-          email,
-          phone: null,
-          status: true,
-          createdBy: userId,
-          updatedBy: userId,
-        },
-        { upsert: true, new: true }
-      );
-
-      // 3) Build HTML content
-      const htmlContent = `
-      <div style="font-family: Arial, sans-serif; background: #f9fafb; padding: 20px; border-radius: 10px; text-align: center; color: #333;">
-        <p style="font-size: 16px; margin-bottom: 10px;">Your OTP Code:</p>
-        <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #007bff; background: #fff; padding: 10px 20px; border-radius: 8px; display: inline-block;">
-          ${otp}
-        </div>
-      </div>
-    `;
-
-      // 4) Send email
-
-      await this.transporter.sendMail({
-        from: `Yoco Stays ${process.env.EMAIL_FROM}`,
-        to: email,
-        subject: "Your OTP Code 🔐",
-        html: htmlContent,
+      await OtpLogicService.requestOtp({
+        identifier: email,
+        channel: OtpChannel.EMAIL,
+        purpose: OtpPurpose.CHANGE_EMAIL,
       });
 
       return {
@@ -279,91 +242,25 @@ class AuthService {
   // generate Otp for phone number
   generateOtp = async (
     userId: string | null | undefined,
-    phone: string | null | undefined
+    identifier: string | null | undefined,
+    channel: OtpChannel,
+    purpose: OtpPurpose = OtpPurpose.LOGIN
   ): Promise<{ otp: string }> => {
     try {
-      if (!phone || String(phone).trim().length === 0) {
-        throw new Error("Phone number is required for SMS OTP");
+      if (!identifier || String(identifier).trim().length === 0) {
+        throw new Error(REQUIRED_FIELD("Identifier"));
       }
+      const identifierTrimmed = String(identifier).trim();
 
-      const phoneTrimmed = String(phone).trim();
-      if (!/^\+?\d{7,15}$/.test(phoneTrimmed)) {
-        throw new Error("Invalid phone number format");
-      }
-
-      const otpNumber = generateSecureOtp();
-      const otp = String(otpNumber).padStart(6, "0");
-
-      const expiryTime = getExpiryDate(5, "M");
-
-      let filter: any = null;
-      let userIdObj: mongoose.Types.ObjectId | null = null;
-      if (userId) {
-        if (!mongoose.Types.ObjectId.isValid(userId)) {
-          throw new Error("Invalid userId");
-        }
-        userIdObj = new mongoose.Types.ObjectId(userId);
-        filter = { userId: userIdObj };
-      } else {
-        filter = { phone: phoneTrimmed };
-      }
-
-      const setObj: any = {
-        otp,
-        expiryTime,
-        isVerified: false,
-        status: true,
-        updatedBy: userIdObj ?? undefined,
-        verifyAttempts: 0,  
-        sent: false,
-      };
-
-   
-
-      if (phoneTrimmed) {
-        setObj.phone = phoneTrimmed;
-      }
-
-      const update: any = {
-        $set: setObj,
-        $setOnInsert: {},
-      };
-
-          if (userIdObj) {
-      update.$setOnInsert.createdBy = userIdObj;
-      update.$setOnInsert.userId = userIdObj;
-    }
-
-      if (!userId && phoneTrimmed) {
-        update.$unset = { email: "" };
-      }
-
-      const otpDoc = await Otp.findOneAndUpdate(filter, update, {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true,
-      }).exec();
-
-      try {
-        await sendSMS(phoneTrimmed, otp);
-        if (otpDoc && otpDoc._id) {
-          await Otp.updateOne(
-            { _id: otpDoc._id },
-            { $set: { sent: true } }
-          ).exec();
-        } else {
-          await Otp.updateOne(filter, { $set: { sent: true } }).exec();
-        }
-      } catch (smsErr: any) {
-        console.error(
-          "SMS send failed (otp still stored):",
-          smsErr?.message || smsErr
-        );
-      }
+      const otp = await OtpLogicService.requestOtp({
+        identifier: identifierTrimmed,
+        channel: channel,
+        purpose: purpose,
+      });
 
       return { otp };
     } catch (error: any) {
-      throw new Error(`User OTP generate: ${error.message}`);
+      throw new Error(`${error.message}`);
     }
   };
 
@@ -393,27 +290,17 @@ class AuthService {
   resetStaffPassword = async (
     userId: string,
     password: string,
-    otp: number
+    otp: number // kept as number in signature but handled as string
   ): Promise<string> => {
     try {
-      const currentDate = new Date();
+      // Find staff to get phone/email
+      const staff = await Staff.findById(userId);
+      if (!staff) throw new Error("Staff not found");
 
-      //NOTE - find otp
-      const existingOtp: any = await Otp.findOne({
-        userId,
-        otp,
-      });
-
-      if (!existingOtp) throw new Error(OTP_NOT_VERIFIED);
-
-      const expiryTimeDate = new Date(existingOtp.expiryTime);
-
-      if (expiryTimeDate <= currentDate || existingOtp.isVerified)
-        throw new Error(OTP_EXPIRED);
-
-      //NOTE: otp verifed sucessfully
-      await Otp.findByIdAndUpdate(existingOtp._id, {
-        $set: { status: false, isVerified: true },
+      await OtpLogicService.verifyOtp({
+        identifier: String(staff.phone), // Cast number to string
+        purpose: OtpPurpose.RESET_PASSWORD,
+        otp: String(otp),
       });
 
       // Step 2: Hash the password
@@ -520,23 +407,13 @@ class AuthService {
   };
 
   //SECTION -  generate Otp on User SignUp
-  generateOtpUserSignUp = async (phone: string): Promise<{ otp: number }> => {
+  generateOtpUserSignUp = async (phone: string): Promise<{ otp: string }> => {
     try {
-      const otp = generateSecureOtp();
-      const expiryTime = getExpiryDate(5, "M");
-
-      // Upsert OTP document for the user
-      await Otp.findOneAndUpdate(
-        { phone },
-        {
-          phone,
-          otp,
-          expiryTime,
-          isVerified: false,
-          status: true,
-        },
-        { upsert: true, new: true }
-      );
+      const otp = await OtpLogicService.requestOtp({
+        identifier: phone,
+        channel: OtpChannel.SMS,
+        purpose: OtpPurpose.LOGIN,
+      });
 
       return { otp };
     } catch (error: any) {
@@ -550,18 +427,11 @@ class AuthService {
     otp: number
   ): Promise<{ isVerified: boolean }> => {
     try {
-      const otpRecord = await Otp.findOne({ phone, isVerified: false }).select(
-        "otp expiryTime isVerified"
-      );
-
-      if (!otpRecord) throw new Error(OTP_NOT_FOUND_With_PHONE);
-
-      if (otpRecord.otp !== otp) throw new Error(OTP_NOT_FOUND);
-
-      if (new Date() > otpRecord.expiryTime) throw new Error(OTP_EXPIRED);
-
-      otpRecord.isVerified = true;
-      await otpRecord.save();
+      await OtpLogicService.verifyOtp({
+        identifier: phone,
+        purpose: OtpPurpose.LOGIN,
+        otp: String(otp),
+      });
 
       return { isVerified: true };
     } catch (error: any) {
