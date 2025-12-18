@@ -233,8 +233,8 @@ class HostelService {
       // Build search parameters based on search input
       const searchParams = search
         ? {
-            $or: [{ name: { $regex: `^${search}`, $options: "i" } }],
-          }
+          $or: [{ name: { $regex: `^${search}`, $options: "i" } }],
+        }
         : {};
 
       // Run both queries in parallel
@@ -668,6 +668,8 @@ class HostelService {
           const roomDetails = await StudentHostelAllocation.findOne({
             studentId: data._id,
             hostelId: data.hostelId,
+            floorNumber: details?.floorNumber,
+            roomNumber: details?.roomNumber
           })
             .select("roomNumber bedNumber")
             .sort({ createdAt: -1 })
@@ -802,12 +804,12 @@ class HostelService {
           $project: {
             roomMapping: bedType
               ? {
-                  $filter: {
-                    input: "$roomMapping",
-                    as: "room",
-                    cond: { $eq: ["$$room.bedType", bedType] },
-                  },
-                }
+                $filter: {
+                  input: "$roomMapping",
+                  as: "room",
+                  cond: { $eq: ["$$room.bedType", bedType] },
+                },
+              }
               : "$roomMapping",
           },
         },
