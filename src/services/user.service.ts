@@ -2477,19 +2477,6 @@ class UserService {
       student?.oneSignalIosId,
     ].filter(Boolean);
 
-    if (playerIds.length === 0) {
-      return {
-        playedIds: [],
-        template: null,
-        student,
-        isPlayedNoticeCreated: false,
-        log: {
-          templateType: templateTypes,
-          reason: "OneSignal Player ids not found",
-        },
-      };
-    }
-
     //NOTE: Check template exists
     const result: any = await checkTemplateExist(
       student?.hostelId,
