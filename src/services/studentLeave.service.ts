@@ -143,10 +143,9 @@ class StudentLeaveService {
           toDate,
         };
         //NOTE: Add details for dynamic message using the populateTemplate.
-        const description = populateTemplate(
-          template?.description,
-          dynamicData
-        );
+        const description = template?.description
+          ? populateTemplate(template.description, dynamicData)
+          : "Your leave request has been submitted successfully.";
 
         //NOTE: Create entry in notice
         await Notice.create({
@@ -776,10 +775,9 @@ class StudentLeaveService {
           toDate,
         };
         //NOTE: Add details for dynamic message using the populateTemplate.
-        const description = populateTemplate(
-          template?.description,
-          dynamicData
-        );
+        const description = template?.description
+          ? populateTemplate(template.description, dynamicData)
+          : "Your outing request has been submitted successfully.";
 
         //NOTE: Create entry in notice
         await Notice.create({
@@ -1128,9 +1126,9 @@ class StudentLeaveService {
         // Else get the date range based on the durationType
         const range = durationType
           ? getDateRange(durationType as ReportDropDownTypes) || {
-              start: null,
-              end: null,
-            }
+            start: null,
+            end: null,
+          }
           : { start: null, end: null };
 
         start = range.start ? new Date(range.start) : null;
