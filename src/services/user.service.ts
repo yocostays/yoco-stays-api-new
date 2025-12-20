@@ -2190,14 +2190,14 @@ class UserService {
       const student = await User.findById(studentId).lean();
       if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
 
-      if (student?.email !== email) {
+      if (String(student?.email) !== String(email)) {
         const student = await User.findOne({ email });
         if (student) {
           throw new Error("Email already exist");
         }
       }
 
-      if (student?.phone !== phone) {
+      if (Number(student?.phone) !== Number(phone)) {
         const student = await User.findOne({ phone });
         if (student) {
           throw new Error("Phone already exist");
