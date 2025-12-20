@@ -33,7 +33,7 @@ class NotificationTemplateAdapter {
       let globalSubData: any = null;
       let globalSubId: string | null = null;
 
-      // 1. Find the target Global Subcategory first (providing stable ID)
+      // Find the target Global Subcategory first (providing stable ID)
       const globalTemplate = await GlobalTemplate.findOne({
         $or: [
           { "subcategories.meta.templateType": templateType },
@@ -52,20 +52,25 @@ class NotificationTemplateAdapter {
         );
         globalSubId = globalSubData?._id?.toString();
 
-        if (globalSubId) {
-          console.log(`  [Global] Found: "${globalSubData.title}" (ID: ${globalSubId})`);
-        }
       } else {
         console.log(`  [Global] No GlobalTemplate/Subcategory found for: ${templateType}`);
       }
 
-      // 2. Try to find hostel-specific override using Global ID or falling back to type/title
+      // Try to find hostel-specific override using Global ID or falling back to type/title
       if (hostelId) {
-        const hostelTemplate = await HostelTemplate.findOne({
+
+        // Build query to find the specific category template for this hostel
+        const hostelQuery: any = {
           hostelId: new Types.ObjectId(hostelId as string),
           isActive: true,
           isDeleted: false,
-        }).lean() as any;
+        };
+
+        if (globalTemplate?._id) {
+          hostelQuery.globalTemplateId = globalTemplate._id;
+        }
+
+        const hostelTemplate = await HostelTemplate.findOne(hostelQuery).lean() as any;
 
         if (hostelTemplate) {
           // Robust matching: originalSubcategoryId OR templateType OR title
@@ -130,7 +135,7 @@ class NotificationTemplateAdapter {
   }
 
   // Populate dynamic placeholders in template string
-  
+
   populatePlaceholders(template: string, data: Record<string, any>): string {
     if (!template) return "";
 
@@ -142,7 +147,7 @@ class NotificationTemplateAdapter {
   }
 
   // Get populated notification template ready to send
-   
+
   async getPopulatedTemplate(
     templateType: TemplateTypes,
     hostelId: string | Types.ObjectId | undefined,
@@ -165,7 +170,7 @@ class NotificationTemplateAdapter {
   }
 
   // Clear cache for specific template or all templates
-  
+
   clearCache(templateType?: TemplateTypes, hostelId?: string): void {
     if (templateType) {
       const cacheKey = `notification_${templateType}_${hostelId || "global"}`;
