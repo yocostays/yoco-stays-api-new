@@ -351,7 +351,7 @@ class MessService {
       if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
 
       // Check if date is provided; if not, use today's date
-      const queryDate = mealDate ? new Date(mealDate) : new Date();
+      const queryDate = mealDate ? new Date(mealDate) : getCurrentISTTime();
       queryDate.setUTCHours(0, 0, 0, 0);
 
       // Get today's menu based on the provided or current date

@@ -195,12 +195,11 @@ export const getMealDetails = (
 };
 //ANCHOR -Utility function to get Date Range
 export const getDateRange = (status: ReportDropDownTypes) => {
-  const now = new Date();
+  const now = getCurrentISTTime();
 
-  // Ensure the current time is in UTC at the start of the current day
-  const utcNow = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
+  // Ensure the current time is at the start of the current day in IST
+  const utcNow = new Date(now);
+  utcNow.setUTCHours(0, 0, 0, 0);
 
   switch (status) {
     case ReportDropDownTypes.TODAY:
@@ -210,54 +209,24 @@ export const getDateRange = (status: ReportDropDownTypes) => {
       };
 
     case ReportDropDownTypes.TOMORROW:
-      const tomorrowStart = new Date(
-        Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate() + 1,
-          0,
-          0,
-          0
-        )
-      );
-      const tomorrowEnd = new Date(
-        Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate() + 1,
-          23,
-          59,
-          59,
-          999
-        )
-      );
+      const tomorrowStart = new Date(utcNow);
+      tomorrowStart.setUTCDate(utcNow.getUTCDate() + 1);
+
+      const tomorrowEnd = new Date(tomorrowStart);
+      tomorrowEnd.setUTCHours(23, 59, 59, 999);
+
       return {
         start: tomorrowStart.toISOString(),
         end: tomorrowEnd.toISOString(),
       };
 
     case ReportDropDownTypes.YESTERDAY:
-      const yesterdayStart = new Date(
-        Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate() - 1,
-          0,
-          0,
-          0
-        )
-      );
-      const yesterdayEnd = new Date(
-        Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate() - 1,
-          23,
-          59,
-          59,
-          999
-        )
-      );
+      const yesterdayStart = new Date(utcNow);
+      yesterdayStart.setUTCDate(utcNow.getUTCDate() - 1);
+
+      const yesterdayEnd = new Date(yesterdayStart);
+      yesterdayEnd.setUTCHours(23, 59, 59, 999);
+
       return {
         start: yesterdayStart.toISOString(),
         end: yesterdayEnd.toISOString(),
