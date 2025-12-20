@@ -37,12 +37,23 @@ import {
 } from "../utils/enum";
 import { sendPushNotificationToUser } from "../utils/commonService/pushNotificationService";
 
-const { RECORD_NOT_FOUND, START_DATE_ERROR } = ERROR_MESSAGES;
+
+const { RECORD_NOT_FOUND, START_DATE_ERROR, NO_DATA_IN_GIVEN_DATE } = ERROR_MESSAGES;
 const { CREATE_DATA, DELETE_DATA, UPDATE_DATA, MEAL_CANCELLED } =
   SUCCESS_MESSAGES;
 const { MESS_MENU_ALREADY_EXIST, INVALID_REPORT_TYPE } = VALIDATION_MESSAGES;
 const { fetchPlayerNotificationConfig, getStudentAllocatedHostelDetails } =
   UserService;
+
+//SECTION: Interface for Booking Request
+export interface IBookingRequest {
+  date: string | Date;
+  isBreakfastBooked: boolean;
+  isLunchBooked: boolean;
+  isDinnerBooked: boolean;
+  isSnacksBooked: boolean;
+  bookingStatus?: MealBookingStatusTypes;
+}
 
 class MessService {
   //SECTION: Method to create a mess menu for hostel
@@ -206,22 +217,22 @@ class MessService {
             day: menu.day ?? null,
             breakfast:
               mealType === MealCountReportType.ALL ||
-              mealType === MealCountReportType.BREAKFAST
+                mealType === MealCountReportType.BREAKFAST
                 ? menu.breakfast ?? null
                 : null,
             lunch:
               mealType === MealCountReportType.ALL ||
-              mealType === MealCountReportType.LUNCH
+                mealType === MealCountReportType.LUNCH
                 ? menu.lunch ?? null
                 : null,
             dinner:
               mealType === MealCountReportType.ALL ||
-              mealType === MealCountReportType.DINNER
+                mealType === MealCountReportType.DINNER
                 ? menu.dinner ?? null
                 : null,
             snacks:
               mealType === MealCountReportType.ALL ||
-              mealType === MealCountReportType.HI_TEA
+                mealType === MealCountReportType.HI_TEA
                 ? menu.snacks ?? null
                 : null,
             status: menu.status ?? null,
@@ -531,7 +542,6 @@ class MessService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.MEAL_BOOKED
           );
         }
@@ -823,7 +833,6 @@ class MessService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.MEAL_CANCELLED
           );
         }
@@ -1088,8 +1097,8 @@ class MessService {
       const bookingStatus = isFullDay
         ? MealBookingStatusTypes.CANCELLED
         : allMealsCancelled
-        ? MealBookingStatusTypes.CANCELLED
-        : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+          ? MealBookingStatusTypes.CANCELLED
+          : MealBookingStatusTypes.PARTIALLY_CANCELLED;
       // Update the booking with new meal status and booking status
       booking.set({
         ...bookingUpdateData,
@@ -1204,14 +1213,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                  MealBookingStatusTypes.BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ]
+                MealBookingStatusTypes.BOOKED,
+                MealBookingStatusTypes.PARTIALLY_BOOKED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ]
               : [
-                  MealBookingStatusTypes.CANCELLED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ];
+                MealBookingStatusTypes.CANCELLED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
