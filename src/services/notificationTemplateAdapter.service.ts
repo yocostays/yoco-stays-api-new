@@ -17,7 +17,6 @@ class NotificationTemplateAdapter {
   ): Promise<{
     heading: string;
     body: string;
-    image?: string;
     extraData?: any;
   }> {
     try {
@@ -31,94 +30,93 @@ class NotificationTemplateAdapter {
       }
 
       let notificationData: any = null;
+      let globalSubData: any = null;
+      let globalSubId: string | null = null;
 
-      // Try to find hostel-specific template first (if hostelId provided)
+      // 1. Find the target Global Subcategory first (providing stable ID)
+      const globalTemplate = await GlobalTemplate.findOne({
+        $or: [
+          { "subcategories.meta.templateType": templateType },
+          { "subcategories.title": { $regex: new RegExp(`^${templateType}$`, "i") } }
+        ],
+        scope: "global",
+        isActive: true,
+        isDeleted: false,
+      }).lean() as any;
+
+      if (globalTemplate) {
+        globalSubData = globalTemplate.subcategories.find(
+          (sc: any) =>
+            sc.meta?.templateType === templateType ||
+            sc.title?.toLowerCase() === templateType.toLowerCase()
+        );
+        globalSubId = globalSubData?._id?.toString();
+
+        if (globalSubId) {
+          console.log(`  [Global] Found: "${globalSubData.title}" (ID: ${globalSubId})`);
+        }
+      } else {
+        console.log(`  [Global] No GlobalTemplate/Subcategory found for: ${templateType}`);
+      }
+
+      // 2. Try to find hostel-specific override using Global ID or falling back to type/title
       if (hostelId) {
         const hostelTemplate = await HostelTemplate.findOne({
           hostelId: new Types.ObjectId(hostelId as string),
           isActive: true,
           isDeleted: false,
-        }).lean();
+        }).lean() as any;
 
         if (hostelTemplate) {
-          // Find matching subcategory by templateType in global template
-          const globalTemplate = await GlobalTemplate.findById(
-            hostelTemplate.globalTemplateId
-          ).lean();
+          // Robust matching: originalSubcategoryId OR templateType OR title
+          const hostelSubcategory = hostelTemplate.subcategories.find((sc: any) => {
+            const matchesId = globalSubId && sc.originalSubcategoryId?.toString() === globalSubId;
+            const matchesType = sc.meta?.templateType === templateType;
+            const matchesTitle = sc.title?.toLowerCase() === templateType.toLowerCase();
+            return matchesId || matchesType || matchesTitle;
+          });
 
-          if (globalTemplate) {
-            const globalSubcategory = globalTemplate.subcategories.find(
-              (sc: any) => sc.meta?.templateType === templateType
-            );
+          if (hostelSubcategory) {
+            const hasCustomTemplate =
+              hostelSubcategory.notificationTemplate?.heading &&
+              hostelSubcategory.notificationTemplate?.body;
 
-            // Check if hostel has custom notification template
-            const hostelSubcategory = hostelTemplate.subcategories.find(
-              (sc: any) =>
-                sc.originalSubcategoryId?.toString() ===
-                globalSubcategory?._id?.toString()
-            );
 
-            if (
-              hostelSubcategory?.notificationTemplate?.heading &&
-              hostelSubcategory?.notificationTemplate?.body
-            ) {
-              notificationData = {
-                heading: hostelSubcategory.notificationTemplate.heading,
-                body: hostelSubcategory.notificationTemplate.body,
-                image: hostelSubcategory.notificationTemplate.imageUrl || null,
-                extraData:
-                  hostelSubcategory.notificationTemplate.actionData || {},
-              };
-            }
+            notificationData = {
+              heading:
+                hostelSubcategory.notificationTemplate?.heading ||
+                hostelSubcategory.title ||
+                "Notification",
+              body:
+                hostelSubcategory.notificationTemplate?.body ||
+                hostelSubcategory.description ||
+                "You have a new update.",
+              extraData: hostelSubcategory.notificationTemplate?.actionData || {},
+            };
+          } else {
           }
         }
       }
 
-      // Fallback to global template if no hostel-specific found
+      // 3. Fallback to global template data if no hostel-specific override found
+      if (!notificationData && globalSubData) {
+        notificationData = {
+          heading:
+            globalSubData.notificationTemplate?.heading ||
+            globalSubData.title ||
+            "Notification",
+          body:
+            globalSubData.notificationTemplate?.body ||
+            globalSubData.description ||
+            "You have a new update.",
+          extraData: globalSubData.notificationTemplate?.actionData || {},
+        };
+      }
+
       if (!notificationData) {
-        const globalTemplate = await GlobalTemplate.findOne({
-          "subcategories.meta.templateType": templateType,
-          scope: "global",
-          isActive: true,
-          isDeleted: false,
-        }).lean();
-
-        if (!globalTemplate) {
-          throw new Error(
-            RECORD_NOT_FOUND(`Notification template for ${templateType}`)
-          );
-        }
-
-        const subcategory = globalTemplate.subcategories.find(
-          (sc: any) => sc.meta?.templateType === templateType
+        throw new Error(
+          RECORD_NOT_FOUND(`Notification template for ${templateType}`)
         );
-
-        if (!subcategory) {
-          throw new Error(
-            `Subcategory not found for template type ${templateType}`
-          );
-        }
-
-        //If notificationTemplate is missing, use subcategory title/description
-        if (
-          !subcategory.notificationTemplate?.heading ||
-          !subcategory.notificationTemplate?.body
-        ) {
-          notificationData = {
-            heading: subcategory.title || "Notification",
-            body: subcategory.description || "You have a new notification.",
-            image: null,
-            extraData: {},
-          };
-        } else {
-          // Use notificationTemplate if available
-          notificationData = {
-            heading: subcategory.notificationTemplate.heading,
-            body: subcategory.notificationTemplate.body,
-            image: subcategory.notificationTemplate.imageUrl || null,
-            extraData: subcategory.notificationTemplate.actionData || {},
-          };
-        }
       }
 
       this.setCache(cacheKey, notificationData);
@@ -131,14 +129,8 @@ class NotificationTemplateAdapter {
     }
   }
 
-  /**
-   * Populate dynamic placeholders in template string
-   * Supports {{variableName}} syntax
-   *
-   * @param template - Template string with {{placeholders}}
-   * @param data - Key-value pairs for replacement
-   * @returns Populated string
-   */
+  // Populate dynamic placeholders in template string
+  
   populatePlaceholders(template: string, data: Record<string, any>): string {
     if (!template) return "";
 
@@ -149,15 +141,8 @@ class NotificationTemplateAdapter {
     });
   }
 
-  /**
-   * Get populated notification template ready to send
-   * Combines fetching and placeholder replacement
-   *
-   * @param templateType - TemplateTypes enum
-   * @param hostelId - Optional hostel ID
-   * @param dynamicData - Data for placeholder replacement
-   * @returns Ready-to-send notification data
-   */
+  // Get populated notification template ready to send
+   
   async getPopulatedTemplate(
     templateType: TemplateTypes,
     hostelId: string | Types.ObjectId | undefined,
@@ -165,7 +150,6 @@ class NotificationTemplateAdapter {
   ): Promise<{
     heading: string;
     body: string;
-    image?: string;
     extraData?: any;
   }> {
     const template = await this.getNotificationTemplate(templateType, hostelId);
@@ -173,7 +157,6 @@ class NotificationTemplateAdapter {
     return {
       heading: this.populatePlaceholders(template.heading, dynamicData),
       body: this.populatePlaceholders(template.body, dynamicData),
-      image: template.image,
       extraData: {
         ...template.extraData,
         templateType,
@@ -181,13 +164,8 @@ class NotificationTemplateAdapter {
     };
   }
 
-  /**
-   * Clear cache for specific template or all templates
-   * Useful after template updates
-   *
-   * @param templateType - Optional specific template to clear
-   * @param hostelId - Optional hostel ID
-   */
+  // Clear cache for specific template or all templates
+  
   clearCache(templateType?: TemplateTypes, hostelId?: string): void {
     if (templateType) {
       const cacheKey = `notification_${templateType}_${hostelId || "global"}`;

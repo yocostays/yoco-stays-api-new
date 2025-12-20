@@ -754,7 +754,6 @@ class UserService {
             playedIds,
             template?.title,
             template?.description,
-            template?.image,
             TemplateTypes.PROFILE_UPDATED
           );
         }
@@ -1285,7 +1284,6 @@ class UserService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.USER_ROLE_UPDATED
           );
         }
@@ -2488,11 +2486,6 @@ class UserService {
 
     if (!result.template) {
       isPlayedNoticeCreated = false;
-    } else {
-      // NOTE: Check image and get signed URL
-      if (result.template?.image) {
-        result.template.image = await getSignedUrl(result.template.description);
-      }
     }
 
     return {

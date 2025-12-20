@@ -15,7 +15,6 @@ export async function sendPushNotificationToUser(
   playerIds: any,
   templateHeading: string,
   templateDescription: string,
-  imageUrl: string,
   templateType: TemplateTypes,
   extraData: Record<string, any> = {}
 ): Promise<string> {
@@ -27,7 +26,6 @@ export async function sendPushNotificationToUser(
         include_player_ids: playerIds,
         headings: { en: templateHeading },
         contents: { en: templateDescription },
-        big_picture: imageUrl,
         data: extraData,
       },
       {
@@ -81,7 +79,6 @@ export async function sendPushNotificationV2(
         include_player_ids: validPlayerIds,
         headings: { en: template.heading },
         contents: { en: template.body },
-        big_picture: template.image,
         data: finalExtraData,
       },
       {
