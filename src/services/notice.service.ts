@@ -69,7 +69,6 @@ class NoticeService {
               playedIds,
               templateData.title,
               templateData.description,
-              templateData.image,
               templateData.templateType
             );
           }

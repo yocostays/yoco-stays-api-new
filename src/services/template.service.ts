@@ -215,27 +215,13 @@ class TemplateService {
       const template = {
         title: notificationData.heading,
         description: notificationData.body,
-        image: notificationData.image,
-        _templateType: templateType, // Keep for reference
+        _templateType: templateType,
       };
 
       return { template };
     } catch (error: any) {
-      // If new system fails, try old Template model as fallback
-      try {
-        const exists: any = await Template.findOne({
-          hostelId,
-          templateType,
-        }).select("title description image");
-
-        if (exists?.image) {
-          exists.image = await getSignedUrl(exists.image);
-        }
-
-        return { template: exists };
-      } catch (fallbackError: any) {
-        throw new Error(error.message);
-      }
+      // Return null instead of crashing if template not found
+      return { template: null };
     }
   }
 }

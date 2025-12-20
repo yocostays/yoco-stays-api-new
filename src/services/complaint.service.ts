@@ -168,7 +168,6 @@ class ComplaintService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.COMPLAINT_SUBMITTED
           );
         }
@@ -312,17 +311,16 @@ class ComplaintService {
 
           const resolvedTimeFormatted =
             ele?.complainStatus === ComplainStatusTypes.RESOLVED &&
-            ele?.resolvedTime
+              ele?.resolvedTime
               ? (() => {
-                  const totalMinutes = ele.resolvedTime;
-                  const hours = Math.floor(totalMinutes / 60);
-                  const minutes = totalMinutes % 60;
-                  return hours > 0
-                    ? `${hours} hr${hours > 1 ? "s" : ""} ${minutes} min${
-                        minutes > 1 ? "s" : ""
-                      }`
-                    : `${minutes} min${minutes > 1 ? "s" : ""}`;
-                })()
+                const totalMinutes = ele.resolvedTime;
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+                return hours > 0
+                  ? `${hours} hr${hours > 1 ? "s" : ""} ${minutes} min${minutes > 1 ? "s" : ""
+                  }`
+                  : `${minutes} min${minutes > 1 ? "s" : ""}`;
+              })()
               : null;
 
           return {
@@ -473,7 +471,6 @@ class ComplaintService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.COMPLAINT_ESCALATED_ASSIGNED
           );
         }
@@ -566,10 +563,10 @@ class ComplaintService {
           complainStatus === ComplainStatusTypes.RESOLVED
             ? TemplateTypes.COMPLAINT_RESOLVED
             : complainStatus === ComplainStatusTypes.ON_HOLD
-            ? TemplateTypes.COMPLAINT_KEPT_ON_HOLD
-            : complainStatus === ComplainStatusTypes.LONG_TERM_WORK
-            ? TemplateTypes.COMPAINT_MARK_AS_LONG_TERM_WORK
-            : TemplateTypes.COMPLAINT_REJECTED;
+              ? TemplateTypes.COMPLAINT_KEPT_ON_HOLD
+              : complainStatus === ComplainStatusTypes.LONG_TERM_WORK
+                ? TemplateTypes.COMPAINT_MARK_AS_LONG_TERM_WORK
+                : TemplateTypes.COMPLAINT_REJECTED;
 
         const { playedIds, template, student, isPlayedNoticeCreated, log } =
           await fetchPlayerNotificationConfig(complaint?.userId, templateType);
@@ -626,7 +623,6 @@ class ComplaintService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             templateType
           );
         }
@@ -717,7 +713,7 @@ class ComplaintService {
           // Fetch role name if roleId exists
           const roleName = log.updatedBy?.roleId
             ? (await Role.findById(log.updatedBy.roleId).select("name").lean())
-                ?.name || null
+              ?.name || null
             : null;
 
           return {
@@ -1321,7 +1317,7 @@ class ComplaintService {
             const createdAt = complaint.createdAt;
             resolvedTime = Math.floor(
               (currentISTTime.getTime() - new Date(createdAt).getTime()) /
-                (1000 * 60)
+              (1000 * 60)
             );
           }
 

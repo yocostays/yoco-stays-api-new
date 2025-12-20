@@ -169,7 +169,6 @@ class StudentLeaveService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.LEAVE_REQUEST_SUBMITTED
           );
         }
@@ -802,7 +801,6 @@ class StudentLeaveService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.LEAVE_REQUEST_SUBMITTED
           );
         }
@@ -933,7 +931,6 @@ class StudentLeaveService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             templateType
           );
         }
@@ -1072,7 +1069,6 @@ class StudentLeaveService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.LEAVE_CANCELLED
           );
         }
