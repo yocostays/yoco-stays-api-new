@@ -58,11 +58,9 @@ import Joi from "joi";
 import StudentLeave from "../models/student-leave.model";
 import Complaint from "../models/complaint.model";
 import BookMeals from "../models/bookMeal.model";
-import nodemailer from "nodemailer";
-import { generateSecureOtp, getExpiryDate } from "../utils/otpService";
-import Otp from "../models/otp.model";
 import { allowedDomains } from "../constants/allowedDomains";
 import Token from "../models/token.model";
+
 
 const { getRoleByName } = RoleService;
 const { checkTemplateExist } = TemplateService;
@@ -705,57 +703,61 @@ class UserService {
       payload = { ...payload, ...safeData };
 
       // Update the user's email and image in the database
-      await User.findByIdAndUpdate(studentId, { $set: payload }, { new: true });
-      //NOTE: Check user is updated or not.
-      // if (userUpdated) {
-      // const { playedIds, template, student, isPlayedNoticeCreated, log } =
-      //   await this.fetchPlayerNotificationConfig(
-      //     studentExists?._id,
-      //     TemplateTypes.PROFILE_UPDATED
-      //   );
+      const update = await User.findByIdAndUpdate(
+        studentId,
+        { $set: payload },
+        { new: true }
+      );
 
-      //NOTE: Get student and hostelDetails
-      // const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-      //   await this.getStudentAllocatedHostelDetails(
-      //     student?._id,
-      //     student?.hostelId,
-      //     TemplateTypes.PROFILE_UPDATED
-      //   );
+      //NOTE: Send profile update notification
+      if (update) {
+        const { playedIds, template, student, isPlayedNoticeCreated, log } =
+          await this.fetchPlayerNotificationConfig(
+            studentId.toString(), // Convert ObjectId to string
+            TemplateTypes.PROFILE_UPDATED
+          );
 
-      //NOTE: Final notice created check.
-      // const finalNoticeCreated =
-      // isPlayedNoticeCreated && isHostelNoticeCreated;
+        //NOTE: Get student and hostelDetails
+        const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+          await this.getStudentAllocatedHostelDetails(
+            student?._id,
+            student?.hostelId,
+            TemplateTypes.PROFILE_UPDATED
+          );
 
-      // NOTE: Combine available logs into an array
-      // const notificationLog = [log, hostelLogs].filter(Boolean);
+        //NOTE: Final notice created check.
+        const finalNoticeCreated =
+          isPlayedNoticeCreated && isHostelNoticeCreated;
 
-      //NOTE: Create entry in notice
-      // await Notice.create({
-      //   userId: student?._id,
-      //   hostelId: student?.hostelId,
-      //   floorNumber: hostelDetail?.floorNumber,
-      //   bedType: hostelDetail?.bedType,
-      //   roomNumber: hostelDetail?.roomNumber,
-      //   noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-      //   pushNotificationTypes: PushNotificationTypes.AUTO,
-      //   templateId: template?._id,
-      //   templateSendMessage: template?.description,
-      //   isNoticeCreated: finalNoticeCreated,
-      //   notificationLog,
-      //   createdAt: getCurrentISTTime(),
-      // });
-      //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-      // if (finalNoticeCreated) {
-      //   //NOTE: Use the send push notification function
-      //   await sendPushNotificationToUser(
-      //     playedIds,
-      //     template?.title,
-      //     template?.description,
-      //     template?.image,
-      //     TemplateTypes.PROFILE_UPDATED
-      //   );
-      // }
-      // }
+        // NOTE: Combine available logs into an array
+        const notificationLog = [log, hostelLogs].filter(Boolean);
+
+        //NOTE: Create entry in notice
+        await Notice.create({
+          userId: student?._id,
+          hostelId: student?.hostelId,
+          floorNumber: hostelDetail?.floorNumber,
+          bedType: hostelDetail?.bedType,
+          roomNumber: hostelDetail?.roomNumber,
+          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+          pushNotificationTypes: PushNotificationTypes.AUTO,
+          templateId: template?._id,
+          templateSendMessage: template?.description,
+          isNoticeCreated: finalNoticeCreated,
+          notificationLog,
+          createdAt: getCurrentISTTime(),
+        });
+        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+        if (finalNoticeCreated) {
+          //NOTE: Use the send push notification function
+          await sendPushNotificationToUser(
+            playedIds,
+            template?.title,
+            template?.description,
+            TemplateTypes.PROFILE_UPDATED
+          );
+        }
+      }
       return UPDATE_DATA;
     } catch (error: any) {
       throw new Error(error.message);
@@ -775,14 +777,15 @@ class UserService {
       const checkUser: any = await User.findOne({
         _id: studentId,
       }).select(
-        "uniqueId name email permanentAddress category phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
+        "uniqueId name email roomNumber floorNumber permanentAddress category phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
       );
       // Fetch the room details for the student
       const studentRoomDetails = await StudentHostelAllocation.findOne({
         studentId: studentId,
         hostelId: checkUser.hostelId,
+
       })
-        .select("roomNumber")
+        .select("roomNumber floorNumber")
         .sort({ createdAt: -1 })
         .lean();
 
@@ -798,11 +801,14 @@ class UserService {
         isVerified: true,
       }).select("name email phone image hostelId");
 
+
       const roomMatesData = await Promise.all(
         roomMates.map(async (data: any) => {
           const details = await StudentHostelAllocation.findOne({
             studentId: data._id,
             hostelId: data.hostelId,
+            roomNumber: studentRoomDetails?.roomNumber,
+            floorNumber: studentRoomDetails?.floorNumber
           })
             .select("roomNumber bedNumber")
             .sort({ createdAt: -1 })
@@ -823,9 +829,7 @@ class UserService {
           return null;
         })
       );
-
       const filteredRoomMatesData = roomMatesData.filter(Boolean);
-
       // Fetch indisciplinary actions if they exist
       let indisciplinaryActions = null;
       if (checkUser.indisciplinaryAction) {
@@ -1082,11 +1086,11 @@ class UserService {
             studentId: { $ne: checkUser._id },
             hostelId: checkUser.hostelId?._id,
             roomNumber: userHostelDetails?.roomNumber,
+            floorNumber: userHostelDetails?.floorNumber
           }).select("studentId roomNumber bedNumber billingCycle");
 
           // Extract studentIds to batch fetch users
           const studentIds = roomMates.map((mate: any) => mate.studentId);
-
           // Fetch user details in one query
           const users = await User.find({
             _id: { $in: studentIds },
@@ -1115,7 +1119,6 @@ class UserService {
               return null;
             })
           );
-
           // Remove null values from roomMatesData
           const filteredRoomMatesData = roomMatesData.filter(Boolean);
           response = {
@@ -1281,7 +1284,6 @@ class UserService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.USER_ROLE_UPDATED
           );
         }
@@ -1943,12 +1945,6 @@ class UserService {
             },
           ]);
 
-          console.log(
-            "Hostel result for",
-            name,
-            "=>",
-            JSON.stringify(hostel, null, 2)
-          );
           if (!hostel) {
             errorArray.push({ ...data, errors: "Bed already occupied" });
             continue; // skip to next student, don't touch successArray
@@ -1997,20 +1993,9 @@ class UserService {
             });
 
             await newUser.save();
-            // console.log("IN LOOP, item index:");
-            // console.log("data.Email inside loop:");
+
             // Queue email only after successful save
             if (data?.Email) {
-              // console.log("Queuing welcome email for:", data.Email, uniqueId);
-
-              // welcomeMailQueue.push({
-              //   email: data.Email,
-              //   name,
-              //   uniqueId,
-              //   plainPassword,
-              // });
-
-              // Persist to MongoDB Queue
               await EmailQueue.create({
                 email: data.Email,
                 name,
@@ -2068,20 +2053,6 @@ class UserService {
           errorArray.push({ ...data, errors: error.message });
         }
       }
-
-      // console.log("welcomeMailQueue before sending", welcomeMailQueue);
-      // console.log("successArray after processing", successArray);
-
-      // Send welcome emails for all newly created students
-      // await Promise.allSettled(
-      //   welcomeMailQueue.map((mailJob) =>
-      //     sendStudentWelcomeEmail(mailJob).catch((err) => {
-      //       console.error(`Failed to send welcome email to:`, err.message);
-      //     })
-      //   )
-      // );
-
-      // console.log("welcomeMailQueue after sending", welcomeMailQueue);
 
       try {
         let successFileUrl: string | null = null;
@@ -2219,10 +2190,17 @@ class UserService {
       const student = await User.findById(studentId).lean();
       if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
 
-      if (student?.email !== email) {
+      if (String(student?.email) !== String(email)) {
         const student = await User.findOne({ email });
         if (student) {
           throw new Error("Email already exist");
+        }
+      }
+
+      if (Number(student?.phone) !== Number(phone)) {
+        const student = await User.findOne({ phone });
+        if (student) {
+          throw new Error("Phone already exist");
         }
       }
       // Step 2: Validate university
@@ -2474,96 +2452,48 @@ class UserService {
     isPlayedNoticeCreated: boolean;
     log?: Pick<INotificationLog, "templateType" | "reason">;
   }> => {
-    let playedIds: any[] = [];
-    let template: any = null;
-    let student: any = null;
-    let isPlayedNoticeCreated = true;
-    let log: Pick<INotificationLog, "templateType" | "reason">;
-    try {
-      // NOTE: Retrieve student details
-      student = await User.findById(studentId).select(
-        "oneSignalWebId oneSignalAndoridId oneSignalIosId hostelId"
-      );
+    //NOTE: Get student details
+    const student: any = await User.findById(studentId).lean();
 
-      if (!student) {
-        log = {
-          templateType: templateTypes,
-          reason: RECORD_NOT_FOUND("Student"),
-        };
-        return {
-          playedIds,
-          template,
-          student,
-          isPlayedNoticeCreated: false,
-          log,
-        };
-      }
-      // NOTE: Check playerIds is available
-      const playerIds: any = [
-        student.oneSignalWebId,
-        student.oneSignalAndoridId,
-        student.oneSignalIosId,
-      ].filter(Boolean);
-
-      if (playerIds.length === 0) {
-        log = {
-          templateType: templateTypes,
-          reason: ONE_SIGNAL_PLAYERS_NOT_FOUND,
-        };
-        return {
-          playedIds,
-          template,
-          student,
-          isPlayedNoticeCreated: false,
-          log,
-        };
-      }
-
-      // NOTE: Check template availability
-      const result: any = await checkTemplateExist(
-        student?.hostelId,
-        templateTypes
-      );
-
-      if (!result?.template) {
-        log = {
-          templateType: templateTypes,
-          reason: RECORD_NOT_FOUND("Template"),
-        };
-        return {
-          playedIds,
-          template,
-          student,
-          isPlayedNoticeCreated: false,
-          log,
-        };
-      }
-
-      if (result?.template?.description) {
-        result.template.description = removeHtmlTags(
-          result.template.description
-        );
-      }
-
+    if (!student) {
       return {
-        playedIds: playerIds,
-        template: result.template,
-        student,
-        isPlayedNoticeCreated,
-      };
-    } catch (error: any) {
-      log = {
-        templateType: templateTypes,
-        reason: error.message,
-      };
-      return {
-        playedIds,
-        template,
-        student,
+        playedIds: [],
+        template: null,
+        student: null,
         isPlayedNoticeCreated: false,
-        log,
+        log: {
+          templateType: templateTypes,
+          reason: "student not found",
+        },
       };
     }
+
+    //NOTE: Get all OneSignal player IDs
+    const playerIds = [
+      student?.oneSignalWebId,
+      student?.oneSignalAndoridId,
+      student?.oneSignalIosId,
+    ].filter(Boolean);
+
+    //NOTE: Check template exists
+    const result: any = await checkTemplateExist(
+      student?.hostelId,
+      templateTypes
+    );
+
+    //NOTE: Check template found or not.
+    let isPlayedNoticeCreated = true;
+
+    if (!result.template) {
+      isPlayedNoticeCreated = false;
+    }
+
+    return {
+      playedIds: playerIds,
+      template: result.template,
+      student,
+      isPlayedNoticeCreated,
+    };
   };
 
   //SECTION: Method to get student hostel details by userId and hostelId
@@ -2806,7 +2736,7 @@ class UserService {
           Complaint.deleteMany({ userId: id }),
           BookMeals.deleteMany({ studentId: id }),
           StudentHostelAllocation.findOneAndDelete({ studentId: id }),
-          Token.findOneAndDelete({ userId: id })
+          Token.findOneAndDelete({ userId: id }),
         ]);
 
         return DELETE_DATA;
@@ -2818,192 +2748,7 @@ class UserService {
     }
   };
 
-  //generate OTP and send email to user for delete account
-  userRequestDelete = async (email: String) => {
-    const userDetails: any = await User.findOne({ email: email });
-    if (!userDetails) throw new Error(RECORD_NOT_FOUND("Email"));
 
-    try {
-      if (!email || typeof email !== "string") {
-        throw new Error("Invalid email address");
-      }
-
-      const otp = await generateSecureOtp();
-      const expiryTime = getExpiryDate(5, "M");
-      await Otp.findOneAndUpdate(
-        { userId: new mongoose.Types.ObjectId(userDetails?._id) },
-        {
-          otp,
-          expiryTime,
-          isVerified: false,
-          email,
-          phone: null,
-          status: true,
-          createdBy: userDetails?._id,
-          updatedBy: userDetails?._id,
-        },
-        { upsert: true, new: true }
-      );
-
-      const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: process.env.EMAL_PORT ? parseInt(process.env.EMAL_PORT) : 465,
-        secure: true,
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-        },
-      });
-
-      await transporter.verify();
-
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; background: #f9fafb; padding: 20px; border-radius: 10px; text-align: center; color: #333;">
-          <p style="font-size: 16px; margin-bottom: 10px;">Your OTP Code:</p>
-          <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #007bff; background: #fff; padding: 10px 20px; border-radius: 8px; display: inline-block;">
-            ${otp}
-          </div>
-        </div>
-      `;
-      await transporter.sendMail({
-        from: `"Yoco Stays" ${process.env.EMAIL_FROM}`,
-        to: email,
-        subject: "Your OTP Code 🔐",
-        html: htmlContent,
-      });
-      return {
-        name: userDetails?.name,
-        userId: userDetails?.uniqueId,
-      };
-    } catch (error) {
-      throw new Error("Failed to send OTP email");
-    }
-  };
-
-  // verify OTP for user delete account
-  // verifyOTP = async (otp: number, email: string) => {
-  //   console.log("inside varify otp");
-  //   try {
-  //     // Check if OTP exists
-  //     console.log("email in verifyOTP", email);
-  //     const otpExists = await Otp.findOne({ email });
-  //     console.log("otpExists", otpExists);
-  //     if (Number(otpExists?.otp) !== Number(otp)) {
-  //       throw new Error("OTP not found");
-  //     }
-  //     if (!otpExists) throw new Error("OTP Expired");
-  //     if (otpExists?.isVerified) throw new Error("OTP already verified");
-  //     // if(!otpExists) throw new Error(OTP_NOT_VERIFIED);
-  //     if (otpExists) {
-  //       await Otp.findOneAndUpdate(
-  //         { userId: new mongoose.Types.ObjectId(otpExists?.userId) },
-  //         {
-  //           isVerified: true,
-  //           updatedBy: otpExists?.userId,
-  //         },
-  //         { upsert: true, new: true }
-  //       );
-
-  //       return "OTP Verified";
-  //     }
-  //   } catch (error: any) {
-  //     throw new Error(error.message || "Failed to Verify OTP");
-  //   }
-  // };
-
-  // Improved verifyOTP method for user delete account and other verifications using email
-  verifyOTP = async (otp: string | number, email: string) => {
-    if (!email) throw new Error("Email is required for OTP verification");
-    if (otp === undefined || otp === null || String(otp).trim() === "")
-      throw new Error("OTP is required");
-
-    try {
-      const otpStr = String(otp).trim();
-      const now = new Date();
-
-      // Atomic verify: match by email, otp, not already verified and not expired
-      const filter: any = {
-        email,
-        otp: otpStr,
-        isVerified: false,
-      };
-
-      // if your schema uses expiryTime, include expiry check; otherwise remove this
-      filter.expiryTime = { $gt: now };
-
-      const update = {
-        $set: {
-          isVerified: true,
-          updatedAt: now,
-        },
-      };
-
-      const opts = { new: true };
-
-      const verifiedDoc = await Otp.findOneAndUpdate(
-        filter,
-        update,
-        opts
-      ).lean();
-
-      if (verifiedDoc) {
-        return "OTP Verified";
-      }
-
-      // If atomic update returned null, figure out why for a clear error message
-      const latest = await Otp.findOne({ email })
-        .sort({ createdAt: -1 })
-        .lean();
-
-      if (!latest) throw new Error("No OTP found for provided email");
-
-      if (latest.expiryTime && new Date(latest.expiryTime) <= now)
-        throw new Error("OTP Expired");
-
-      if (latest.isVerified) throw new Error("OTP already verified");
-
-      // OTP exists, not expired and not verified => mismatch
-      throw new Error("OTP does not match");
-    } catch (err: any) {
-      // surface precise messages; do not leak internals in production logs
-      throw new Error(err?.message || "Failed to verify OTP");
-    }
-  };
-
-  //This method is used to verify phone OTP
-
-  verifyPhoneOTP = async (otp: number, phone: string) => {
-    try {
-      const otpExists = await Otp.findOne({ phone });
-
-      if (!otpExists) {
-        throw new Error("OTP Expired");
-      }
-
-      if (Number(otpExists.otp) !== Number(otp)) {
-        throw new Error("Please enter valid OTP");
-      }
-
-      if (otpExists.isVerified) {
-        throw new Error("OTP already verified");
-      }
-
-      await Otp.findOneAndUpdate(
-        { userId: new mongoose.Types.ObjectId(otpExists.userId) },
-        {
-          isVerified: true,
-          updatedBy: otpExists.userId,
-          phone: phone,
-          email: null,
-        },
-        { upsert: true, new: true }
-      );
-
-      return "OTP Verified";
-    } catch (error: any) {
-      throw new Error(error.message || "Failed to Verify OTP");
-    }
-  };
 
   userRequestDeactivate = async (email: string) => {
     try {

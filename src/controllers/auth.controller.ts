@@ -1,13 +1,9 @@
 import { Request, Response } from "express";
-import Joi from "joi";
 import mongoose from "mongoose";
 import User from "../models/user.model";
 import AuthService from "../services/auth.service";
 import StaffService from "../services/staff.service";
-import {
-  default as UserService,
-  default as userService,
-} from "../services/user.service";
+import { default as UserService } from "../services/user.service";
 import { getSignedUrl } from "../utils/awsUploadService";
 import { HttpResponse } from "../utils/httpResponse";
 import {
@@ -20,7 +16,8 @@ import {
   SAMPLE_FILE,
   STAFF_FOLDER,
 } from "../utils/s3bucketFolder";
-import { allowedDomains } from "../constants/allowedDomains";
+import { OtpChannel, OtpPurpose } from "../validators/otp.schema";
+import OtpLogicService from "../services/otp.service";
 
 const {
   staffLoginWithUserNameAndPwd,
@@ -30,14 +27,11 @@ const {
   uploadFileInApp,
   wardenRefreshToken,
   generateOtp,
-  // generateOtpMail,
   resetStaffPassword,
   downloadSampleBulkUploadFile,
   generateOtpUserSignUp,
   verifyOtpUserSignUp,
 } = AuthService;
-
-const { userRequestDelete, verifyOTP, verifyPhoneOTP } = userService;
 
 const { getStudentByUniqueId } = UserService;
 const { getStaffById, staffByEmailId } = StaffService;
@@ -186,117 +180,64 @@ class AuthController {
     }
   }
 
-  
   //Here we generate otp for app using email or phone for password reset and user delete request(using mail);
+
   async generateOtpForApp(
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
-      const { email, phone } = req.body;
+      const { identifier, channel, purpose } = req.body;
 
-      if (!email && !phone) {
-        return res
-          .status(400)
-          .json({ statusCode: 400, message: "Email or phone is required" });
-      }
-
-      if (phone) {
-        const phoneTrimmed = String(phone).trim();
-
-        const phoneSchema = Joi.object({
-          phone: Joi.string()
-            .trim()
-            .pattern(/^\+?\d{7,15}$/)
-            .required()
-            .messages({
-              "string.empty": "Phone number is required",
-              "any.required": "Phone number is required",
-              "string.pattern.base": "Invalid phone number format",
-            }),
-        });
-
-        if (phone) {
-          const { error } = phoneSchema.validate({ phone });
-          if (error) {
-            return res.status(400).json({
-              statusCode: 400,
-              message: error.details[0].message,
-            });
-          }
-        }
-
-        // Check phone exists in users collection
-        const userByPhone = await User.findOne({ phone: phoneTrimmed }).lean();
+      if (channel === OtpChannel.SMS) {
+        // Check phone exists
+        const userByPhone = await User.findOne({ phone: identifier }).lean();
         if (!userByPhone) {
           return res
             .status(400)
             .json({ statusCode: 400, message: "Phone number not registered" });
         }
 
-        await generateOtp(userByPhone._id?.toString() ?? null, phoneTrimmed);
+        await generateOtp(
+          userByPhone._id?.toString() ?? null,
+          identifier,
+          OtpChannel.SMS,
+          purpose
+        );
 
-        const successResponse: HttpResponse = {
+        return res.status(200).json({
           statusCode: 200,
           message: "OTP sent to phone",
-        };
-        return res.status(200).json(successResponse);
+        });
       }
 
-      // Else: email path (email is present)
-      if (email) {
-
-        const schema = Joi.object({
-          email: Joi.string()
-            .email({ tlds: { allow: false } })
-            .custom((value, helpers) => {
-              const domain = value.split("@")[1];
-              if (!allowedDomains.includes(domain)) {
-                return helpers.error("any.invalid");
-              }
-              return value;
-            })
-            .required()
-            .messages({
-              "string.email": "Invalid email format",
-              "any.invalid": `Only these domains allowed: ${allowedDomains.join(
-                ", "
-              )}`,
-              "any.required": "Email is required",
-            }),
-        });
-
-        const { error } = schema.validate({ email }, { abortEarly: false });
-        if (error) {
-          const errorResponse: HttpResponse = {
-            statusCode: 400,
-            message: error?.details[0]?.message,
-          };
-          return res.status(400).json(errorResponse);
-        }
-
-        // Check email exists in users collection
-        const emailLower = email.toLowerCase();
-        const userByEmail = await User.findOne({ email: emailLower }).lean();
+      if (channel === OtpChannel.EMAIL) {
+        // Check email exists
+        const userByEmail = await User.findOne({
+          email: identifier,
+        }).lean();
         if (!userByEmail) {
           return res
             .status(400)
             .json({ statusCode: 400, message: "Email not registered" });
         }
 
-        
-          await userRequestDelete(emailLower);
+        await generateOtp(
+          userByEmail._id?.toString() ?? null,
+          identifier,
+          OtpChannel.EMAIL,
+          purpose
+        );
 
-        const successResponse: HttpResponse = {
+        return res.status(200).json({
           statusCode: 200,
           message: "OTP sent to email",
-        };
-        return res.status(200).json(successResponse);
+        });
       }
 
       return res
         .status(400)
-        .json({ statusCode: 400, message: "Invalid request" });
+        .json({ statusCode: 400, message: "Invalid Channel" });
     } catch (error: any) {
       const errorMessage = error?.message ?? "Server error";
       const errorResponse: HttpResponse = {
@@ -313,68 +254,15 @@ class AuthController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
+      const { identifier, otp, password, purpose } = req.body;
 
-      const schema = Joi.object({
-        email: Joi.string()
-          .email({ tlds: { allow: false } })
-          .custom((value, helpers) => {
-            const domain = value.split("@")[1] || "";
-            if (!allowedDomains.includes(domain))
-              return helpers.error("any.invalid");
-            return value;
-          })
-          .messages({
-            "string.email": "Invalid email format",
-            "any.invalid": `Only these domains allowed: ${allowedDomains.join(
-              ", "
-            )}`,
-          }),
+      const isEmail = String(identifier).includes("@");
+      const query = isEmail
+        ? { email: String(identifier).trim() }
+        : { phone: String(identifier).trim() };
 
-        phone: Joi.string()
-          .pattern(/^\+?\d{7,15}$/)
-          .messages({ "string.pattern.base": "Invalid phone format" }),
+      const student = await User.findOne(query);
 
-        otp: Joi.alternatives()
-          .try(Joi.string(), Joi.number())
-          .required()
-          .messages({ "any.required": "OTP is required" }),
-
-        // password: Joi.string()
-        //   .pattern(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/)
-        //   .required()
-        //   .messages({
-        //     "string.pattern.base": "Password must contain letters and numbers",
-        //   }),
-        password: Joi.string()
-          .pattern(/^(?=.*[A-Za-z])(?=.*\d).{4,}$/)
-          .required()
-          .messages({
-            "string.pattern.base":
-              "Password must contain at least one letter and one number, and be at least 4 characters long",
-          }),
-      })
-        .or("email", "phone")
-        .messages({ "object.missing": "Either email or phone is required" });
-
-      const { error } = schema.validate(req?.body);
-      if (error) {
-        const errorResponse: HttpResponse = {
-          statusCode: 400,
-          message: `${error?.details[0]?.message}`,
-        };
-        return res.status(400).json(errorResponse);
-      }
-      const { email, phone, otp: rawOtp, password } = req.body;
-      const otp = String(rawOtp).trim();
-
-      if (email) {
-        await verifyOTP(otp, email);
-      } else if (phone) {
-        await verifyPhoneOTP(Number(otp), phone);
-      }
-
-      const findQuery: any = email ? { email } : { phone };
-      const student = await User.findOne(findQuery);
       if (!student) {
         return res.status(404).json({
           statusCode: 404,
@@ -382,28 +270,11 @@ class AuthController {
         });
       }
 
-      //NOTE - get user by unique Id
-      // const { student } = await getStudentByUniqueId(uniqueId);
-      //  const otpExists = await Otp.findOne({ email });
-      // if (Number(otpExists?.otp) !== Number(otp)) {
-      //   throw new Error("OTP not found")
-      // }
-      // if (!otpExists) throw new Error("OTP Expired")
-      // if (otpExists?.isVerified) throw new Error("OTP already verified")
-      // // if(!otpExists) throw new Error(OTP_NOT_VERIFIED);
-      // if (otpExists) {
-      //   await Otp.findOneAndUpdate(
-      //     { userId: new mongoose.Types.ObjectId(otpExists?.userId) },
-      //     {
-      //       isVerified: true,
-      //       updatedBy: otpExists?.userId,
-      //     },
-      //     { upsert: true, new: true }
-      //   );
-
-      // if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
-
-      // Call the service to reset User password
+      await OtpLogicService.verifyOtp({
+        identifier: isEmail ? String(identifier).trim() : identifier,
+        purpose,
+        otp,
+      });
 
       await resetStudentPassword(student, password);
 
@@ -512,15 +383,11 @@ class AuthController {
       const { staff } = await staffByEmailId(email);
 
       // Call the service to generate otp
-      const { otp } = await generateOtp(staff._id, staff.phone);
+      const { otp } = await generateOtp(staff._id, staff.phone, OtpChannel.SMS);
 
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: GENERATE_OTP,
-        data: {
-          otp,
-          staffId: staff?._id,
-        },
       };
       return res.status(200).json(successResponse);
     } catch (error: any) {
@@ -626,7 +493,6 @@ class AuthController {
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: GENERATE_OTP,
-        data: otp,
       };
       return res.status(200).json(successResponse);
     } catch (error: any) {

@@ -11,6 +11,7 @@ import Hostel, {
 import User from "../models/user.model";
 import College from "../models/university.model";
 import { excelDateToJSDate, getCurrentISTTime } from "../utils/lib";
+import { uploadRoomMappingSchema } from "../utils/validators/hostel.validator";
 import {
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
@@ -41,6 +42,9 @@ import BulkUpload from "../models/bulkUpload.model";
 import { normalizeBedNumber } from "../utils/normalizeBedNumber";
 import Template from "../models/template.model";
 import { defaultTemplates } from "../config/defaultTemplates";
+import HostelTemplateService from "./hostelTemplate.service";
+
+const { initializeHostelTemplates } = HostelTemplateService;
 
 const {
   DUPLICATE_RECORD,
@@ -168,6 +172,8 @@ class HostelService {
       // Step 4: Save the new hostel
       const savedHostel = await newHostel.save();
 
+      /*
+      //  NEW HOSTEL TEMPLATE SYSTEM
       try {
         // Create default templates
         const templatesToCreate = defaultTemplates.map((template) => ({
@@ -184,6 +190,14 @@ class HostelService {
         await Hostel.findByIdAndDelete(savedHostel._id);
         throw new Error("Failed to create default templates. Hostel creation rolled back.");
       }
+      */
+
+      // NEW: Initialize Hostel Templates from Global Templates
+      await initializeHostelTemplates(
+        savedHostel._id as mongoose.Types.ObjectId,
+        savedHostel.name,
+        savedHostel.identifier
+      );
 
       return savedHostel;
     } catch (error: any) {
@@ -555,7 +569,7 @@ class HostelService {
         totalBeds: ele?.bedType,
         bedNumbers: ele?.bedNumbers?.map((b: IBedNumberDetails) => ({
           ...b,
-          bedNumber: normalizeBedNumber(b?.bedNumber)
+          bedNumber: normalizeBedNumber(b?.bedNumber),
         })),
         vacant: ele?.occupied ? ele?.bedType - ele?.occupied : ele?.bedType - 0,
         occupied: ele?.occupied ?? 0,
@@ -654,6 +668,8 @@ class HostelService {
           const roomDetails = await StudentHostelAllocation.findOne({
             studentId: data._id,
             hostelId: data.hostelId,
+            floorNumber: details?.floorNumber,
+            roomNumber: details?.roomNumber
           })
             .select("roomNumber bedNumber")
             .sort({ createdAt: -1 })
@@ -667,14 +683,17 @@ class HostelService {
           return null;
         })
       );
-      const filteredRoomMatesData = roomMatesData.filter(Boolean)
+      const filteredRoomMatesData = roomMatesData.filter(Boolean);
       const hostel = {
         _id: user?.hostelId?._id,
         name: user?.hostelId?.name ?? null,
         address: user?.hostelId?.address ?? null,
         description: user?.hostelId?.description ?? null,
         phone: user?.phone ?? null,
-        guardianContactNo: (user?.familiyDetails?.fatherNumber || user?.familyDetails?.motherNumber) ?? null,
+        guardianContactNo:
+          (user?.familiyDetails?.fatherNumber ||
+            user?.familyDetails?.motherNumber) ??
+          null,
         roomMates: filteredRoomMatesData.map((ele) => ele?.name ?? null),
         floorNumber: details?.floorNumber ?? null,
         bedDetails: details
@@ -1177,6 +1196,7 @@ class HostelService {
       if (!existingHostel) {
         throw new Error(RECORD_NOT_FOUND("Hostel"));
       }
+
       // Create bulk upload entry
       const bulkUpload = await BulkUpload.create({
         originalFile: url,
@@ -1185,6 +1205,7 @@ class HostelService {
         createdAt: getCurrentISTTime(),
         updatedAt: getCurrentISTTime(),
       });
+
       const existingRoomNumbers = new Set<number>(
         existingHostel.roomMapping?.map((room: any) => room.roomNumber) || []
       );
@@ -1198,9 +1219,51 @@ class HostelService {
 
       const newRoomMappings: any[] = [];
 
+      // Helper function to safely get property case-insensitively and handle spaces
+      const getValue = (obj: any, key: string) => {
+        const normalizedSearchKey = key.toLowerCase().replace(/\s/g, "");
+        const foundKey = Object.keys(obj).find((k) => {
+          const normalizedObjKey = k.toLowerCase().replace(/\s/g, "");
+          return normalizedObjKey === normalizedSearchKey;
+        });
+        return foundKey ? obj[foundKey] : undefined;
+      };
+
       for (const row of json) {
-        const roomNumber = Number(row.RoomNumber);
-        const bedTypeStr = (row.BedType || "").toLowerCase();
+        const roomNumberVal = getValue(row, "RoomNumber");
+        const floorNumberVal = getValue(row, "FloorNumber");
+        const bedTypeVal = getValue(row, "BedType");
+
+        // Check for both 'BedNumber' and 'BedNumbers'
+        let bedNumberVal = getValue(row, "BedNumber");
+        if (!bedNumberVal) {
+          bedNumberVal = getValue(row, "BedNumbers");
+        }
+
+        const maintenanceStatusVal = getValue(row, "MaintenanceStatus");
+        const roomTypeVal = getValue(row, "RoomType");
+        const occupancyTypeVal = getValue(row, "OccupancyType");
+        const washroomTypeVal = getValue(row, "WashroomType");
+
+        const validationObj = {
+          roomNumber: roomNumberVal,
+          floorNumber: floorNumberVal,
+          bedType: bedTypeVal,
+          bedNumbers: bedNumberVal,
+          maintenanceStatus: maintenanceStatusVal,
+          roomType: roomTypeVal,
+          occupancyType: occupancyTypeVal,
+          washroomType: washroomTypeVal,
+        };
+
+        const { error } = uploadRoomMappingSchema.validate(validationObj);
+        if (error) {
+          errorArray.push({ ...row, reason: error.message });
+          continue;
+        }
+
+        const roomNumber = Number(roomNumberVal);
+        const bedTypeStr = (bedTypeVal || "").toLowerCase();
         const bedType = bedTypeMap[bedTypeStr];
 
         if (!bedType || isNaN(roomNumber)) {
@@ -1213,12 +1276,11 @@ class HostelService {
           continue;
         }
 
-        const bedList = String(row.BedNumber || "")
+        const bedList = String(bedNumberVal || "")
           .split(",")
           .map((bed: string) => bed.trim())
           .filter((bed: string) => bed.length > 0);
 
-        // ❗ Add bed count validation here
         if (bedList.length !== bedType) {
           errorArray.push({
             ...row,
@@ -1235,15 +1297,15 @@ class HostelService {
         const roomData = {
           bedType,
           roomNumber,
-          floorNumber: Number(row.FloorNumber),
+          floorNumber: Number(floorNumberVal),
           totalBeds: bedNumbers.length,
           bedNumbers,
           vacant: bedNumbers.length,
           occupied: 0,
-          maintenanceStatus: row.MaintenanceStatus,
-          roomType: row.RoomType,
-          occupancyType: row.OccupancyType,
-          washroomType: row.WashroomType,
+          maintenanceStatus: maintenanceStatusVal?.toLowerCase(),
+          roomType: roomTypeVal?.toLowerCase(),
+          occupancyType: occupancyTypeVal?.toLowerCase(),
+          washroomType: washroomTypeVal?.toLowerCase(),
           isAssignedToStaff: false,
         };
 
@@ -1251,22 +1313,59 @@ class HostelService {
         successArray.push({ ...row, status: "Uploaded" });
       }
 
+      // Optimize DB write: Batch process if many rows to handle large document limits (somewhat) and timeouts
       if (newRoomMappings.length > 0) {
-        await Hostel.findByIdAndUpdate(
-          hostelId,
-          {
-            $push: { roomMapping: { $each: newRoomMappings } },
-            $set: {
-              updatedAt: new Date(),
-              ...(createdById && {
-                updatedBy: new mongoose.Types.ObjectId(createdById),
-              }),
+        const BATCH_SIZE = 500;
+        const isInitRequired = !Array.isArray(existingHostel.roomMapping);
+
+        if (isInitRequired) {
+          const firstBatch = newRoomMappings.slice(0, BATCH_SIZE);
+          await Hostel.findByIdAndUpdate(
+            hostelId,
+            {
+              $set: {
+                roomMapping: firstBatch,
+                updatedAt: new Date(),
+                ...(createdById && {
+                  updatedBy: new mongoose.Types.ObjectId(createdById),
+                }),
+              },
             },
-          },
-          { new: true }
-        );
+            { new: true }
+          );
+
+          // Process remaining batches with $push
+          for (
+            let i = BATCH_SIZE;
+            i < newRoomMappings.length;
+            i += BATCH_SIZE
+          ) {
+            const batch = newRoomMappings.slice(i, i + BATCH_SIZE);
+            await Hostel.findByIdAndUpdate(hostelId, {
+              $push: { roomMapping: { $each: batch } },
+            });
+          }
+        } else {
+          for (let i = 0; i < newRoomMappings.length; i += BATCH_SIZE) {
+            const batch = newRoomMappings.slice(i, i + BATCH_SIZE);
+            await Hostel.findByIdAndUpdate(
+              hostelId,
+              {
+                $push: { roomMapping: { $each: batch } },
+                $set: {
+                  updatedAt: new Date(),
+                  ...(createdById && {
+                    updatedBy: new mongoose.Types.ObjectId(createdById),
+                  }),
+                },
+              },
+              { new: true }
+            );
+          }
+        }
       }
-      // Upload result filess
+
+      // Upload result files
       let successFileUrl: string | null = null;
       let errorFileUrl: string | null = null;
 
@@ -1300,12 +1399,10 @@ class HostelService {
     }
   };
 
-
   fetchFloorRooms = async (
-    hostelId: string,
+    hostelId: string
   ): Promise<{ floorRooms: any[] }> => {
     try {
-     
       const result = await Hostel.aggregate([
         { $match: { _id: new mongoose.Types.ObjectId(hostelId) } },
 
@@ -1322,10 +1419,10 @@ class HostelService {
               $filter: {
                 input: "$roomMapping.bedNumbers",
                 as: "bed",
-                cond: { $eq: ["$$bed.isVacant", true] }
-              }
-            }
-          }
+                cond: { $eq: ["$$bed.isVacant", true] },
+              },
+            },
+          },
         },
 
         // Group by floorNumber
@@ -1336,11 +1433,11 @@ class HostelService {
               $push: {
                 roomNumber: "$roomMapping.roomNumber",
                 bedType: "$roomMapping.bedType",
-                bedNumbers: "$roomMapping.bedNumbers"
-              }
+                bedNumbers: "$roomMapping.bedNumbers",
+              },
             },
-            buildingNumber: { $first: "$buildingNumber" }
-          }
+            buildingNumber: { $first: "$buildingNumber" },
+          },
         },
 
         // Rename _id → floorNumber
@@ -1349,19 +1446,18 @@ class HostelService {
             _id: 0,
             floorNumber: "$_id",
             rooms: 1,
-            buildingNumber:1
-          }
+            buildingNumber: 1,
+          },
         },
 
         // Optional: sort by floorNumber
-        { $sort: { floorNumber: 1 } }
+        { $sort: { floorNumber: 1 } },
       ]);
       return { floorRooms: result };
     } catch (error: any) {
       throw new Error(error.message);
     }
   };
-
 }
 
 export default new HostelService();

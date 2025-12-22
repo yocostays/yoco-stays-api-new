@@ -168,7 +168,6 @@ class ComplaintService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.COMPLAINT_SUBMITTED
           );
         }
@@ -284,8 +283,8 @@ class ComplaintService {
           $in: userIds.map((id) => new mongoose.Types.ObjectId(id)),
         };
       }
-      query.hostelId = hostelId
-      delete query.assignedStaff
+      query.hostelId = hostelId;
+      delete query.assignedStaff;
       const [count, complaint] = await Promise.all([
         Complaint.countDocuments({ ...query, ...searchUserParams }),
         Complaint.find({ ...query, ...searchUserParams })
@@ -301,7 +300,7 @@ class ComplaintService {
           .skip(skip)
           .limit(limit),
       ]);
-     
+
       const response = await Promise.all(
         complaint.map(async (ele: any) => {
           const hostelDetails = await StudentHostelAllocation.findOne({
@@ -443,42 +442,40 @@ class ComplaintService {
           complaintId: complaint?.ticketId,
           staffName: complaint?.assignedStaffName,
         };
-console.log(template,"template")
         //NOTE: Add details for dynamic message using the populateTemplate.
-        // const description = populateTemplate(
-        //   template?.description,
-        //   dynamicData
-        // );
+        const description = populateTemplate(
+          template?.description,
+          dynamicData
+        );
 
-        // //NOTE: Create entry in notice
-        // await Notice.create({
-        //   userId: student?._id,
-        //   hostelId: student?.hostelId,
-        //   floorNumber: hostelDetail?.floorNumber,
-        //   bedType: hostelDetail?.bedType,
-        //   roomNumber: hostelDetail?.roomNumber,
-        //   noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-        //   pushNotificationTypes: PushNotificationTypes.AUTO,
-        //   templateId: template?._id,
-        //   templateSendMessage: description,
-        //   isNoticeCreated: finalNoticeCreated,
-        //   notificationLog,
-        //   createdAt: getCurrentISTTime(),
-        // });
+        //NOTE: Create entry in notice
+        await Notice.create({
+          userId: student?._id,
+          hostelId: student?.hostelId,
+          floorNumber: hostelDetail?.floorNumber,
+          bedType: hostelDetail?.bedType,
+          roomNumber: hostelDetail?.roomNumber,
+          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+          pushNotificationTypes: PushNotificationTypes.AUTO,
+          templateId: template?._id,
+          templateSendMessage: description,
+          isNoticeCreated: finalNoticeCreated,
+          notificationLog,
+          createdAt: getCurrentISTTime(),
+        });
 
-        // //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-        // if (finalNoticeCreated) {
-        //   //NOTE: Use the send push notification function.
-        //   await sendPushNotificationToUser(
-        //     playedIds,
-        //     template?.title,
-        //     description,
-        //     template?.image,
-        //     TemplateTypes.COMPLAINT_ESCALATED_ASSIGNED
-        //   );
-        // }
+        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+        if (finalNoticeCreated) {
+          //NOTE: Use the send push notification function.
+          await sendPushNotificationToUser(
+            playedIds,
+            template?.title,
+            description,
+            TemplateTypes.COMPLAINT_ESCALATED_ASSIGNED
+          );
+        }
       }
-      console.log(UPDATE_DATA,"UPDATEdaTA")
+      console.log(UPDATE_DATA, "UPDATEdaTA");
       return UPDATE_DATA;
     } catch (error: any) {
       throw new Error(`${error.message}`);
@@ -559,7 +556,7 @@ console.log(template,"template")
         },
         { new: true } //NOTE: Optionally return the updated document
       );
-      
+
       if (complaintUpdate) {
         //NOTE: Set the template type according to complain status
         const templateType =
@@ -583,53 +580,52 @@ console.log(template,"template")
           );
 
         //NOTE: Final notice created check.
-        // const finalNoticeCreated =
-        //   isPlayedNoticeCreated && isHostelNoticeCreated;
+        const finalNoticeCreated =
+          isPlayedNoticeCreated && isHostelNoticeCreated;
 
         // NOTE: Combine available logs into an array
-        // const notificationLog = [log, hostelLogs].filter(Boolean);
+        const notificationLog = [log, hostelLogs].filter(Boolean);
 
-        // //NOTE: Get complaint details
-        // const result = await this.complaintDetailsById(complaintUpdate?._id);
+        //NOTE: Get complaint details
+        const result = await this.complaintDetailsById(complaintUpdate?._id);
 
-        // const dynamicData = {
-        //   complaintType: result?.complaint?.categoryType,
-        //   complaintId: result?.complaint?.ticketId,
-        //   reason: remark ? remark : null,
-        // };
+        const dynamicData = {
+          complaintType: result?.complaint?.categoryType,
+          complaintId: result?.complaint?.ticketId,
+          reason: remark ? remark : null,
+        };
 
         //NOTE: Add details for dynamic message using the populateTemplate.
-        // const description = populateTemplate(
-        //   template?.description,
-        //   dynamicData
-        // );
+        const description = populateTemplate(
+          template?.description,
+          dynamicData
+        );
 
-        // //NOTE: Create entry in notice
-        // await Notice.create({
-        //   userId: student?._id,
-        //   hostelId: student?.hostelId,
-        //   floorNumber: hostelDetail?.floorNumber,
-        //   bedType: hostelDetail?.bedType,
-        //   roomNumber: hostelDetail?.roomNumber,
-        //   noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-        //   pushNotificationTypes: PushNotificationTypes.AUTO,
-        //   templateId: template?._id,
-        //   templateSendMessage: description,
-        //   isNoticeCreated: finalNoticeCreated,
-        //   notificationLog,
-        //   createdAt: getCurrentISTTime(),
-        // });
-        // //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-        // if (finalNoticeCreated) {
-        //   //NOTE: Use the send push notification function.
-        //   await sendPushNotificationToUser(
-        //     playedIds,
-        //     template?.title,
-        //     description,
-        //     template?.image,
-        //     templateType
-        //   );
-        // }
+        //NOTE: Create entry in notice
+        await Notice.create({
+          userId: student?._id,
+          hostelId: student?.hostelId,
+          floorNumber: hostelDetail?.floorNumber,
+          bedType: hostelDetail?.bedType,
+          roomNumber: hostelDetail?.roomNumber,
+          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+          pushNotificationTypes: PushNotificationTypes.AUTO,
+          templateId: template?._id,
+          templateSendMessage: description,
+          isNoticeCreated: finalNoticeCreated,
+          notificationLog,
+          createdAt: getCurrentISTTime(),
+        });
+        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+        if (finalNoticeCreated) {
+          //NOTE: Use the send push notification function.
+          await sendPushNotificationToUser(
+            playedIds,
+            template?.title,
+            description,
+            templateType
+          );
+        }
       }
 
       return UPDATE_DATA;

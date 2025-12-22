@@ -10,6 +10,7 @@ import StudentHostelAllocation from "../models/studentHostelAllocation.model";
 import { getSignedUrl, pushToS3Bucket } from "../utils/awsUploadService";
 import { MESS_BULK_UPLOAD_FILES } from "../utils/s3bucketFolder";
 import UserService from "./user.service";
+import { Types } from "mongoose";
 
 import {
   excelDateToJSDate,
@@ -37,12 +38,33 @@ import {
 } from "../utils/enum";
 import { sendPushNotificationToUser } from "../utils/commonService/pushNotificationService";
 
-const { RECORD_NOT_FOUND, START_DATE_ERROR } = ERROR_MESSAGES;
+const { RECORD_NOT_FOUND, START_DATE_ERROR, NO_DATA_IN_GIVEN_DATE } =
+  ERROR_MESSAGES;
 const { CREATE_DATA, DELETE_DATA, UPDATE_DATA, MEAL_CANCELLED } =
   SUCCESS_MESSAGES;
 const { MESS_MENU_ALREADY_EXIST, INVALID_REPORT_TYPE } = VALIDATION_MESSAGES;
 const { fetchPlayerNotificationConfig, getStudentAllocatedHostelDetails } =
   UserService;
+
+interface TodayMenuResponse {
+  messDetails: {
+    date: Date;
+    breakfast: string;
+    lunch: string;
+    snacks: string;
+    dinner: string;
+  };
+}
+
+//SECTION: Interface for Booking Request
+export interface IBookingRequest {
+  date: string | Date;
+  isBreakfastBooked: boolean;
+  isLunchBooked: boolean;
+  isDinnerBooked: boolean;
+  isSnacksBooked: boolean;
+  bookingStatus?: MealBookingStatusTypes;
+}
 
 class MessService {
   //SECTION: Method to create a mess menu for hostel
@@ -330,35 +352,55 @@ class MessService {
   };
 
   //SECTION: Method to get mess menu by id
+
   todayHostelMenuByUserId = async (
     hostelId: string,
-    mealDate?: Date
-  ): Promise<{ messDetails: any }> => {
-    try {
-      const hostel = await Hostel.exists({ _id: hostelId });
-
-      if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
-
-      // Check if date is provided; if not, use today's date
-      const queryDate = mealDate ? new Date(mealDate) : new Date();
-      queryDate.setUTCHours(0, 0, 0, 0);
-
-      // Get today's menu based on the provided or current date
-      const menu = await MessMenu.findOne({
-        hostelId,
-        date: queryDate,
-      }).select("date breakfast lunch snacks dinner");
-
-      if (!menu) {
-        throw new Error(
-          `No menu found for the date: ${queryDate.toDateString()}`
-        );
-      }
-
-      return { messDetails: menu };
-    } catch (error: any) {
-      throw new Error(`Failed to retrieve menu: ${error.message}`);
+    mealDate?: string | Date
+  ): Promise<TodayMenuResponse> => {
+    if (!Types.ObjectId.isValid(hostelId)) {
+      throw new Error("Invalid hostelId");
     }
+
+    const hostelExists = await Hostel.exists({ _id: hostelId });
+    if (!hostelExists) {
+      throw new Error(RECORD_NOT_FOUND("Hostel"));
+    }
+
+    let dateOnly: string;
+
+    if (!mealDate) {
+      dateOnly = new Date().toISOString().split("T")[0];
+    } else if (typeof mealDate === "string") {
+      dateOnly = mealDate.includes("T") ? mealDate.split("T")[0] : mealDate;
+    } else {
+      dateOnly = mealDate.toISOString().split("T")[0];
+    }
+
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+      throw new Error("Invalid mealDate format");
+    }
+
+    // Create a Date object at UTC midnight for the specified date
+    const baseDate = new Date(`${dateOnly}T00:00:00+05:30`);
+
+    const queryDate = new Date(
+      Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate())
+    );
+
+    const menu = await MessMenu.findOne({
+      hostelId,
+      date: queryDate,
+      status: true,
+    })
+      .select("date breakfast lunch snacks dinner -_id")
+      .lean();
+
+    if (!menu) {
+      throw new Error(`Menu not found for date ${dateOnly}`);
+    }
+
+    return { messDetails: menu };
   };
 
   //SECTION: Method to book meal
@@ -531,7 +573,6 @@ class MessService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.MEAL_BOOKED
           );
         }
@@ -823,7 +864,6 @@ class MessService {
             playedIds,
             template?.title,
             description,
-            template?.image,
             TemplateTypes.MEAL_CANCELLED
           );
         }

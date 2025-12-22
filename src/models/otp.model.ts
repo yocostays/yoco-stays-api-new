@@ -1,111 +1,66 @@
+
 import mongoose, { Document, Schema } from "mongoose";
-import { SchemeReferenceModelTypes } from "../utils/enum";
 
 export interface IOtp extends Document {
-  userId: mongoose.Types.ObjectId;
-  userModel: SchemeReferenceModelTypes | null; 
-  phone: string;
-  otp: number;
-  email:string;
-  expiryTime: Date;
-  isVerified: boolean;
-  status: boolean;
-  createdBy?: mongoose.Types.ObjectId;
-  updatedBy?: mongoose.Types.ObjectId;
-  createdAt?: Date;
-  updatedAt?: Date;
-  verifyAttempts?: number;        // << ADDED By Mayur for tracking OTP verify attempts
-  lastVerifyAttemptAt?: Date | null;
+  identifier: string; // Email or Phone
+  channel: "EMAIL" | "SMS";
+  purpose: string;
+  otpHash: string;
+  expiresAt: Date;
+  usedAt?: Date | null;
+  attempts: number;
+  maxAttempts: number;
+  createdAt: Date;
 }
 
 const OtpSchema: Schema = new Schema<IOtp>(
   {
-    userId: {
-      type: Schema.Types.ObjectId,
-      refPath: "userModel",
-      required: false,
-      default: null,
-    },
-    email:{
-      type:String,
-      required:false,
-      // default:null,
-      // unique:true
-    },
-    userModel: {
+    identifier: {
       type: String,
-      enum: Object.values(SchemeReferenceModelTypes),
-      required: false,
-      default: null, 
+      required: true,
+      trim: true,
+      index: true,
     },
-    phone: {
+    channel: {
       type: String,
-      required: false,
-      // default: null,
-    },
-    otp: {
-      type: Number,
+      enum: ["EMAIL", "SMS"],
       required: true,
     },
-    expiryTime: {
+    purpose: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    otpHash: {
+      type: String,
+      required: true,
+    },
+    expiresAt: {
       type: Date,
       required: true,
     },
-    isVerified: {
-      type: Boolean,
-      default: false,
-    },
-     verifyAttempts: {                 
-      type: Number,                  
-      default: 0,                    
-    },                               
-
-    lastVerifyAttemptAt: {            
-      type: Date,                     
-      default: null,                  
-    },               
-    status: {
-      type: Boolean,
-      default: true,
-    },
-    createdBy: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: false,
+    usedAt: {
+      type: Date,
       default: null,
     },
-    updatedBy: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: false,
-      default: null,
+    attempts: {
+      type: Number,
+      default: 0,
+    },
+    maxAttempts: {
+      type: Number,
+      default: 5,
     },
   },
   { timestamps: true }
 );
 
-OtpSchema.index(
-  { email: 1 },
-  {
-    partialFilterExpression: {
-      email: { $type: "string" }
-    }
-  }
-);
+// Indexes
+// Combined index for faster lookup of valid OTPs
+OtpSchema.index({ identifier: 1, purpose: 1, usedAt: 1 });
 
-
-OtpSchema.index(
-  { phone: 1 },
-  {
-    partialFilterExpression: {
-      phone: { $type: "string" } 
-    }
-  }
-);
-// OtpSchema.index({ phone: 1 });
-OtpSchema.index({ userId: 1 });
-OtpSchema.index({ userModel: 1 });
-OtpSchema.index({ expiryTime: 1 }, { expireAfterSeconds: 0 });
+// TTL Index: Delete after 24 hours (86400 seconds) so we can track daily limits
+OtpSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
 
 const Otp = mongoose.model<IOtp>("Otp", OtpSchema);
 export default Otp;

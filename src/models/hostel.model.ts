@@ -10,6 +10,7 @@ import {
   MealCountReportType,
   RoomCoolingType,
 } from "../utils/enum";
+import aggregatePaginate from "mongoose-aggregate-paginate-v2";
 
 // Interfaces
 export interface IBedNumberDetails extends Document {
@@ -282,5 +283,10 @@ HostelSchema.index({ name: "text", description: "text" });
 HostelSchema.index({ createdAt: -1 });
 HostelSchema.index({ updatedAt: -1 });
 
-const Hostel = mongoose.model<IHostel>("Hostel", HostelSchema);
+
+HostelSchema.plugin(aggregatePaginate);
+
+interface HostelModel<T extends Document> extends mongoose.AggregatePaginateModel<T> { }
+
+const Hostel: HostelModel<IHostel> = mongoose.model<IHostel>("Hostel", HostelSchema) as HostelModel<IHostel>;
 export default Hostel;

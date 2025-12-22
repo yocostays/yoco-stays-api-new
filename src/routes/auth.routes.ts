@@ -2,6 +2,15 @@ import { Router } from "express";
 import AuthController from "../controllers/auth.controller";
 import validateToken from "../middlewares/validateToken";
 import { uploadFileWithMulter } from "../utils/configureMulterStorage";
+import {
+  otpGenerationRateLimiter,
+  otpVerificationRateLimiter,
+} from "../middlewares/otpRateLimiter";
+import { validateZod } from "../middlewares/validateZod";
+import {
+  requestOtpSchema,
+  resetPasswordSchema,
+} from "../validators/otp.schema";
 const {
   staffLoginWithUserNameAndPwd,
   studentLoginWithIdAndPwd,
@@ -30,9 +39,6 @@ authRouter.post("/sessions", studentLoginWithIdAndPwd);
 // Shared: logout (requires token) — used by mobile clients
 authRouter.post("/logout", validateToken, logoutFromApplication);
 
-// Student (mobile) reset password
-authRouter.post("/student-reset-password", resetStudentPasswordInApp);//for app studen rest password
-
 // Mobile upload (image/audio) used by staff and students (requires token)
 authRouter.post(
   "/upload-media",
@@ -41,15 +47,17 @@ authRouter.post(
   uploadImageOrAudio
 );
 
-// Mobile: request OTP (app)
-authRouter.post("/request-otp", generateOtpForApp);//for app
-
 // ========== Web App Routes (Warden / Admin / Warden Panel) ==========
 // Warden: refresh token (warden panel)
 authRouter.post("/refresh-token", validateToken, generateWardenRefreshToken);
 
 // Warden panel: generate OTP for staff via web
-authRouter.post("/staff/generate-otp", generateOtpForwardenPanel);//warden panel
+// Warden panel: generate OTP for staff (dual-layer protection)
+authRouter.post(
+  "/staff/generate-otp",
+  otpGenerationRateLimiter,
+  generateOtpForwardenPanel
+);
 
 // Web: staff password reset (via admin/warden panel)
 authRouter.post("/staff/reset-password", resetStaffPassword);
@@ -62,7 +70,36 @@ authRouter.post(
 );
 
 // Web: generate/verify OTP for user signup in warden/admin panel
-authRouter.post("/generate-otp", validateToken, generateOtpUserSignUp);
-authRouter.post("/verify-otp", validateToken, verifyOtpUserSignUp);
+// Web: generate/verify OTP for user signup (dual-layer protection)
+authRouter.post(
+  "/generate-otp",
+  validateToken,
+  otpGenerationRateLimiter,
+  generateOtpUserSignUp
+);
+authRouter.post(
+  "/verify-otp",
+  validateToken,
+  otpVerificationRateLimiter,
+  verifyOtpUserSignUp
+);
+
+//------------------------------- Mobile app side APIs----------------------------------------------
+
+// Mobile: request OTP
+authRouter.post(
+  "/request-otp",
+  otpGenerationRateLimiter,
+  validateZod(requestOtpSchema),
+  generateOtpForApp
+);
+
+// Student reset password - verification protected
+authRouter.post(
+  "/student-reset-password",
+  otpVerificationRateLimiter,
+  validateZod(resetPasswordSchema),
+  resetStudentPasswordInApp
+);
 
 export default authRouter;

@@ -5,6 +5,7 @@ import routes from "./routes";
 import mongoose from 'mongoose';
 import path from 'path';
 
+
 dotenv.config();
 
 // Create an instance of express
@@ -21,6 +22,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase limi
 app.use(cors()); // Enable CORS for all routes
 app.use("/uploads", express.static(path.resolve("uploads")));
 
+
+
 app.use("/api", routes);
 // Example route
 app.get('/', (req: Request, res: Response) => {
@@ -34,7 +37,7 @@ mongoose.connect(process.env.MONGO_URI || '')
     // Start the server only after the connection is successful
     app.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
-    
+
     });
   })
   .catch(err => {
