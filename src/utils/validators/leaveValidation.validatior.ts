@@ -1,7 +1,7 @@
 import Joi from "joi";
 import moment from "moment-timezone";
 
-const TIMEZONE = "Asia/Kolkata"; // change if needed
+const TIMEZONE = "Asia/Kolkata"; // your timezone
 
 export const leaveValidationSchema = Joi.object({
     _valid: Joi.object()
@@ -23,12 +23,13 @@ export const leaveValidationSchema = Joi.object({
             "any.required": "minutes is required",
         }),
 
-    startDate: Joi.date()
+    startDate: Joi.string()
         .required()
         .custom((value, helpers) => {
-            const now = moment().tz(TIMEZONE);
-            const start = moment(value).tz(TIMEZONE);
+            const start = moment.parseZone(value).tz(TIMEZONE); // respects +05:30
+            const now = moment().tz(TIMEZONE);        // current time in TZ
 
+            console.log(start, start.isBefore(now), now, "sisffff")
             if (!start.isValid()) {
                 return helpers.error("any.invalid");
             }
@@ -45,22 +46,36 @@ export const leaveValidationSchema = Joi.object({
             "any.required": "Start date is required",
         }),
 
-    endDate: Joi.date()
-        .min(Joi.ref("startDate"))
+
+    endDate: Joi.string()
         .required()
+        .custom((value, helpers) => {
+            const start = moment.tz(helpers.state.ancestors[0].startDate, TIMEZONE);
+            const end = moment.tz(value, TIMEZONE);
+
+            if (!end.isValid()) {
+                return helpers.error("any.invalid");
+            }
+
+            if (end.isBefore(start)) {
+                return helpers.error("date.min");
+            }
+
+            return value;
+        })
         .messages({
-            "date.base": "End date must be a valid date",
+            "any.invalid": "End date must be a valid date",
             "date.min": "End date must be after start date",
             "any.required": "End date is required",
         }),
 
     days: Joi.number()
         .integer()
-        .min(1)
+        .min(0)
         .required()
         .messages({
             "number.base": "Days must be a number",
-            "number.min": "Days must be at least 1",
+            "number.min": "Days must be 0 or more",
             "any.required": "Days is required",
         }),
 
