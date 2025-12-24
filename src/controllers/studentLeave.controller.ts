@@ -49,19 +49,13 @@ class StudentLeaveController {
       const { error } = leaveValidationSchema.validate(req.body, {
         abortEarly: false,
       });
-      console.log(error, "errrorrr")
       if (error) {
         return res.status(400).json({
-          message: "Validation error",
-          errors: error.details.map(err => err.message),
+          message: error.details[0].message,
+          statusCode: 400,
         });
       }
-      // if (error) {
-      //   return res.status(400).json({
-      //     statusCode: 400,
-      //     message: error?.details,
-      //   });
-      // }
+   
 
       const userId = req.body._valid._id;
       if (!mongoose.isValidObjectId(userId)) {
