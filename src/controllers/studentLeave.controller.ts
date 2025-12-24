@@ -15,6 +15,7 @@ import {
   ReportDropDownTypes,
   SortingTypes,
 } from "../utils/enum";
+import { leaveValidationSchema } from "../utils/validators/leaveValidation.validatior";
 
 const { getStaffById } = StaffService;
 const { getStudentById } = UserService;
@@ -45,6 +46,23 @@ class StudentLeaveController {
     res: Response
   ): Promise<Response<HttpResponse>> {
     try {
+      const { error } = leaveValidationSchema.validate(req.body, {
+        abortEarly: false,
+      });
+      console.log(error, "errrorrr")
+      if (error) {
+        return res.status(400).json({
+          message: "Validation error",
+          errors: error.details.map(err => err.message),
+        });
+      }
+      // if (error) {
+      //   return res.status(400).json({
+      //     statusCode: 400,
+      //     message: error?.details,
+      //   });
+      // }
+
       const userId = req.body._valid._id;
       if (!mongoose.isValidObjectId(userId)) {
         throw new Error(INVALID_ID);
