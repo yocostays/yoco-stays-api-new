@@ -4,11 +4,17 @@ import User from "../models/user.model";
 import Notice from "../models/notice.model";
 import moment from "moment";
 import StudentHostelAllocation from "../models/studentHostelAllocation.model";
+import BookMeals from "../models/bookMeal.model";
+import HostelMealTiming from "../models/hostelMealTiming.model";
+import MessMenu from "../models/messMenu.model";
 import UserService from "./user.service";
 import {
   LeaveApproveStatusTypes,
   LeaveStatusTypes,
   LeaveTypes,
+  MealBookingIntent,
+  MealCancelSource,
+  MealBookingStatusTypes,
   NoticeTypes,
   PushNotificationTypes,
   ReportDropDownTypes,
@@ -114,62 +120,69 @@ class StudentLeaveService {
 
       //NOTE: Check user leave applied or not.
       if (newLeave) {
-        const { playedIds, template, student, isPlayedNoticeCreated, log } =
-          await fetchPlayerNotificationConfig(
-            userId,
-            TemplateTypes.LEAVE_REQUEST_SUBMITTED
-          );
-        //NOTE: Get student and hostelDetails
-        const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-          await getStudentAllocatedHostelDetails(
-            student?._id,
-            student?.hostelId,
-            TemplateTypes.LEAVE_REQUEST_SUBMITTED
-          );
+        try {
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await fetchPlayerNotificationConfig(
+              userId,
+              TemplateTypes.LEAVE_REQUEST_SUBMITTED
+            );
+          //NOTE: Get student and hostelDetails
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              TemplateTypes.LEAVE_REQUEST_SUBMITTED
+            );
 
-        //NOTE: Final notice created check.
-        const finalNoticeCreated =
-          isPlayedNoticeCreated && isHostelNoticeCreated;
+          //NOTE: Final notice created check.
+          const finalNoticeCreated =
+            isPlayedNoticeCreated && isHostelNoticeCreated;
 
-        // NOTE: Combine available logs into an array
-        const notificationLog = [log, hostelLogs].filter(Boolean);
+          // NOTE: Combine available logs into an array
+          const notificationLog = [log, hostelLogs].filter(Boolean);
 
-        //NOTE: Retrieve only the date section from date & time.
-        const fromDate = formatDateOnly(startDate);
-        const toDate = formatDateOnly(endDate);
+          //NOTE: Retrieve only the date section from date & time.
+          const fromDate = formatDateOnly(startDate);
+          const toDate = formatDateOnly(endDate);
 
-        const dynamicData = {
-          fromDate,
-          toDate,
-        };
-        //NOTE: Add details for dynamic message using the populateTemplate.
-        const description = template?.description
-          ? populateTemplate(template.description, dynamicData)
-          : "Your leave request has been submitted successfully.";
+          const dynamicData = {
+            fromDate,
+            toDate,
+          };
+          //NOTE: Add details for dynamic message using the populateTemplate.
+          const description = template?.description
+            ? populateTemplate(template.description, dynamicData)
+            : "Your leave request has been submitted successfully.";
 
-        //NOTE: Create entry in notice
-        await Notice.create({
-          userId: student?._id,
-          hostelId: student?.hostelId,
-          floorNumber: hostelDetail?.floorNumber,
-          bedType: hostelDetail?.bedType,
-          roomNumber: hostelDetail?.roomNumber,
-          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-          pushNotificationTypes: PushNotificationTypes.AUTO,
-          templateId: template?._id,
-          templateSendMessage: description,
-          isNoticeCreated: finalNoticeCreated,
-          notificationLog,
-          createdAt: getCurrentISTTime(),
-        });
-        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-        if (finalNoticeCreated) {
-          //NOTE: Use the send push notification function.
-          await sendPushNotificationToUser(
-            playedIds,
-            template?.title,
-            description,
-            TemplateTypes.LEAVE_REQUEST_SUBMITTED
+          //NOTE: Create entry in notice
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+          //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+          if (finalNoticeCreated) {
+            //NOTE: Use the send push notification function.
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title,
+              description,
+              TemplateTypes.LEAVE_REQUEST_SUBMITTED
+            );
+          }
+        } catch (notificationError: any) {
+          // Log notification error but don't fail the request since leave is created
+          console.error(
+            `[Leave Notification Failed] UserId: ${userId}, Error: ${notificationError.message}`
           );
         }
       }
@@ -867,71 +880,82 @@ class StudentLeaveService {
 
       //NOTE: Send notification when leave is approved or rejected
       if (studentLeave) {
-        //NOTE: Dynamically select the appropriate template type based on leave status.
-        const templateType =
-          status === LeaveStatusTypes.APPROVED
-            ? TemplateTypes.LEAVE_APPROVED
-            : TemplateTypes.LEAVE_REJECTED;
+        try {
+          //NOTE: Dynamically select the appropriate template type based on leave status.
+          const templateType =
+            status === LeaveStatusTypes.APPROVED
+              ? TemplateTypes.LEAVE_APPROVED
+              : TemplateTypes.LEAVE_REJECTED;
 
-        const { playedIds, template, student, isPlayedNoticeCreated, log } =
-          await fetchPlayerNotificationConfig(
-            studentLeave?.createdBy,
-            templateType
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await fetchPlayerNotificationConfig(
+              studentLeave?.createdBy,
+              templateType
+            );
+
+          //NOTE: Get student and hostelDetails
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              templateType
+            );
+
+          //NOTE: Final notice created check.
+          const finalNoticeCreated =
+            isPlayedNoticeCreated && isHostelNoticeCreated;
+
+          // NOTE: Combine available logs into an array
+          const notificationLog = [log, hostelLogs].filter(Boolean);
+
+          //NOTE: Retrieve only the date section from date & time.
+          const fromDate = formatDateOnly(studentLeave?.startDate);
+          const toDate = formatDateOnly(studentLeave?.endDate);
+
+          const dynamicData = {
+            fromDate,
+            toDate,
+          };
+          //NOTE: Add details for dynamic message using the populateTemplate.
+          const description = populateTemplate(
+            template?.description,
+            dynamicData
           );
 
-        //NOTE: Get student and hostelDetails
-        const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-          await getStudentAllocatedHostelDetails(
-            student?._id,
-            student?.hostelId,
-            templateType
-          );
+          //NOTE: Create entry in notice
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
 
-        //NOTE: Final notice created check.
-        const finalNoticeCreated =
-          isPlayedNoticeCreated && isHostelNoticeCreated;
+          //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+          if (finalNoticeCreated) {
+            //NOTE: Use the send push notification function.
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title,
+              description,
+              templateType
+            );
+          }
+        } catch (notificationError: any) {
+          console.error(`[Leave Approval Notification Failed] LeaveId: ${leaveId}, Error: ${notificationError.message}`);
+        }
 
-        // NOTE: Combine available logs into an array
-        const notificationLog = [log, hostelLogs].filter(Boolean);
-
-        //NOTE: Retrieve only the date section from date & time.
-        const fromDate = formatDateOnly(studentLeave?.startDate);
-        const toDate = formatDateOnly(studentLeave?.endDate);
-
-        const dynamicData = {
-          fromDate,
-          toDate,
-        };
-        //NOTE: Add details for dynamic message using the populateTemplate.
-        const description = populateTemplate(
-          template?.description,
-          dynamicData
-        );
-
-        //NOTE: Create entry in notice
-        await Notice.create({
-          userId: student?._id,
-          hostelId: student?.hostelId,
-          floorNumber: hostelDetail?.floorNumber,
-          bedType: hostelDetail?.bedType,
-          roomNumber: hostelDetail?.roomNumber,
-          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-          pushNotificationTypes: PushNotificationTypes.AUTO,
-          templateId: template?._id,
-          templateSendMessage: description,
-          isNoticeCreated: finalNoticeCreated,
-          notificationLog,
-          createdAt: getCurrentISTTime(),
-        });
-
-        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-        if (finalNoticeCreated) {
-          //NOTE: Use the send push notification function.
-          await sendPushNotificationToUser(
-            playedIds,
-            template?.title,
-            description,
-            templateType
+        // Trigger Meal Cancellation Flow
+        if (status === LeaveStatusTypes.APPROVED) {
+          this.cancelMealsForLeavePeriod(leave).catch(err =>
+            console.error(`[LeaveCancellation] Hook Error: ${err.message}`)
           );
         }
       }
@@ -1270,10 +1294,17 @@ class StudentLeaveService {
         ordered: false,
       });
 
-      if (result.modifiedCount === 0) {
-        throw new Error(
-          "No leave statuses were updated. Check if all leave IDs are valid and in pending state."
-        );
+      if (result.modifiedCount > 0) {
+        // Trigger Meal Cancellation for all approved leaves
+        const approvedLeaves = leaves.filter(l => l.status === LeaveStatusTypes.APPROVED);
+        for (const item of approvedLeaves) {
+          const leave = await StudentLeave.findById(item.leaveId).lean();
+          if (leave) {
+            this.cancelMealsForLeavePeriod(leave as any).catch(err =>
+              console.error(`[LeaveCancellation] Bulk Hook Error for ${item.leaveId}: ${err.message}`)
+            );
+          }
+        }
       }
 
       return UPDATE_DATA;
@@ -1429,6 +1460,133 @@ class StudentLeaveService {
       }
     } catch (error) {
       throw new Error(UNIQUE_GENERATE_FAILED);
+    }
+  };
+
+  /**
+   * SECTION: Method to cancel meals for leave period
+   * Runs upon warden approval of a leave request.
+   */
+  cancelMealsForLeavePeriod = async (leave: IStudentLeave): Promise<void> => {
+    try {
+      const { startDate, endDate, userId, hostelId } = leave;
+
+      // Calculate the full date range for the leave in IST
+      const startMoment = moment(startDate).tz("Asia/Kolkata");
+      const endMoment = moment(endDate).tz("Asia/Kolkata");
+
+      // Get all unique dates (YYYY-MM-DD) in the range
+      const datesInRange: string[] = [];
+      let current = moment(startMoment).startOf("day");
+      const endMarker = moment(endMoment).startOf("day");
+
+      while (current.isSameOrBefore(endMarker)) {
+        datesInRange.push(current.format("YYYY-MM-DD"));
+        current.add(1, "day");
+      }
+
+      console.log(`[LeaveCancellation] Processing ${datesInRange.length} days for leave ${leave._id}`);
+
+      // Fetch dependencies in bulk (General Timing and Daily Menus)
+      const [generalTimings, menus] = await Promise.all([
+        HostelMealTiming.findOne({ hostelId, status: true }).lean(),
+        MessMenu.find({
+          hostelId,
+          date: { $in: datesInRange.map(d => moment.utc(d).toDate()) },
+          status: true
+        }).lean()
+      ]);
+
+      // Maps for quick lookup
+      const menuMap = new Map();
+      menus.forEach(m => menuMap.set(moment(m.date).format("YYYY-MM-DD"), m));
+
+      const bulkOps: any[] = [];
+
+      // Process each date
+      for (const dateKey of datesInRange) {
+        const targetDateUTC = moment.utc(dateKey).toDate();
+        const dMoment = moment.tz(dateKey, "Asia/Kolkata");
+        const menu = menuMap.get(dateKey);
+
+        if (!generalTimings) {
+          console.log(`[LeaveCancellation] No general meal timings for hostel ${hostelId}, skipping cancellation.`);
+          break; // Stop if no timings are configured for this hostel
+        }
+        const timings = generalTimings;
+
+        // Define outside-hostel window
+        let windowStart = moment(dMoment).startOf("day");
+        let windowEnd = moment(dMoment).endOf("day");
+        if (dateKey === startMoment.format("YYYY-MM-DD")) windowStart = startMoment;
+        if (dateKey === endMoment.format("YYYY-MM-DD")) windowEnd = endMoment;
+
+        const mealDefs = [
+          { name: "breakfast", end: timings.breakfastEndTime, bool: "isBreakfastBooked" },
+          { name: "lunch", end: timings.lunchEndTime, bool: "isLunchBooked" },
+          { name: "snacks", end: timings.snacksEndTime, bool: "isSnacksBooked" },
+          { name: "dinner", end: timings.dinnerEndTime, bool: "isDinnerBooked" }
+        ];
+
+        const setUpdates: any = {
+          updatedAt: moment().tz("Asia/Kolkata").toDate(),
+          status: true,
+        };
+        const setOnInsert: any = {
+          hostelId,
+          studentId: userId,
+          date: targetDateUTC,
+          isManualBooking: false, // Default for new records; existing records preserve their flag
+          createdAt: moment().tz("Asia/Kolkata").toDate(),
+          createdBy: userId,
+          updatedBy: userId
+        };
+        if (menu) setOnInsert.mealId = menu._id;
+
+        let cancelledInDay = 0;
+
+        for (const mDef of mealDefs) {
+          let isCancelled = false;
+          if (mDef.end) {
+            const [h, m] = mDef.end.split(":").map(Number);
+            const mealEndAbs = moment.tz(dateKey, "Asia/Kolkata").set({ hour: h, minute: m, second: 0, millisecond: 0 });
+            if (mealEndAbs.isSameOrAfter(windowStart) && mealEndAbs.isSameOrBefore(windowEnd)) {
+              isCancelled = true;
+            }
+          }
+
+          if (isCancelled) {
+            setUpdates[mDef.bool] = false;
+            setUpdates[`meals.${mDef.name}`] = {
+              bookingIntent: MealBookingIntent.CANCELLED,
+              cancelSource: MealCancelSource.LEAVE,
+              consumed: false
+            };
+            cancelledInDay++;
+          }
+        }
+
+        if (cancelledInDay > 0) {
+          // If all meals for the day are cancelled, mark the entire record status
+          if (cancelledInDay === 4) {
+            setUpdates.bookingStatus = MealBookingStatusTypes.CANCELLED;
+          }
+          bulkOps.push({
+            updateOne: {
+              filter: { studentId: userId, date: targetDateUTC, hostelId },
+              update: { $set: setUpdates, $setOnInsert: setOnInsert },
+              upsert: true
+            }
+          });
+        }
+      }
+
+      if (bulkOps.length > 0) {
+        const result = await BookMeals.bulkWrite(bulkOps);
+        console.log(`[LeaveCancellation] Precision applied: ${result.upsertedCount} new, ${result.modifiedCount} updated.`);
+      }
+    } catch (error: any) {
+      console.error(`[LeaveCancellation] Final Fix Failure: ${error.message}`);
     }
   };
 }

@@ -16,7 +16,7 @@ import {
   SAMPLE_FILE,
   STAFF_FOLDER,
 } from "../utils/s3bucketFolder";
-import { OtpChannel, OtpPurpose } from "../validators/otp.schema";
+import { OtpChannel, OtpPurpose } from "../utils/validators/otp.schema";
 import OtpLogicService from "../services/otp.service";
 
 const {

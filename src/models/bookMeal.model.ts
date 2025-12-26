@@ -1,29 +1,77 @@
 import mongoose, { Document, Schema } from "mongoose";
-import { MealBookingStatusTypes } from "../utils/enum";
+import {
+  MealBookingStatusTypes,
+  MealBookingIntent,
+  MealCancelSource,
+} from "../utils/enum";
 
-// Define the BookMealsDetails interface
+export interface IMealState {
+  bookingIntent: MealBookingIntent;
+  consumed: boolean;
+  consumedAt?: Date;
+  cancelSource?: MealCancelSource;
+}
+
+export interface IMealsObject {
+  breakfast?: IMealState;
+  lunch?: IMealState;
+  snacks?: IMealState;
+  dinner?: IMealState;
+}
+
 export interface IBookMealsDetails extends Document {
   mealId: mongoose.Types.ObjectId;
   bookMealNumber: string;
   hostelId: mongoose.Types.ObjectId;
   studentId: mongoose.Types.ObjectId;
   date: Date;
-  isBreakfastBooked: boolean;
-  isLunchBooked: boolean;
-  isDinnerBooked: boolean;
-  isSnacksBooked: boolean;
+
+  // Legacy boolean fields - null = meal not available in menu
+  isBreakfastBooked: boolean | null;
+  isLunchBooked: boolean | null;
+  isDinnerBooked: boolean | null;
+  isSnacksBooked: boolean | null;
+
   cancellationReason: string;
   bookingStatus: MealBookingStatusTypes;
   status: boolean;
   isManualBooking: boolean;
+  mealCount: number;
   staffId: mongoose.Types.ObjectId;
   createdBy: mongoose.Types.ObjectId;
   updatedBy?: mongoose.Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
+
+  // New meal-level state machine
+  meals?: IMealsObject;
 }
 
-// Define the BookMealsSchema
+const MealStateSchema = new Schema<IMealState>(
+  {
+    bookingIntent: {
+      type: String,
+      enum: Object.values(MealBookingIntent),
+      required: true, //
+    },
+    // TEMPORARY: defaults to true until biometric/punch system is implemented
+    consumed: {
+      type: Boolean,
+      default: true,
+    },
+    consumedAt: {
+      type: Date,
+      default: null,
+    },
+    cancelSource: {
+      type: String,
+      enum: [...Object.values(MealCancelSource), null],
+      default: null,
+    },
+  },
+  { _id: false }
+);
+
 const BookMealsSchema: Schema = new Schema<IBookMealsDetails>(
   {
     mealId: {
@@ -50,25 +98,33 @@ const BookMealsSchema: Schema = new Schema<IBookMealsDetails>(
       type: Date,
       required: true,
     },
+
+    // Legacy boolean fields - null = meal not available in menu
     isBreakfastBooked: {
       type: Boolean,
-      required: true,
-      default: false,
+      required: false,
+      default: null,
     },
     isLunchBooked: {
       type: Boolean,
-      required: true,
-      default: false,
+      required: false,
+      default: null,
     },
     isSnacksBooked: {
       type: Boolean,
-      required: true,
-      default: false,
+      required: false,
+      default: null,
     },
     isDinnerBooked: {
       type: Boolean,
+      required: false,
+      default: null,
+    },
+
+    mealCount: {
+      type: Number,
       required: true,
-      default: false,
+      default: 0,
     },
     cancellationReason: {
       type: String,
@@ -108,11 +164,23 @@ const BookMealsSchema: Schema = new Schema<IBookMealsDetails>(
       required: false,
       default: null,
     },
+
+    // New meal-level state machine (optional for gradual adoption)
+    meals: {
+      type: {
+        breakfast: { type: MealStateSchema, default: undefined },
+        lunch: { type: MealStateSchema, default: undefined },
+        snacks: { type: MealStateSchema, default: undefined },
+        dinner: { type: MealStateSchema, default: undefined },
+      },
+      required: false,
+      default: undefined,
+    },
   },
   { timestamps: true }
 );
 
-// Add indexes to frequently queried fields
+// Indexes - all existing indexes preserved
 BookMealsSchema.index({ mealId: 1, date: 1 });
 BookMealsSchema.index({ hostelId: 1, studentId: 1, date: 1 });
 BookMealsSchema.index({ bookingStatus: 1 });
@@ -121,7 +189,12 @@ BookMealsSchema.index({ staffId: 1 });
 BookMealsSchema.index({ staffId: 1, date: 1 });
 BookMealsSchema.index({ status: 1 });
 
-// Define the BookMeals model
+// TTL Index: Auto-delete records after 450 days
+BookMealsSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: 450 * 24 * 60 * 60 }
+);
+
 const BookMeals = mongoose.model<IBookMealsDetails>(
   "BookMeals",
   BookMealsSchema

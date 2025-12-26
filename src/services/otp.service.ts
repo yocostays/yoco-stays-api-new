@@ -1,5 +1,5 @@
 import Otp, { IOtp } from "../models/otp.model";
-import { OtpPurpose, OtpChannel } from "../validators/otp.schema";
+import { OtpPurpose, OtpChannel } from "../utils/validators/otp.schema";
 import { generateSecureOtp, getExpiryDate } from "../utils/otpService";
 import { hashPassword, comparePassword } from "../utils/hashUtils";
 import { sendSMS } from "../utils/commonService/messagingService";

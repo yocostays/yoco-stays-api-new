@@ -19,6 +19,11 @@ import {
   SortingTypes,
 } from "../utils/enum";
 
+// DRY Helper imports (only for newly created APIs)
+import { asyncHandler } from "../utils/asyncHandler";
+import { sendSuccess, sendError, sendZodError } from "../utils/responseHelpers";
+import { getValidatedStudent } from "../utils/entityHelpers";
+
 const { getStaffById } = StaffService;
 const { getStudentById } = UserService;
 
@@ -42,6 +47,9 @@ const {
   fetchGatepassInfoByMealId,
   manuallyBookMeal,
   fetchManuallyBookedMeals,
+  studentBookMealBulk,
+  getStudentMealBookingMonthlyView,
+  setHostelMealTiming,
 } = MessService;
 const {
   CREATE_DATA,
@@ -53,8 +61,6 @@ const {
 } = SUCCESS_MESSAGES;
 const { INVALID_ID, REQUIRED_FIELD } = VALIDATION_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
-
-
 
 class MessMenuController {
   //SECTION Controller method to handle mess menu creation for hostel
@@ -93,16 +99,16 @@ class MessMenuController {
         const missingField = !hostelId
           ? "Hostel Id"
           : !fromDate
-            ? "From Date"
-            : !toDate
-              ? "To Date"
-              : !breakfast
-                ? "Breakfast"
-                : !lunch
-                  ? "Lunch"
-                  : !snacks
-                    ? "Snacks"
-                    : "Dinner";
+          ? "From Date"
+          : !toDate
+          ? "To Date"
+          : !breakfast
+          ? "Breakfast"
+          : !lunch
+          ? "Lunch"
+          : !snacks
+          ? "Snacks"
+          : "Dinner";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -271,14 +277,14 @@ class MessMenuController {
         const missingField = !hostelId
           ? "Hostel Id"
           : !date
-            ? "Date"
-            : !breakfast
-              ? "Breakfast"
-              : !lunch
-                ? "Lunch"
-                : !snacks
-                  ? "Snacks"
-                  : "Dinner";
+          ? "Date"
+          : !breakfast
+          ? "Breakfast"
+          : !lunch
+          ? "Lunch"
+          : !snacks
+          ? "Snacks"
+          : "Dinner";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -355,7 +361,7 @@ class MessMenuController {
   }
 
   //SECTION Controller method to book student meal
-  async bookMealByStudent(
+  async bookMealByStudentOld(
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
@@ -933,8 +939,8 @@ class MessMenuController {
         const missingField = !date
           ? "Date"
           : !studentId
-            ? "Student"
-            : "Meal Type";
+          ? "Student"
+          : "Meal Type";
         const errorResponse: HttpResponse = {
           statusCode: 400,
           message: `${missingField} is required`,
@@ -1022,6 +1028,69 @@ class MessMenuController {
       return res.status(400).json(errorResponse);
     }
   }
+
+  //SECTION Controller method to book meals
+  bookMealByStudent = asyncHandler(async (req: Request, res: Response) => {
+    const studentId = req.body._valid._id;
+
+    // Validate request body with Zod
+    const { BulkMealBookingSchema } = await import(
+      "../utils/validators/mealBooking.validator"
+    );
+
+    const parseResult = BulkMealBookingSchema.safeParse(req.body);
+
+    const validationError = sendZodError(res, parseResult);
+    if (validationError) return validationError;
+
+    const { bookings } = parseResult.data!; // Safe after validation check
+    const student = await getValidatedStudent(studentId);
+
+    // Call the new service method
+    const { results, summary } = await studentBookMealBulk(
+      student.hostelId,
+      student._id,
+      bookings
+    );
+
+    return sendSuccess(res, "Meal booking processed", { results, summary });
+  });
+
+  //SECTION Controller method to get monthly meal booking data (V1 - readonly)
+  getMonthlyMealData = asyncHandler(async (req: Request, res: Response) => {
+    const studentId = req.body._valid._id;
+
+    // Validate request body with Zod
+    const { CalendarMonthViewSchema } = await import(
+      "../utils/validators/mealBooking.validator"
+    );
+    const parseResult = CalendarMonthViewSchema.safeParse(req.body);
+
+    const validationError = sendZodError(res, parseResult);
+    if (validationError) return validationError;
+
+    const { date } = parseResult.data!; // Safe after validation check
+    const student = await getValidatedStudent(studentId);
+
+    // Call the service method
+    const { results, mealTimings } = await getStudentMealBookingMonthlyView(
+      student.hostelId,
+      student._id,
+      date
+    );
+
+    return sendSuccess(res, "Meal data fetched successfully", {
+      results,
+      mealTimings,
+    });
+  });
+
+  // SECTION: Controller method to set hostel meal timings
+  setHostelMealTiming = asyncHandler(async (req: Request, res: Response) => {
+    const result = await setHostelMealTiming(req.body);
+
+    return sendSuccess(res, UPDATE_DATA, result);
+  });
 }
 
 export default new MessMenuController();

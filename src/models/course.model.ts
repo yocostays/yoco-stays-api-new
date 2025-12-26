@@ -38,10 +38,10 @@ const CourseSchema: Schema = new Schema<ICourse>(
 );
 
 // Add indexes
-CourseSchema.index({ name: 1 }); 
-CourseSchema.index({ status: 1 }); 
+CourseSchema.index({ name: 1 });
+CourseSchema.index({ status: 1 });
 CourseSchema.index({ createdBy: 1 });
-CourseSchema.index({ updatedBy: 1 }); 
+CourseSchema.index({ updatedBy: 1 });
 
 // Create the model
 const Course = mongoose.model<ICourse>("Course", CourseSchema);
