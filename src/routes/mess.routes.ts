@@ -11,7 +11,7 @@ const {
   bookMealByStudent,
   getMonthlyMealData,
   cancelBookingMealByStudent,
-  fetchCancelledMeals,
+  // fetchCancelledMeals,
   messMenuBulkUpload,
   bookingReversible,
   editMealByStudent,
@@ -23,6 +23,7 @@ const {
   manuallyBookMeal,
   fetchManuallyBookedMeals,
   setHostelMealTiming,
+  getMealStateAnalyticsByDate,
 } = MessMenuController;
 import validateToken from "../middlewares/validateToken";
 import { validateZod } from "../middlewares/validateZod";
@@ -33,6 +34,7 @@ import {
 import {
   BulkMealBookingSchema,
   CalendarMonthViewSchema,
+  MealStateAnalyticsSchema,
 } from "../utils/validators/mealBooking.validator";
 import { studentMealBookingRateLimiter } from "../middlewares/studentRateLimiter";
 import { uploadFileWithMulter } from "../utils/configureMulterStorage";
@@ -62,11 +64,11 @@ messMenuRouter.post(
   validateToken,
   cancelBookingMealByStudent
 );
-messMenuRouter.post(
-  "/canceled-meal-history",
-  validateToken,
-  fetchCancelledMeals
-); //TODO - fetch Cancelled Meals and booked status
+// messMenuRouter.post(
+//   "/canceled-meal-history",
+//   validateToken,
+//   fetchCancelledMeals
+// ); //TODO - fetch Cancelled Meals and booked status
 messMenuRouter.post(
   "/bulk-upload",
   uploadFileWithMulter.single("file"),
@@ -85,19 +87,22 @@ messMenuRouter.post(
   studentMealBookingRateLimiter,
   bookMealByStudent
 );
-messMenuRouter.post(
-  "/v1/monthly-meal",
-  validateToken,
-  getMonthlyMealData
-);
+messMenuRouter.post("/v1/monthly-meal", validateToken, getMonthlyMealData);
 
 //--------------------------- (Warden Panel)------------------------------------------------
+
 messMenuRouter.post(
-  "/set/meal-timings",
+  "/dashboard/meal-states",
+  validateToken,
+  validateZod(MealStateAnalyticsSchema),
+  getMealStateAnalyticsByDate
+);
+
+messMenuRouter.post(
+  "/warden/set/meal-timings",
   validateToken,
   validateZod(SetMealTimingSchema),
   setHostelMealTiming
 );
-
 
 export default messMenuRouter;

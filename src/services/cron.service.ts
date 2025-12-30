@@ -59,7 +59,7 @@ class CronService {
   /**
    * Marks meals as consumed based on hybrid time cutoffs
    * Runs every hour to update consumption status
-   * 
+   *
    * Priority:
    * 1. Uses hostel-specific meal timings from HostelMealTiming (if configured)
    * 2. Falls back to hardcoded defaults if not configured:
@@ -152,8 +152,9 @@ class CronService {
               filter: {
                 hostelId: hostel._id,
                 date: todayUTC,
-                [`meals.${mealName}.bookingIntent`]:
-                  MealBookingIntent.CONFIRMED,
+                [`meals.${mealName}.status`]: {
+                  $in: [MealBookingIntent.CONFIRMED, MealBookingIntent.PENDING],
+                },
                 $or: [
                   { [`meals.${mealName}.consumed`]: false },
                   { [`meals.${mealName}.consumed`]: { $exists: false } },

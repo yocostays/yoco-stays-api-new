@@ -1,5 +1,12 @@
 import mongoose from "mongoose";
-import moment from "moment-timezone";
+import { normalizeDateKey } from "../utils/dateUtils";
+import moment from "moment-timezone"; // Keeping moment as per existing imports, but avoiding usage in optimized function
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 import { formatDateOnly, getDateRange, populateTemplate } from "../utils/lib";
 import MessMenu from "../models/messMenu.model";
 import BulkUpload from "../models/bulkUpload.model";
@@ -61,16 +68,6 @@ interface TodayMenuResponse {
     snacks: string;
     dinner: string;
   };
-}
-
-//SECTION: Interface for Booking Request
-export interface IBookingRequest {
-  date: string | Date;
-  isBreakfastBooked: boolean;
-  isLunchBooked: boolean;
-  isDinnerBooked: boolean;
-  isSnacksBooked: boolean;
-  bookingStatus?: MealBookingStatusTypes;
 }
 
 class MessService {
@@ -235,22 +232,22 @@ class MessService {
             day: menu.day ?? null,
             breakfast:
               mealType === MealCountReportType.ALL ||
-                mealType === MealCountReportType.BREAKFAST
+              mealType === MealCountReportType.BREAKFAST
                 ? menu.breakfast ?? null
                 : null,
             lunch:
               mealType === MealCountReportType.ALL ||
-                mealType === MealCountReportType.LUNCH
+              mealType === MealCountReportType.LUNCH
                 ? menu.lunch ?? null
                 : null,
             dinner:
               mealType === MealCountReportType.ALL ||
-                mealType === MealCountReportType.DINNER
+              mealType === MealCountReportType.DINNER
                 ? menu.dinner ?? null
                 : null,
             snacks:
               mealType === MealCountReportType.ALL ||
-                mealType === MealCountReportType.HI_TEA
+              mealType === MealCountReportType.HI_TEA
                 ? menu.snacks ?? null
                 : null,
             status: menu.status ?? null,
@@ -882,64 +879,64 @@ class MessService {
   };
 
   //SECTION: Method to get cancelled meal of user
-  cancelledMealHistory = async (
-    hostelId: string,
-    studentId: string,
-    status: MealBookingStatusTypes
-  ): Promise<{ cancelMeal: any[] }> => {
-    try {
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
+  // cancelledMealHistory = async (
+  //   hostelId: string,
+  //   studentId: string,
+  //   status: MealBookingStatusTypes
+  // ): Promise<{ cancelMeal: any[] }> => {
+  //   try {
+  //     const today = new Date();
+  //     today.setUTCHours(0, 0, 0, 0);
 
-      const hostel = await Hostel.exists({ _id: hostelId });
+  //     const hostel = await Hostel.exists({ _id: hostelId });
 
-      if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
+  //     if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
 
-      // Build the query based on the status
-      const query: any = {
-        hostelId,
-        studentId,
-      };
+  //     // Build the query based on the status
+  //     const query: any = {
+  //       hostelId,
+  //       studentId,
+  //     };
 
-      if (status === MealBookingStatusTypes.BOOKED) {
-        query.bookingStatus = {
-          $in: [
-            MealBookingStatusTypes.BOOKED,
-            MealBookingStatusTypes.PARTIALLY_CANCELLED,
-          ],
-        };
-      } else {
-        query.bookingStatus = MealBookingStatusTypes.CANCELLED;
-      }
+  //     if (status === MealBookingStatusTypes.BOOKED) {
+  //       query.bookingStatus = {
+  //         $in: [
+  //           MealBookingStatusTypes.BOOKED,
+  //           MealBookingStatusTypes.PARTIALLY_CANCELLED,
+  //         ],
+  //       };
+  //     } else {
+  //       query.bookingStatus = MealBookingStatusTypes.CANCELLED;
+  //     }
 
-      // Get meals that are not booked (cancelled)
-      const meals = await BookMeals.find(query).select(
-        "date isBreakfastBooked isLunchBooked isDinnerBooked isSnacksBooked cancellationReason bookingStatus"
-      );
+  //     // Get meals that are not booked (cancelled)
+  //     const meals = await BookMeals.find(query).select(
+  //       "date isBreakfastBooked isLunchBooked isDinnerBooked isSnacksBooked cancellationReason bookingStatus"
+  //     );
 
-      if (!meals || meals.length === 0) {
-        return { cancelMeal: [] };
-      }
+  //     if (!meals || meals.length === 0) {
+  //       return { cancelMeal: [] };
+  //     }
 
-      // Transform each meal into the desired response format
-      const response = meals.map((meal) => ({
-        _id: meal._id,
-        date: meal.date ?? null,
-        canUndoBooking: meal.date <= today ? false : true,
-        editBooking: meal.date <= today ? false : true,
-        breakfast: !!meal.isBreakfastBooked,
-        lunch: !!meal.isLunchBooked,
-        dinner: !!meal.isDinnerBooked,
-        snacks: !!meal.isSnacksBooked,
-        cancellationReason: meal.cancellationReason ?? null,
-        bookingStatus: meal.bookingStatus ?? null,
-      }));
+  //     // Transform each meal into the desired response format
+  //     const response = meals.map((meal) => ({
+  //       _id: meal._id,
+  //       date: meal.date ?? null,
+  //       canUndoBooking: meal.date <= today ? false : true,
+  //       editBooking: meal.date <= today ? false : true,
+  //       breakfast: !!meal.isBreakfastBooked,
+  //       lunch: !!meal.isLunchBooked,
+  //       dinner: !!meal.isDinnerBooked,
+  //       snacks: !!meal.isSnacksBooked,
+  //       cancellationReason: meal.cancellationReason ?? null,
+  //       bookingStatus: meal.bookingStatus ?? null,
+  //     }));
 
-      return { cancelMeal: response };
-    } catch (error: any) {
-      throw new Error(error.message);
-    }
-  };
+  //     return { cancelMeal: response };
+  //   } catch (error: any) {
+  //     throw new Error(error.message);
+  //   }
+  // };
 
   //SECTION: Method to bulk uplaod a mess menu for hostel
   bulkUploadMessMenuForHostel = async (
@@ -1134,8 +1131,8 @@ class MessService {
       const bookingStatus = isFullDay
         ? MealBookingStatusTypes.CANCELLED
         : allMealsCancelled
-          ? MealBookingStatusTypes.CANCELLED
-          : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+        ? MealBookingStatusTypes.CANCELLED
+        : MealBookingStatusTypes.PARTIALLY_CANCELLED;
       // Update the booking with new meal status and booking status
       booking.set({
         ...bookingUpdateData,
@@ -1250,14 +1247,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                MealBookingStatusTypes.BOOKED,
-                MealBookingStatusTypes.PARTIALLY_BOOKED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ]
+                  MealBookingStatusTypes.BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ]
               : [
-                MealBookingStatusTypes.CANCELLED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ];
+                  MealBookingStatusTypes.CANCELLED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
@@ -1880,16 +1877,17 @@ class MessService {
   };
 
   //  Bulk meal booking for student method
-
   studentBookMealBulk = async (
     hostelId: string,
     studentId: string,
     bookings: Array<{
       date: string;
-      breakfast: boolean | null;
-      lunch: boolean | null;
-      snacks: boolean | null;
-      dinner: boolean | null;
+      meals: {
+        breakfast: string;
+        lunch: string;
+        snacks: string;
+        dinner: string;
+      };
     }>
   ): Promise<{
     results: Array<{
@@ -1901,276 +1899,292 @@ class MessService {
     }>;
     summary: { confirmed: number; rejected: number; cancelled: number };
   }> => {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const today = dayjs().tz("Asia/Kolkata").startOf("day");
 
-    // Deduplicate bookings by date - keep last occurrence of each date
-    const dedupMap = new Map<string, (typeof bookings)[0]>();
-    for (const b of bookings) {
-      dedupMap.set(b.date, b);
-    }
-    const dedupedBookings = Array.from(dedupMap.values());
-
-    // Batch fetch: policy, leaves, existing bookings, menus
-    const dates = dedupedBookings.map((b) => {
-      const d = new Date(b.date);
-      d.setUTCHours(0, 0, 0, 0);
-      return d;
-    });
-
-    const [policy, leaves, existingBookings, menus] = await Promise.all([
-      HostelPolicy.findOne({ hostelId, status: true }).lean(),
-      StudentLeave.find({
-        userId: studentId,
-        leaveStatus: LeaveStatusTypes.APPROVED,
-        startDate: { $lte: dates[dates.length - 1] },
-        endDate: { $gte: dates[0] },
-      }).lean(),
-      BookMeals.find({
-        hostelId,
-        studentId,
-        date: { $in: dates },
-      }).lean(),
-      MessMenu.find({
-        hostelId,
-        date: { $in: dates },
-      }).lean(),
-    ]);
-
-    // Build lookup maps
-    const leaveMap = new Map<string, boolean>();
-    for (const leave of leaves) {
-      const start = new Date(leave.startDate);
-      const end = new Date(leave.endDate);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        leaveMap.set(d.toISOString().split("T")[0], true);
+      // Deduplicate bookings by date - keep last occurrence of each date
+      const dedupMap = new Map<string, (typeof bookings)[0]>();
+      for (const b of bookings) {
+        dedupMap.set(normalizeDateKey(b.date), b);
       }
-    }
+      const dedupedBookings = Array.from(dedupMap.values());
 
-    const existingBookingMap = new Map<string, any>();
-    for (const b of existingBookings) {
-      const key = new Date(b.date).toISOString().split("T")[0];
-      existingBookingMap.set(key, b);
-    }
+      // Batch fetch: policy, leaves, existing bookings, menus
+      const dates = dedupedBookings.map((b) => {
+        const d = new Date(b.date);
+        d.setUTCHours(0, 0, 0, 0);
+        return d;
+      });
 
-    const menuMap = new Map<string, any>();
-    for (const m of menus) {
-      const key = new Date(m.date).toISOString().split("T")[0];
-      menuMap.set(key, m);
-    }
-
-    // Helper: check if cutoff passed
-    const isCutoffPassed = (
-      mealName: "breakfast" | "lunch" | "snacks" | "dinner",
-      mealDate: Date
-    ): boolean => {
-      let dayOffset: number;
-      let time: string;
-
-      if (policy?.bookingCutoffs?.[mealName]) {
-        dayOffset = policy.bookingCutoffs[mealName].dayOffset;
-        time = policy.bookingCutoffs[mealName].time;
-      } else {
-        // Defaults: T-1 9PM for Breakfast, T 8AM/1PM/4PM for others
-        const defaults = {
-          breakfast: { dayOffset: -1, time: "21:00" },
-          lunch: { dayOffset: 0, time: "08:00" },
-          snacks: { dayOffset: 0, time: "13:00" },
-          dinner: { dayOffset: 0, time: "16:00" },
-        };
-        dayOffset = defaults[mealName].dayOffset;
-        time = defaults[mealName].time;
-      }
-
-      const [hours, mins] = time.split(":").map(Number);
-      const cutoffTime = moment(mealDate)
-        .tz("Asia/Kolkata")
-        .add(dayOffset, "days")
-        .set({ hour: hours, minute: mins, second: 0, millisecond: 0 });
-
-      return moment().tz("Asia/Kolkata").isAfter(cutoffTime);
-    };
-
-    const results: Array<{
-      date: string;
-      breakfast: { status: string; reason?: string };
-      lunch: { status: string; reason?: string };
-      snacks: { status: string; reason?: string };
-      dinner: { status: string; reason?: string };
-    }> = [];
-
-    let confirmed = 0;
-    let rejected = 0;
-    let cancelled = 0;
-    let bookMealNumber = await this.generateBooKMealNumber();
-
-    for (const booking of dedupedBookings) {
-      const dateStr = booking.date;
-      const mealDate = new Date(dateStr);
-      mealDate.setUTCHours(0, 0, 0, 0);
-
-      const hasLeave = leaveMap.get(dateStr) || false;
-      const existingBooking = existingBookingMap.get(dateStr);
-      const menu = menuMap.get(dateStr);
-
-      const mealResults: any = { date: dateStr };
-      const mealUpdates: any = {};
-      const mealsState: any = {};
-
-      for (const meal of ["breakfast", "lunch", "snacks", "dinner"] as const) {
-        const wantsMeal = booking[meal];
-        const boolField = `is${meal.charAt(0).toUpperCase() + meal.slice(1)
-          }Booked`;
-
-        // null = no menu available for this meal, skip without counting
-        if (wantsMeal === null) {
-          mealResults[meal] = { status: MealBookingIntent.NOT_APPLICABLE };
-          continue;
-        }
-
-        if (mealDate < today) {
-          mealResults[meal] = { status: "rejected", reason: "past_date" };
-          rejected++;
-          continue;
-        }
-
-        if (!menu) {
-          mealResults[meal] = {
-            status: MealBookingIntent.NOT_APPLICABLE,
-            reason: "no_menu",
-          };
-          rejected++;
-          continue;
-        }
-
-        // Check if this specific meal is available in the menu
-        const mealContent = menu[meal];
-        if (!mealContent || mealContent.trim() === "") {
-          mealResults[meal] = { status: MealBookingIntent.NOT_APPLICABLE };
-          mealUpdates[boolField] = null; // null = meal not available in menu
-          continue;
-        }
-
-        if (!wantsMeal) {
-          mealResults[meal] = { status: "skipped" };
-          mealUpdates[boolField] = false;
-          mealsState[meal] = {
-            bookingIntent: MealBookingIntent.NOT_APPLICABLE,
-            consumed: false,
-          };
-          continue;
-        }
-
-        // Check if meal is already consumed - cannot be changed if consumed
-        const existingMeal = existingBooking?.meals?.[meal];
-        if (existingMeal?.consumed === true) {
-          mealResults[meal] = {
-            status: "rejected",
-            reason: "meal_consumed",
-          };
-          rejected++;
-          // Keep existing state - don't modify consumed meals
-          mealUpdates[boolField] = existingBooking[boolField];
-          mealsState[meal] = existingMeal;
-          continue;
-        }
-
-        if (isCutoffPassed(meal, mealDate)) {
-          mealResults[meal] = { status: "rejected", reason: "cutoff_passed" };
-          rejected++;
-          continue;
-        }
-
-        if (hasLeave) {
-          mealResults[meal] = { status: "cancelled", reason: "leave" };
-          mealUpdates[boolField] = false;
-          mealsState[meal] = {
-            bookingIntent: MealBookingIntent.CANCELLED,
-            consumed: true,
-            cancelSource: MealCancelSource.LEAVE,
-          };
-          cancelled++;
-          continue;
-        }
-
-        // Confirmed
-        mealResults[meal] = { status: "confirmed" };
-        mealUpdates[boolField] = true;
-        mealsState[meal] = {
-          bookingIntent: MealBookingIntent.CONFIRMED,
-          consumed: false,
-        };
-        confirmed++;
-      }
-
-      results.push(mealResults);
-
-      // Calculate mealCount and bookingStatus
-      const bookedCount = [
-        mealUpdates.isBreakfastBooked,
-        mealUpdates.isLunchBooked,
-        mealUpdates.isSnacksBooked,
-        mealUpdates.isDinnerBooked,
-      ].filter(Boolean).length;
-
-      const cancelledCount = Object.values(mealsState).filter(
-        (m: any) => m?.bookingIntent === MealBookingIntent.CANCELLED
-      ).length;
-
-      let bookingStatus = MealBookingStatusTypes.NOT_BOOKED;
-      if (bookedCount === 4) bookingStatus = MealBookingStatusTypes.BOOKED;
-      else if (bookedCount > 0 && cancelledCount > 0)
-        bookingStatus = MealBookingStatusTypes.PARTIALLY_CANCELLED;
-      else if (bookedCount > 0)
-        bookingStatus = MealBookingStatusTypes.PARTIALLY_BOOKED;
-      else if (cancelledCount > 0)
-        bookingStatus = MealBookingStatusTypes.CANCELLED;
-
-      // Upsert booking
-      if (existingBooking) {
-        await BookMeals.updateOne(
-          { _id: existingBooking._id },
-          {
-            $set: {
-              ...mealUpdates,
-              mealCount: bookedCount,
-              bookingStatus,
-              meals: mealsState,
-              isManualBooking: true,
-              updatedBy: studentId,
-              updatedAt: getCurrentISTTime(),
-            },
-          }
-        );
-      } else if (menu && mealDate >= today) {
-        await BookMeals.create({
-          mealId: menu._id,
-          bookMealNumber,
+      // Use session for consistency if possible, though strict requirement is WRITES.
+      // We'll proceed with reads normally to minimize locking, unless critical.
+      const [policy, leaves, existingBookings, menus] = await Promise.all([
+        HostelPolicy.findOne({ hostelId, status: true }).lean(),
+        StudentLeave.find({
+          userId: studentId,
+          leaveStatus: LeaveStatusTypes.APPROVED,
+          startDate: { $lte: dates[dates.length - 1] },
+          endDate: { $gte: dates[0] },
+        }).lean(),
+        BookMeals.find({
           hostelId,
           studentId,
-          date: mealDate,
-          ...mealUpdates,
-          mealCount: bookedCount,
-          bookingStatus,
-          meals: mealsState,
-          isManualBooking: true,
-          createdBy: studentId,
-          createdAt: getCurrentISTTime(),
-          updatedAt: getCurrentISTTime(),
-        });
-        const num = parseInt(bookMealNumber.split("-")[1], 10) + 1;
-        bookMealNumber = `BM-${String(num).padStart(3, "0")}`;
-      }
-    }
+          date: { $in: dates },
+        })
+          .session(session)
+          .lean(),
+        MessMenu.find({
+          hostelId,
+          date: { $in: dates },
+        }).lean(),
+      ]);
 
-    return { results, summary: { confirmed, rejected, cancelled } };
+      // Create maps for quick lookup
+      const existingBookingMap = new Map<string, any>();
+      for (const b of existingBookings) {
+        existingBookingMap.set(normalizeDateKey(b.date), b);
+      }
+
+      // Menu map
+      const menuMap = new Map<string, any>();
+      for (const m of menus) {
+        menuMap.set(normalizeDateKey(m.date), m);
+      }
+
+      // Pre-compute cutoff checks
+      const cutoffMap = new Map<string, boolean>();
+      const currentIST = dayjs().tz("Asia/Kolkata");
+
+      const mealDefaults = {
+        breakfast: { dayOffset: -1, time: "21:00" },
+        lunch: { dayOffset: 0, time: "08:00" },
+        snacks: { dayOffset: 0, time: "13:00" },
+        dinner: { dayOffset: 0, time: "16:00" },
+      };
+
+      for (const dateStr of dedupMap.keys()) {
+        const mealDate = dayjs(dateStr).tz("Asia/Kolkata").startOf("day");
+
+        for (const mealName of [
+          "breakfast",
+          "lunch",
+          "snacks",
+          "dinner",
+        ] as const) {
+          let dayOffset: number = mealDefaults[mealName].dayOffset;
+          let time: string = mealDefaults[mealName].time;
+
+          if (policy?.bookingCutoffs?.[mealName]) {
+            dayOffset = policy.bookingCutoffs[mealName].dayOffset;
+            time = policy.bookingCutoffs[mealName].time;
+          }
+
+          const [hours, mins] = time.split(":").map(Number);
+          const cutoffTime = mealDate
+            .add(dayOffset, "day")
+            .set("hour", hours)
+            .set("minute", mins)
+            .set("second", 0)
+            .set("millisecond", 0);
+
+          const isPassed = currentIST.isAfter(cutoffTime);
+          cutoffMap.set(`${dateStr}_${mealName}`, isPassed);
+        }
+      }
+
+      const results: Array<{
+        date: string;
+        breakfast: { status: string; reason?: string };
+        lunch: { status: string; reason?: string };
+        snacks: { status: string; reason?: string };
+        dinner: { status: string; reason?: string };
+      }> = [];
+
+      let confirmed = 0;
+      let rejected = 0;
+      let cancelled = 0;
+      let bookMealNumber = await this.generateBooKMealNumber();
+
+      for (const booking of dedupedBookings) {
+        const dateKey = normalizeDateKey(booking.date);
+        const mealDate = new Date(dateKey);
+        mealDate.setUTCHours(0, 0, 0, 0);
+
+        // Range check for leaves: replacing map expansion
+        const hasLeave = leaves.some((leave) => {
+          const start = new Date(leave.startDate);
+          const end = new Date(leave.endDate);
+          return mealDate >= start && mealDate <= end;
+        });
+
+        const existingBooking = existingBookingMap.get(dateKey);
+        const menu = menuMap.get(dateKey);
+
+        const mealResults: any = { date: dateKey };
+        const mealsUpdate: any = {};
+
+        // Default / Existing State
+        let currentMeals = existingBooking
+          ? existingBooking.meals
+          : {
+              breakfast: { status: MealBookingIntent.PENDING, locked: false },
+              lunch: { status: MealBookingIntent.PENDING, locked: false },
+              snacks: { status: MealBookingIntent.PENDING, locked: false },
+              dinner: { status: MealBookingIntent.PENDING, locked: false },
+            };
+
+        for (const meal of [
+          "breakfast",
+          "lunch",
+          "snacks",
+          "dinner",
+        ] as const) {
+          const requestedStatus = booking.meals[meal] as MealBookingIntent;
+          const currentMealState = currentMeals[meal];
+
+          //  Validations
+          if (!menu) {
+            mealResults[meal] = { status: "rejected", reason: "no_menu" };
+            rejected++;
+            mealsUpdate[meal] = currentMealState;
+            continue;
+          }
+
+          const mealContent = menu[meal];
+          if (!mealContent || mealContent.trim() === "") {
+            mealResults[meal] = { status: "rejected", reason: "no_menu_item" };
+            mealsUpdate[meal] = currentMealState;
+            continue;
+          }
+
+          // Compare using dayjs for consistency or simple date comparison
+          if (dayjs(mealDate).isBefore(today)) {
+            mealResults[meal] = { status: "rejected", reason: "past_date" };
+            rejected++;
+            mealsUpdate[meal] = currentMealState;
+            continue;
+          }
+
+          // Lock Check
+          if (currentMealState.locked) {
+            mealResults[meal] = {
+              status: "rejected",
+              reason: "locked",
+              error: "Meal is locked",
+            };
+            rejected++;
+            mealsUpdate[meal] = currentMealState;
+            continue;
+          }
+
+          // Status Logic
+          let newStatus = requestedStatus;
+
+          const isCutoffPassed = cutoffMap.get(`${dateKey}_${meal}`);
+
+          if (isCutoffPassed) {
+            mealResults[meal] = {
+              status: "rejected",
+              reason: "cutoff_passed",
+              error: "Meal booking/cancellation cut-off time passed",
+            };
+            rejected++;
+            mealsUpdate[meal] = currentMealState;
+            continue;
+          }
+
+          if (hasLeave) {
+            if (newStatus === MealBookingIntent.CONFIRMED) {
+              mealResults[meal] = { status: "rejected", reason: "leave" };
+              rejected++;
+              mealsUpdate[meal] = currentMealState;
+              continue;
+            }
+          }
+
+          if (newStatus === MealBookingIntent.CONFIRMED) {
+            confirmed++;
+          } else if (newStatus === MealBookingIntent.SKIPPED) {
+            cancelled++;
+          }
+
+          // Update State
+          mealResults[meal] = { status: newStatus };
+          mealsUpdate[meal] = {
+            status: newStatus,
+            locked: false,
+            consumed: false,
+          };
+        }
+
+        results.push(mealResults);
+
+        // Upsert
+        if (existingBooking) {
+          await BookMeals.updateOne(
+            { _id: existingBooking._id },
+            {
+              $set: {
+                meals: { ...currentMeals, ...mealsUpdate },
+                isManualBooking: true,
+                updatedBy: studentId,
+                updatedAt: getCurrentISTTime(),
+              },
+            },
+            { session } // Transaction
+          );
+        } else if (menu && !dayjs(mealDate).isBefore(today)) {
+          const finalMeals = {
+            breakfast: { status: MealBookingIntent.PENDING, locked: false },
+            lunch: { status: MealBookingIntent.PENDING, locked: false },
+            snacks: { status: MealBookingIntent.PENDING, locked: false },
+            dinner: { status: MealBookingIntent.PENDING, locked: false },
+            ...mealsUpdate,
+          };
+
+          // Use array to Create within transaction
+          await BookMeals.create(
+            [
+              {
+                mealId: menu._id,
+                bookMealNumber,
+                hostelId,
+                studentId,
+                date: mealDate,
+                meals: finalMeals,
+                isManualBooking: true,
+                createdBy: studentId,
+                createdAt: getCurrentISTTime(),
+                updatedAt: getCurrentISTTime(),
+              },
+            ],
+            { session }
+          );
+
+          const num = parseInt(bookMealNumber.split("-")[1], 10) + 1;
+          bookMealNumber = `BM-${String(num).padStart(3, "0")}`;
+        }
+      }
+
+      await session.commitTransaction();
+      return { results, summary: { confirmed, rejected, cancelled } };
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
   };
 
-  // Get monthly meal booking view for student 
+  // Get monthly meal booking view for student
   getStudentMealBookingMonthlyView = async (
     hostelId: string,
     studentId: string,
-    dateStr?: string // Made optional for full month view
+    dateStr?: string, // Made optional for full month view
+    year?: number, // Year for month view
+    month?: number // Month for month view (1-12)
   ): Promise<{
     results: Array<{
       date: string;
@@ -2202,45 +2216,48 @@ class MessService {
       };
     }>;
     mealTimings?: {
-      breakfast?: string;
-      lunch?: string;
-      snacks?: string;
-      dinner?: string;
+      breakfast?: { start: string; end: string };
+      lunch?: { start: string; end: string };
+      snacks?: { start: string; end: string };
+      dinner?: { start: string; end: string };
     };
   }> => {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    // Current time in IST
+    const today = dayjs().tz("Asia/Kolkata").startOf("day");
 
     let rangeStart: Date;
     let rangeEnd: Date;
     let iterations: number;
+    let startDateKey: string;
 
     if (dateStr) {
-      // Single date mode
-      const targetDate = new Date(dateStr);
-      targetDate.setUTCHours(0, 0, 0, 0);
-      rangeStart = targetDate;
-      rangeEnd = new Date(targetDate);
-      rangeEnd.setUTCHours(23, 59, 59, 999);
+      // Single date
+      const targetDate = dayjs(dateStr).tz("Asia/Kolkata").startOf("day");
+      rangeStart = targetDate.utc().toDate();
+      rangeEnd = targetDate.endOf("day").utc().toDate();
+      startDateKey = targetDate.format("YYYY-MM-DD");
       iterations = 1;
+    } else if (year && month) {
+      // Year + Month format (new logic)
+      const dateStr = `${year}-${String(month).padStart(2, "0")}-01`;
+      const inputDate = dayjs(dateStr).tz("Asia/Kolkata").startOf("month");
+      rangeStart = inputDate.utc().toDate();
+
+      const endMoment = inputDate.endOf("month");
+      rangeEnd = endMoment.utc().toDate();
+
+      startDateKey = inputDate.format("YYYY-MM-DD");
+      iterations = endMoment.date();
     } else {
-      // 35-day month view mode
-      const inputDate = new Date();
-      rangeStart = new Date(
-        Date.UTC(
-          inputDate.getUTCFullYear(),
-          inputDate.getUTCMonth(),
-          1,
-          0,
-          0,
-          0,
-          0
-        )
-      );
-      rangeEnd = new Date(rangeStart);
-      rangeEnd.setDate(rangeEnd.getDate() + 34);
-      rangeEnd.setUTCHours(23, 59, 59, 999);
-      iterations = 35;
+      //month data
+      const inputDate = dayjs().tz("Asia/Kolkata").startOf("month");
+      rangeStart = inputDate.utc().toDate();
+
+      const endMoment = inputDate.endOf("month");
+      rangeEnd = endMoment.utc().toDate();
+
+      startDateKey = inputDate.format("YYYY-MM-DD");
+      iterations = endMoment.date();
     }
 
     // Batch fetch: policy, leaves, bookings, menu, meal timings
@@ -2282,92 +2299,107 @@ class MessService {
         hostelMealTiming.breakfastStartTime &&
         hostelMealTiming.breakfastEndTime
       ) {
-        mealTimings.breakfast = `Breakfast - ${formatTime(
-          hostelMealTiming.breakfastStartTime
-        )} to ${formatTime(hostelMealTiming.breakfastEndTime)}`;
+        mealTimings.breakfast = {
+          start: formatTime(hostelMealTiming.breakfastStartTime),
+          end: formatTime(hostelMealTiming.breakfastEndTime),
+        };
       }
       if (hostelMealTiming.lunchStartTime && hostelMealTiming.lunchEndTime) {
-        mealTimings.lunch = `Lunch - ${formatTime(
-          hostelMealTiming.lunchStartTime
-        )} to ${formatTime(hostelMealTiming.lunchEndTime)}`;
+        mealTimings.lunch = {
+          start: formatTime(hostelMealTiming.lunchStartTime),
+          end: formatTime(hostelMealTiming.lunchEndTime),
+        };
       }
       if (hostelMealTiming.snacksStartTime && hostelMealTiming.snacksEndTime) {
-        mealTimings.snacks = `Snacks - ${formatTime(
-          hostelMealTiming.snacksStartTime
-        )} to ${formatTime(hostelMealTiming.snacksEndTime)}`;
+        mealTimings.snacks = {
+          start: formatTime(hostelMealTiming.snacksStartTime),
+          end: formatTime(hostelMealTiming.snacksEndTime),
+        };
       }
       if (hostelMealTiming.dinnerStartTime && hostelMealTiming.dinnerEndTime) {
-        mealTimings.dinner = `Dinner - ${formatTime(
-          hostelMealTiming.dinnerStartTime
-        )} to ${formatTime(hostelMealTiming.dinnerEndTime)}`;
+        mealTimings.dinner = {
+          start: formatTime(hostelMealTiming.dinnerStartTime),
+          end: formatTime(hostelMealTiming.dinnerEndTime),
+        };
       }
     }
 
-    // Build lookup maps
-    const leaveMap = new Map<string, boolean>();
-    for (const leave of leaves) {
-      const start = new Date(leave.startDate);
-      const end = new Date(leave.endDate);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        leaveMap.set(d.toISOString().split("T")[0], true);
-      }
-    }
+    // Precompute leave date ranges to avoid repeated timezone conversions
+    const leaveRanges = leaves.map((leave) => ({
+      start: dayjs(leave.startDate).tz("Asia/Kolkata").startOf("day"),
+      end: dayjs(leave.endDate).tz("Asia/Kolkata").startOf("day"),
+    }));
 
     const bookingMap = new Map<string, any>();
     for (const b of bookings) {
-      const key = new Date(b.date).toISOString().split("T")[0];
+      const key = dayjs(b.date).tz("Asia/Kolkata").format("YYYY-MM-DD");
       bookingMap.set(key, b);
     }
 
     const menuMap = new Map<string, any>();
     for (const m of menus) {
-      const key = new Date(m.date).toISOString().split("T")[0];
+      const key = dayjs(m.date).tz("Asia/Kolkata").format("YYYY-MM-DD");
       menuMap.set(key, m);
     }
 
-    // Helper: check if cutoff passed
-    const isCutoffPassed = (
-      mealName: "breakfast" | "lunch" | "snacks" | "dinner",
-      mealDate: Date
-    ): boolean => {
-      // Past dates are always locked
-      if (mealDate < today) return true;
+    const results: any[] = [];
+    const startMoment = dayjs(startDateKey).tz("Asia/Kolkata");
 
-      let dayOffset: number;
-      let time: string;
+    // Pre-compute cutoff checks for all dates and meals
+    const cutoffMap = new Map<string, boolean>();
+    const currentIST = dayjs().tz("Asia/Kolkata");
 
-      if (policy?.bookingCutoffs?.[mealName]) {
-        dayOffset = policy.bookingCutoffs[mealName].dayOffset;
-        time = policy.bookingCutoffs[mealName].time;
-      } else {
-        // Defaults: T-1 9PM for Breakfast, T 8AM/1PM/4PM for others
-        const defaults = {
-          breakfast: { dayOffset: -1, time: "21:00" },
-          lunch: { dayOffset: 0, time: "08:00" },
-          snacks: { dayOffset: 0, time: "13:00" },
-          dinner: { dayOffset: 0, time: "16:00" },
-        };
-        dayOffset = defaults[mealName].dayOffset;
-        time = defaults[mealName].time;
-      }
-
-      const [hours, mins] = time.split(":").map(Number);
-      const cutoffTime = moment(mealDate)
-        .tz("Asia/Kolkata")
-        .add(dayOffset, "days")
-        .set({ hour: hours, minute: mins, second: 0, millisecond: 0 });
-
-      return moment().tz("Asia/Kolkata").isAfter(cutoffTime);
+    const mealDefaults = {
+      breakfast: { dayOffset: -1, time: "21:00" },
+      lunch: { dayOffset: 0, time: "08:00" },
+      snacks: { dayOffset: 0, time: "13:00" },
+      dinner: { dayOffset: 0, time: "16:00" },
     };
 
-    const results: any[] = [];
+    for (let i = 0; i < iterations; i++) {
+      const currentDate = startMoment.add(i, "days");
+      const dateKey = currentDate.format("YYYY-MM-DD");
+
+      for (const mealName of [
+        "breakfast",
+        "lunch",
+        "snacks",
+        "dinner",
+      ] as const) {
+        let dayOffset: number = mealDefaults[mealName].dayOffset;
+        let time: string = mealDefaults[mealName].time;
+
+        if (policy?.bookingCutoffs?.[mealName]) {
+          dayOffset = policy.bookingCutoffs[mealName].dayOffset;
+          time = policy.bookingCutoffs[mealName].time;
+        }
+
+        const [hours, mins] = time.split(":").map(Number);
+        const cutoffTime = currentDate
+          .clone()
+          .add(dayOffset, "day")
+          .hour(hours)
+          .minute(mins)
+          .second(0)
+          .millisecond(0);
+
+        const isPassed = currentIST.isAfter(cutoffTime);
+        cutoffMap.set(`${dateKey}_${mealName}`, isPassed);
+      }
+    }
 
     for (let i = 0; i < iterations; i++) {
-      const date = new Date(rangeStart);
-      date.setDate(date.getDate() + i);
-      const dateKey = date.toISOString().split("T")[0];
+      const currentDate = startMoment.clone().add(i, "days");
+      const dateKey = currentDate.format("YYYY-MM-DD");
 
-      const hasLeave = leaveMap.get(dateKey) || false;
+      // Range check for leaves using precomputed ranges
+      const hasLeave = leaveRanges.some(({ start, end }) => {
+        return (
+          (currentDate.isAfter(start) || currentDate.isSame(start, "day")) &&
+          (currentDate.isBefore(end) || currentDate.isSame(end, "day"))
+        );
+      });
+
       const booking = bookingMap.get(dateKey);
       const menu = menuMap.get(dateKey);
 
@@ -2377,45 +2409,31 @@ class MessService {
       };
 
       for (const meal of ["breakfast", "lunch", "snacks", "dinner"] as const) {
-        const boolField = `is${meal.charAt(0).toUpperCase() + meal.slice(1)
-          }Booked`;
-        const legacyBooked = booking ? booking[boolField] : false;
-        const intent = booking?.meals?.[meal]?.bookingIntent;
-        const isConsumed = booking?.meals?.[meal]?.consumed || false;
+        const mealStateObj = booking?.meals?.[meal];
+        const currentStatus = mealStateObj?.status || MealBookingIntent.PENDING;
+        const dbLocked = mealStateObj?.locked || false;
 
-        // Derivation Logic
+        // Use precomputed cutoff lock
+        const isLockedCalc = cutoffMap.get(`${dateKey}_${meal}`) || false;
+        const finalLocked = dbLocked || isLockedCalc;
+
+        const isConsumed = mealStateObj?.consumed || false;
         const foodExists = menu && menu[meal] && menu[meal].trim() !== "";
-        let state: string = foodExists
-          ? "SKIPPED"
-          : MealBookingIntent.NOT_APPLICABLE;
+        let displayStatus = currentStatus;
 
-        if (hasLeave) {
-          state = "CANCELLED";
-        } else if (
-          intent === MealBookingIntent.CONFIRMED ||
-          legacyBooked === true
-        ) {
-          state = "CONFIRMED";
-        } else if (intent === MealBookingIntent.CANCELLED) {
-          state = "CANCELLED";
-        } else if (
-          intent === MealBookingIntent.NOT_APPLICABLE ||
-          legacyBooked === false
-        ) {
-          state = foodExists ? "SKIPPED" : MealBookingIntent.NOT_APPLICABLE;
+        if (!foodExists) {
+          displayStatus = MealBookingIntent.NOT_APPLICABLE;
         }
 
         dayResult.meals[meal] = {
-          state,
-          locked: isCutoffPassed(meal, date),
+          state: displayStatus,
+          locked: finalLocked,
           food: menu ? menu[meal] || null : null,
           consumed: isConsumed,
         };
       }
-
       results.push(dayResult);
     }
-
     return { results, mealTimings };
   };
 
@@ -2423,31 +2441,28 @@ class MessService {
    * Auto-booking engine (Production Refined):
    * Books all 4 meals for eligible students for the NEXT day.
    * Runs daily at 12:00 PM IST via Cron.
+   * Logic: Converts PENDING -> CONFIRMED and Sets locked = true.
    */
+
   autoBookMealsForNextDay = async (): Promise<void> => {
-    const startTimeIST = moment().tz("Asia/Kolkata").format();
+    // Current Time in IST
+    const nowIST = dayjs().tz("Asia/Kolkata");
+    const startTimeIST = nowIST.format();
     console.log(`[AutoBooking] Job started at ${startTimeIST} (Asia/Kolkata)`);
 
     try {
-      //  Compute target date as Tomorrow in IST
-      const targetDateIST = moment()
-        .tz("Asia/Kolkata")
-        .add(1, "day")
-        .startOf("day");
+      const targetDateIST = nowIST.add(1, "day").startOf("day");
       const targetDateKey = targetDateIST.format("YYYY-MM-DD");
+
       // Use UTC midnight for database queries to match how menu dates are stored
-      const targetDateUTC = moment.utc(targetDateKey).toDate();
+      const targetDateUTC = dayjs.utc(targetDateKey).toDate();
 
       console.log(`[AutoBooking] Target Date (Tomorrow IST): ${targetDateKey}`);
-      console.log(
-        `[AutoBooking] Target Date UTC (for Query): ${targetDateUTC.toISOString()}`
-      );
 
-      //  Fetch all active hostels
+      // Fetch all active hostels
       const hostels = await Hostel.find({ status: true })
         .select("_id name")
         .lean();
-      console.log(`[AutoBooking] Processing ${hostels.length} hostels.`);
 
       let stats = {
         totalStudents: 0,
@@ -2455,42 +2470,50 @@ class MessService {
         recordsCreated: 0,
         recordsUpdated: 0,
         skippedManual: 0,
+        skippedExisting: 0,
         skippedNoMenu: 0,
       };
 
       for (const hostel of hostels) {
         const hostelId = hostel._id;
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
         try {
-          //  Fetch Menu for next day (IST-based date matching)
+          // Fetch Menu
+          const startOfDay = targetDateIST.toDate();
+          const endOfDay = targetDateIST.endOf("day").toDate();
+
           const menu = await MessMenu.findOne({
             hostelId,
-            date: targetDateUTC,
+            date: { $gte: startOfDay, $lte: endOfDay },
             status: true,
           }).lean();
+
           if (!menu) {
-            console.log(
-              `[AutoBooking] Skipping Hostel: ${hostel.name} (No menu found for ${targetDateKey})`
-            );
             stats.skippedNoMenu++;
+            await session.abortTransaction();
+            session.endSession();
             continue;
           }
-          console.log(`[AutoBooking] Found Menu for Hostel: ${hostel.name}`);
 
-          //  Fetch Active Students in this hostel
-          const allocations = await StudentHostelAllocation.find({
+          // Fetch Active Students
+          const activeStudents = await User.find({
             hostelId,
             status: true,
+            isLeft: false,
           })
-            .select("studentId")
+            .select("_id")
             .lean();
-          const studentIds = allocations.map((a) => a.studentId);
+          const studentIds = activeStudents.map((u) => u._id);
 
           if (studentIds.length === 0) {
-            stats.hostelsProcessed++;
+            await session.abortTransaction();
+            session.endSession();
             continue;
           }
 
-          //  Fetch Approved Leaves for target date
+          // Fetch Approved Leaves
           const leaves = await StudentLeave.find({
             userId: { $in: studentIds },
             leaveStatus: LeaveStatusTypes.APPROVED,
@@ -2503,42 +2526,78 @@ class MessService {
             leaves.map((l) => l.userId.toString())
           );
 
-          //  Fetch Existing Bookings for target date
+          // Fetch Existing Bookings (Manual OR Auto)
+          // We must skip these to ensure idempotency and not overwrite manual changes
           const existingBookings = await BookMeals.find({
             hostelId,
             studentId: { $in: studentIds },
             date: targetDateUTC,
           })
-            .select("studentId isManualBooking bookMealNumber")
+            .select("studentId meals isManualBooking")
             .lean();
 
-          const bookingMap = new Map<string, any>();
-          for (const b of existingBookings) {
-            bookingMap.set(b.studentId.toString(), b);
-          }
+          const existingBookingsMap = new Map();
+          existingBookings.forEach((b: any) =>
+            existingBookingsMap.set(b.studentId.toString(), b)
+          );
 
-          //  Prepare Bulk Operations
+          // Prepare Bulk Operations
           const bulkOps: any[] = [];
 
           for (const studentIdObj of studentIds) {
             const studentId = studentIdObj.toString();
-            const hasLeave = leaveStudentIds.has(studentId);
-            const existing = bookingMap.get(studentId);
-
             stats.totalStudents++;
 
-            // If manual booking exists, DO NOTHING for that student/date.
-            if (existing && existing.isManualBooking) {
-              stats.skippedManual++;
+            const existing = existingBookingsMap.get(studentId);
+
+            if (existing) {
+              if (existing.isManualBooking) {
+                stats.skippedManual++;
+                continue;
+              }
+
+              // Check if we can confirm any PENDING meals?
+              let hasUpdates = false;
+              const updatedMeals = existing.meals ? { ...existing.meals } : {};
+
+              for (const meal of [
+                "breakfast",
+                "lunch",
+                "snacks",
+                "dinner",
+              ] as const) {
+                if (!updatedMeals[meal]) continue;
+
+                // Force Confirm for any PENDING meal found in existing system record
+                if (updatedMeals[meal].status === MealBookingIntent.PENDING) {
+                  updatedMeals[meal].status = MealBookingIntent.CONFIRMED;
+                  updatedMeals[meal].locked = false;
+                  hasUpdates = true;
+                }
+              }
+
+              if (hasUpdates) {
+                bulkOps.push({
+                  updateOne: {
+                    filter: { _id: existing._id },
+                    update: {
+                      $set: {
+                        meals: updatedMeals,
+                        updatedAt: nowIST.toDate(),
+                      },
+                    },
+                  },
+                });
+                stats.recordsUpdated++;
+              } else {
+                stats.skippedExisting++;
+              }
               continue;
             }
 
-            const mealFields = [
-              "isBreakfastBooked",
-              "isLunchBooked",
-              "isSnacksBooked",
-              "isDinnerBooked",
-            ];
+            const hasLeave = leaveStudentIds.has(studentId);
+
+            const newMeals: any = {};
             const mealNames = [
               "breakfast",
               "lunch",
@@ -2546,98 +2605,267 @@ class MessService {
               "dinner",
             ] as const;
 
-            const updateData: any = {
-              updatedAt: getCurrentISTTime(),
-              isManualBooking: false,
-            };
-            const mealStates: any = {};
-            let confirmedCount = 0;
+            for (const meal of mealNames) {
+              let status = MealBookingIntent.PENDING;
+              let locked = false;
 
-            if (hasLeave) {
-              // Leave overrides everything -> CANCELLED
-              mealFields.forEach((f) => (updateData[f] = false));
-              mealNames.forEach((m) => {
-                mealStates[m] = {
-                  bookingIntent: MealBookingIntent.CANCELLED,
-                  consumed: false,
-                  cancelSource: MealCancelSource.LEAVE,
-                };
-              });
-              updateData.bookingStatus = MealBookingStatusTypes.CANCELLED;
-              updateData.mealCount = 0;
-            } else {
-              //  Process based on menu availability
-              mealNames.forEach((m, idx) => {
-                const menuContent = menu[m];
-                const isAvailable = menuContent && menuContent.trim() !== "";
-                const boolField = mealFields[idx];
+              // If menu doesn't exist for this meal
+              if (!menu[meal] || menu[meal].trim() === "") {
+                status = MealBookingIntent.NOT_APPLICABLE;
+                locked = true;
+              } else if (hasLeave) {
+                // Determine leave status - usually SKIPPED or CANCELLED
+                status = MealBookingIntent.SKIPPED;
+                locked = false;
+              } else {
+                // Auto-confirm without cutoff check (Cron runs early)
+                status = MealBookingIntent.CONFIRMED;
+                locked = false; // Allow cancellation until actual cutoff
+              }
 
-                if (isAvailable) {
-                  updateData[boolField] = true;
-                  mealStates[m] = {
-                    bookingIntent: MealBookingIntent.CONFIRMED,
-                    consumed: false,
-                  };
-                  confirmedCount++;
-                } else {
-                  //  Set NOT_AVAILABLE if missing in menu
-                  updateData[boolField] = false;
-                  mealStates[m] = {
-                    bookingIntent: MealBookingIntent.NOT_APPLICABLE,
-                    consumed: false,
-                  };
-                }
-              });
-
-              updateData.mealCount = confirmedCount;
-              updateData.bookingStatus =
-                confirmedCount === 4
-                  ? MealBookingStatusTypes.BOOKED
-                  : confirmedCount > 0
-                    ? MealBookingStatusTypes.PARTIALLY_BOOKED
-                    : MealBookingStatusTypes.NOT_BOOKED;
+              newMeals[meal] = {
+                status: status,
+                locked: locked,
+                consumed: false,
+                consumedAt: null,
+                cancelSource: hasLeave ? MealCancelSource.LEAVE : null,
+              };
             }
 
-            updateData.meals = mealStates;
+            // Prepare Insert
 
             bulkOps.push({
-              updateOne: {
-                filter: { hostelId, studentId, date: targetDateUTC },
-                update: {
-                  $set: updateData,
-                  $setOnInsert: {
-                    mealId: menu._id,
-                    bookMealNumber: null,
-                    status: true,
-                    createdBy: studentId,
-                    createdAt: getCurrentISTTime(),
-                  },
+              insertOne: {
+                document: {
+                  mealId: menu._id,
+                  hostelId,
+                  studentId: studentIdObj,
+                  date: targetDateUTC,
+                  meals: newMeals,
+                  isManualBooking: false,
+                  createdAt: nowIST.toDate(),
+                  updatedAt: nowIST.toDate(),
                 },
-                upsert: true,
               },
             });
+            stats.recordsCreated++;
           }
 
           if (bulkOps.length > 0) {
-            const result = await BookMeals.bulkWrite(bulkOps);
-            stats.recordsCreated += result.upsertedCount || 0;
-            stats.recordsUpdated += result.modifiedCount || 0;
+            await BookMeals.bulkWrite(bulkOps, { session });
           }
+
+          await session.commitTransaction();
           stats.hostelsProcessed++;
-        } catch (hostelErr: any) {
+        } catch (err: any) {
+          await session.abortTransaction();
           console.error(
-            `[AutoBooking] Error in Hostel ${hostel.name} (${hostelId}):`,
-            hostelErr.message
+            `[AutoBooking] Error processing hostel ${hostel.name}:`,
+            err.message
           );
+        } finally {
+          session.endSession();
         }
       }
 
-      console.log(
-        `[AutoBooking] Job Finished at ${moment().tz("Asia/Kolkata").format()}`
-      );
-      console.log(`[AutoBooking] Summary:`, stats);
+      console.log("[AutoBooking] Completed.", stats);
     } catch (error: any) {
-      console.error("[AutoBooking] Global Job Failed:", error.message);
+      console.error("[AutoBooking] Failed:", error.message);
+    }
+  };
+
+  //-----------------------warden methods-----------------------
+
+  // SECTION: Method to get meal state analytics by date
+  getMealStateAnalyticsByDate = async (
+    hostelId: string,
+    date: string | Date
+  ): Promise<any> => {
+    interface MealStateAnalyticsResponse {
+      date: string;
+      hostelId: string;
+      meals: {
+        breakfast: { booked: number; skipped: number; pending: number };
+        lunch: { booked: number; skipped: number; pending: number };
+        snacks: { booked: number; skipped: number; pending: number };
+        dinner: { booked: number; skipped: number; pending: number };
+      };
+      totalStudents: number;
+    }
+
+    try {
+      if (!hostelId) throw new Error("Hostel Id is required");
+      if (!date) throw new Error("Date is required");
+
+      const targetDateIST = dayjs.tz(date, "Asia/Kolkata");
+      // Explicit conversion to UTC for MongoDB query
+      const startOfDay = targetDateIST.startOf("day").utc().toDate();
+      const endOfDay = targetDateIST.endOf("day").utc().toDate();
+
+      // Get Total Students in the Hostel (Active & Verified)
+      const totalStudents = await User.countDocuments({
+        hostelId: new mongoose.Types.ObjectId(hostelId),
+        isVerified: true,
+        status: true,
+      });
+
+      // NOTE: Pending Calculation Assumption
+      // Pending = totalStudents - (CONFIRMED + SKIPPED)
+      // Students without booking records for the date are treated as PENDING.
+
+      // Use MongoDB aggregation for counting confirmed and skipped meals
+      const counts = await BookMeals.aggregate([
+        {
+          $match: {
+            hostelId: new mongoose.Types.ObjectId(hostelId),
+            date: { $gte: startOfDay, $lte: endOfDay },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            breakfastBooked: {
+              $sum: {
+                $cond: [
+                  {
+                    $eq: [
+                      "$meals.breakfast.status",
+                      MealBookingIntent.CONFIRMED,
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            breakfastSkipped: {
+              $sum: {
+                $cond: [
+                  {
+                    $eq: ["$meals.breakfast.status", MealBookingIntent.SKIPPED],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            lunchBooked: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$meals.lunch.status", MealBookingIntent.CONFIRMED] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            lunchSkipped: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$meals.lunch.status", MealBookingIntent.SKIPPED] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            snacksBooked: {
+              $sum: {
+                $cond: [
+                  {
+                    $eq: ["$meals.snacks.status", MealBookingIntent.CONFIRMED],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            snacksSkipped: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$meals.snacks.status", MealBookingIntent.SKIPPED] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            dinnerBooked: {
+              $sum: {
+                $cond: [
+                  {
+                    $eq: ["$meals.dinner.status", MealBookingIntent.CONFIRMED],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            dinnerSkipped: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$meals.dinner.status", MealBookingIntent.SKIPPED] },
+                  1,
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ]);
+
+      const c = counts[0] || {
+        breakfastBooked: 0,
+        breakfastSkipped: 0,
+        lunchBooked: 0,
+        lunchSkipped: 0,
+        snacksBooked: 0,
+        snacksSkipped: 0,
+        dinnerBooked: 0,
+        dinnerSkipped: 0,
+      };
+
+      // Calculate Response
+      const response: MealStateAnalyticsResponse = {
+        date: formatDateOnly(targetDateIST.toDate()),
+        hostelId,
+        meals: {
+          breakfast: {
+            booked: c.breakfastBooked,
+            skipped: c.breakfastSkipped,
+            pending: Math.max(
+              0,
+              totalStudents - c.breakfastBooked - c.breakfastSkipped
+            ),
+          },
+          lunch: {
+            booked: c.lunchBooked,
+            skipped: c.lunchSkipped,
+            pending: Math.max(
+              0,
+              totalStudents - c.lunchBooked - c.lunchSkipped
+            ),
+          },
+          snacks: {
+            booked: c.snacksBooked,
+            skipped: c.snacksSkipped,
+            pending: Math.max(
+              0,
+              totalStudents - c.snacksBooked - c.snacksSkipped
+            ),
+          },
+          dinner: {
+            booked: c.dinnerBooked,
+            skipped: c.dinnerSkipped,
+            pending: Math.max(
+              0,
+              totalStudents - c.dinnerBooked - c.dinnerSkipped
+            ),
+          },
+        },
+        totalStudents,
+      };
+
+      return response;
+    } catch (error: any) {
+      throw new Error(error.message);
     }
   };
 

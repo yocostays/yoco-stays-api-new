@@ -1558,9 +1558,11 @@ class StudentLeaveService {
           if (isCancelled) {
             setUpdates[mDef.bool] = false;
             setUpdates[`meals.${mDef.name}`] = {
-              bookingIntent: MealBookingIntent.CANCELLED,
+              status: MealBookingIntent.SKIPPED,
+              locked: false,
+              consumed: false,
+              consumedAt: null,
               cancelSource: MealCancelSource.LEAVE,
-              consumed: false
             };
             cancelledInDay++;
           }
@@ -1569,7 +1571,7 @@ class StudentLeaveService {
         if (cancelledInDay > 0) {
           // If all meals for the day are cancelled, mark the entire record status
           if (cancelledInDay === 4) {
-            setUpdates.bookingStatus = MealBookingStatusTypes.CANCELLED;
+            setUpdates.bookingStatus = MealBookingStatusTypes.SKIPPED;
           }
           bulkOps.push({
             updateOne: {

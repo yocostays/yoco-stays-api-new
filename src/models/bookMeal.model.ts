@@ -1,22 +1,19 @@
 import mongoose, { Document, Schema } from "mongoose";
-import {
-  MealBookingStatusTypes,
-  MealBookingIntent,
-  MealCancelSource,
-} from "../utils/enum";
+import { MealBookingIntent, MealCancelSource } from "../utils/enum";
 
 export interface IMealState {
-  bookingIntent: MealBookingIntent;
+  status: MealBookingIntent; // PENDING | CONFIRMED | SKIPPED
+  locked: boolean;
   consumed: boolean;
   consumedAt?: Date;
   cancelSource?: MealCancelSource;
 }
 
 export interface IMealsObject {
-  breakfast?: IMealState;
-  lunch?: IMealState;
-  snacks?: IMealState;
-  dinner?: IMealState;
+  breakfast: IMealState;
+  lunch: IMealState;
+  snacks: IMealState;
+  dinner: IMealState;
 }
 
 export interface IBookMealsDetails extends Document {
@@ -25,39 +22,35 @@ export interface IBookMealsDetails extends Document {
   hostelId: mongoose.Types.ObjectId;
   studentId: mongoose.Types.ObjectId;
   date: Date;
-
-  // Legacy boolean fields - null = meal not available in menu
-  isBreakfastBooked: boolean | null;
-  isLunchBooked: boolean | null;
-  isDinnerBooked: boolean | null;
-  isSnacksBooked: boolean | null;
-
   cancellationReason: string;
-  bookingStatus: MealBookingStatusTypes;
-  status: boolean;
-  isManualBooking: boolean;
-  mealCount: number;
   staffId: mongoose.Types.ObjectId;
+
+  // New pure state-based structure
+  meals: IMealsObject;
+
+  isManualBooking: boolean;
   createdBy: mongoose.Types.ObjectId;
   updatedBy?: mongoose.Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
-
-  // New meal-level state machine
-  meals?: IMealsObject;
 }
 
 const MealStateSchema = new Schema<IMealState>(
   {
-    bookingIntent: {
+    status: {
       type: String,
       enum: Object.values(MealBookingIntent),
-      required: true, //
+      default: MealBookingIntent.PENDING,
+      required: true,
     },
-    // TEMPORARY: defaults to true until biometric/punch system is implemented
+    locked: {
+      type: Boolean,
+      default: false,
+      required: true,
+    },
     consumed: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     consumedAt: {
       type: Date,
@@ -67,6 +60,28 @@ const MealStateSchema = new Schema<IMealState>(
       type: String,
       enum: [...Object.values(MealCancelSource), null],
       default: null,
+    },
+  },
+  { _id: false }
+);
+
+const MealsSchema = new Schema<IMealsObject>(
+  {
+    breakfast: {
+      type: MealStateSchema,
+      default: () => ({ status: MealBookingIntent.PENDING, locked: false }),
+    },
+    lunch: {
+      type: MealStateSchema,
+      default: () => ({ status: MealBookingIntent.PENDING, locked: false }),
+    },
+    snacks: {
+      type: MealStateSchema,
+      default: () => ({ status: MealBookingIntent.PENDING, locked: false }),
+    },
+    dinner: {
+      type: MealStateSchema,
+      default: () => ({ status: MealBookingIntent.PENDING, locked: false }),
     },
   },
   { _id: false }
@@ -98,46 +113,11 @@ const BookMealsSchema: Schema = new Schema<IBookMealsDetails>(
       type: Date,
       required: true,
     },
-
-    // Legacy boolean fields - null = meal not available in menu
-    isBreakfastBooked: {
-      type: Boolean,
-      required: false,
-      default: null,
-    },
-    isLunchBooked: {
-      type: Boolean,
-      required: false,
-      default: null,
-    },
-    isSnacksBooked: {
-      type: Boolean,
-      required: false,
-      default: null,
-    },
-    isDinnerBooked: {
-      type: Boolean,
-      required: false,
-      default: null,
-    },
-
-    mealCount: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
     cancellationReason: {
       type: String,
       required: false,
       default: null,
     },
-    bookingStatus: {
-      type: String,
-      enum: Object.values(MealBookingStatusTypes),
-      required: true,
-      default: MealBookingStatusTypes.BOOKED,
-    },
-
     staffId: {
       type: Schema.Types.ObjectId,
       ref: "Staff",
@@ -147,11 +127,6 @@ const BookMealsSchema: Schema = new Schema<IBookMealsDetails>(
     isManualBooking: {
       type: Boolean,
       default: false,
-    },
-    status: {
-      type: Boolean,
-      required: true,
-      default: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
@@ -165,29 +140,27 @@ const BookMealsSchema: Schema = new Schema<IBookMealsDetails>(
       default: null,
     },
 
-    // New meal-level state machine (optional for gradual adoption)
+    // Pure state-based meal structure
     meals: {
-      type: {
-        breakfast: { type: MealStateSchema, default: undefined },
-        lunch: { type: MealStateSchema, default: undefined },
-        snacks: { type: MealStateSchema, default: undefined },
-        dinner: { type: MealStateSchema, default: undefined },
-      },
-      required: false,
-      default: undefined,
+      type: MealsSchema as any,
+      required: true,
+      default: () => ({
+        breakfast: { status: MealBookingIntent.PENDING, locked: false },
+        lunch: { status: MealBookingIntent.PENDING, locked: false },
+        snacks: { status: MealBookingIntent.PENDING, locked: false },
+        dinner: { status: MealBookingIntent.PENDING, locked: false },
+      }),
     },
   },
   { timestamps: true }
 );
 
-// Indexes - all existing indexes preserved
+// Indexes
 BookMealsSchema.index({ mealId: 1, date: 1 });
 BookMealsSchema.index({ hostelId: 1, studentId: 1, date: 1 });
-BookMealsSchema.index({ bookingStatus: 1 });
 BookMealsSchema.index({ studentId: 1, date: 1 });
 BookMealsSchema.index({ staffId: 1 });
 BookMealsSchema.index({ staffId: 1, date: 1 });
-BookMealsSchema.index({ status: 1 });
 
 // TTL Index: Auto-delete records after 450 days
 BookMealsSchema.index(

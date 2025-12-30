@@ -1,18 +1,33 @@
 import { z } from "zod";
 
-
 export const SetMealTimingSchema = z.object({
-    hostelId: z.string(),
-    breakfastStartTime: z.string().nullable().optional(),
-    breakfastEndTime: z.string().nullable().optional(),
-    lunchStartTime: z.string().nullable().optional(),
-    lunchEndTime: z.string().nullable().optional(),
-    snacksStartTime: z.string().nullable().optional(),
-    snacksEndTime: z.string().nullable().optional(),
-    dinnerStartTime: z.string().nullable().optional(),
-    dinnerEndTime: z.string().nullable().optional(),
+  hostelId: z.string().min(1, "Hostel ID is required"),
+  breakfastStartTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
+  breakfastEndTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
+  lunchStartTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
+  lunchEndTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
+  snacksStartTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
+  snacksEndTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
+  dinnerStartTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
+  dinnerEndTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
 });
 
 export const GetMealTimingSchema = z.object({
-    hostelId: z.string(),
+  hostelId: z.string(),
 });

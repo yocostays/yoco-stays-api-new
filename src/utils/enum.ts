@@ -93,17 +93,19 @@ export enum MealBookingStatusTypes {
  * Used in the new meals state machine for granular tracking.
  */
 export enum MealBookingIntent {
-  CONFIRMED = "confirmed",     // Student actively booked this meal
-  CANCELLED = "cancelled",     // Student actively cancelled this meal
-  NOT_APPLICABLE = "n/a",      // Meal was never booked (null-equivalent)
+  CONFIRMED = "CONFIRMED", // Student actively booked this meal
+  CANCELLED = "CANCELLED", // Student actively cancelled this meal
+  NOT_APPLICABLE = "N/A", // Meal was never booked (null-equivalent)
+  PENDING = "PENDING", // No decision yet
+  SKIPPED = "SKIPPED", // Student explicitly skipped this meal
 }
 
 // Source of meal cancellation for audit and tracking purposes.
- 
+
 export enum MealCancelSource {
-  MANUAL = "manual",           // User cancelled manually
-  LEAVE = "leave",             // Cancelled due to approved leave
-  SYSTEM = "system",           // System-triggered cancellation
+  MANUAL = "manual", // User cancelled manually
+  LEAVE = "leave", // Cancelled due to approved leave
+  SYSTEM = "system", // System-triggered cancellation
 }
 
 export enum ComplainStatusTypes {
@@ -203,7 +205,7 @@ export enum BulkUploadTypes {
   MEAL = "meal",
   FOOD_WASTAGE = "food wastage",
   HOSTEL = "hostel",
-  HOSTEL_ROOM_MAP = "hostel room map"
+  HOSTEL_ROOM_MAP = "hostel room map",
 }
 
 export enum HostelTypes {
