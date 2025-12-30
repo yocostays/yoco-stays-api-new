@@ -17,7 +17,7 @@ import {
   uploadFileToCloudStorage,
 } from "../utils/awsUploadService";
 import OtpLogicService from "./otp.service";
-import { OtpPurpose, OtpChannel } from "../validators/otp.schema";
+import { OtpPurpose, OtpChannel } from "../utils/validators/otp.schema";
 
 const { USER_LOGOUT_SUCCESS, PASSWORD_RESET_SUCCESS } = SUCCESS_MESSAGES;
 const {

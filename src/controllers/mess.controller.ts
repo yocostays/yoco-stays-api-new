@@ -19,6 +19,11 @@ import {
   SortingTypes,
 } from "../utils/enum";
 
+// DRY Helper imports (only for newly created APIs)
+import { asyncHandler } from "../utils/asyncHandler";
+import { sendSuccess, sendError, sendZodError } from "../utils/responseHelpers";
+import { getValidatedStudent } from "../utils/entityHelpers";
+
 const { getStaffById } = StaffService;
 const { getStudentById } = UserService;
 
@@ -31,7 +36,7 @@ const {
   todayHostelMenuByUserId,
   studentBookMeal,
   cancelBookingByStudent,
-  cancelledMealHistory,
+  // cancelledMealHistory,
   bulkUploadMessMenuForHostel,
   bookingReversible,
   studentEditBookedMeal,
@@ -42,6 +47,10 @@ const {
   fetchGatepassInfoByMealId,
   manuallyBookMeal,
   fetchManuallyBookedMeals,
+  studentBookMealBulk,
+  getStudentMealBookingMonthlyView,
+  setHostelMealTiming,
+  getMealStateAnalyticsByDate
 } = MessService;
 const {
   CREATE_DATA,
@@ -53,8 +62,6 @@ const {
 } = SUCCESS_MESSAGES;
 const { INVALID_ID, REQUIRED_FIELD } = VALIDATION_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
-
-
 
 class MessMenuController {
   //SECTION Controller method to handle mess menu creation for hostel
@@ -355,7 +362,7 @@ class MessMenuController {
   }
 
   //SECTION Controller method to book student meal
-  async bookMealByStudent(
+  async bookMealByStudentOld(
     req: Request,
     res: Response
   ): Promise<Response<HttpResponse>> {
@@ -491,49 +498,49 @@ class MessMenuController {
   }
 
   //SECTION Controller method to get cancel meal
-  async fetchCancelledMeals(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const studentId = req.body._valid._id;
+  // async fetchCancelledMeals(
+  //   req: Request,
+  //   res: Response
+  // ): Promise<Response<HttpResponse>> {
+  //   try {
+  //     const studentId = req.body._valid._id;
 
-      if (!mongoose.isValidObjectId(studentId)) {
-        throw new Error(INVALID_ID);
-      }
+  //     if (!mongoose.isValidObjectId(studentId)) {
+  //       throw new Error(INVALID_ID);
+  //     }
 
-      // Call the service to retrieve stduent deatails
-      const { student } = await getStudentById(studentId);
+  //     // Call the service to retrieve stduent deatails
+  //     const { student } = await getStudentById(studentId);
 
-      if (!student) {
-        throw new Error(RECORD_NOT_FOUND("Student"));
-      }
+  //     if (!student) {
+  //       throw new Error(RECORD_NOT_FOUND("Student"));
+  //     }
 
-      const { status } = req.body;
+  //     const { status } = req.body;
 
-      //Call the service to retrieve cancelled meal
-      const { cancelMeal } = await cancelledMealHistory(
-        student?.hostelId,
-        student?._id,
-        status
-      );
+  //     //Call the service to retrieve cancelled meal
+  //     const { cancelMeal } = await cancelledMealHistory(
+  //       student?.hostelId,
+  //       student?._id,
+  //       status
+  //     );
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: FETCH_SUCCESS,
-        date: cancelMeal,
-      };
+  //     const successResponse: HttpResponse = {
+  //       statusCode: 200,
+  //       message: FETCH_SUCCESS,
+  //       date: cancelMeal,
+  //     };
 
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+  //     return res.status(200).json(successResponse);
+  //   } catch (error: any) {
+  //     const errorMessage = error.message ?? SERVER_ERROR;
+  //     const errorResponse: HttpResponse = {
+  //       statusCode: 400,
+  //       message: errorMessage,
+  //     };
+  //     return res.status(400).json(errorResponse);
+  //   }
+  // }
 
   //SECTION Controller method to handle mess menu bulk upload
   async messMenuBulkUpload(
@@ -1022,6 +1029,88 @@ class MessMenuController {
       return res.status(400).json(errorResponse);
     }
   }
+
+  //SECTION Controller method to book meals
+  bookMealByStudent = asyncHandler(async (req: Request, res: Response) => {
+    const studentId = req.body._valid._id;
+
+    // Validate request body with Zod
+    const { BulkMealBookingSchema } = await import(
+      "../utils/validators/mealBooking.validator"
+    );
+
+    const parseResult = BulkMealBookingSchema.safeParse(req.body);
+
+    const validationError = sendZodError(res, parseResult);
+    if (validationError) return validationError;
+
+    const { bookings } = parseResult.data!; // Safe after validation check
+    const student = await getValidatedStudent(studentId);
+
+    // Call the new service method
+    await studentBookMealBulk(
+      student.hostelId,
+      student._id,
+      bookings
+    );
+
+    return sendSuccess(res, CREATE_DATA);
+  });
+
+  //SECTION Controller method to get monthly meal booking data (V1 - readonly)
+  getMonthlyMealData = asyncHandler(async (req: Request, res: Response) => {
+    const studentId = req.body._valid._id;
+
+    // Validate request body with Zod
+    const { CalendarMonthViewSchema } = await import(
+      "../utils/validators/mealBooking.validator"
+    );
+    const parseResult = CalendarMonthViewSchema.safeParse(req.body);
+
+    const validationError = sendZodError(res, parseResult);
+    if (validationError) return validationError;
+
+    const { date, year, month } = parseResult.data!; // Safe after validation check
+    const student = await getValidatedStudent(studentId);
+
+    // Call the service method
+    const { results, mealTimings } = await getStudentMealBookingMonthlyView(
+      student.hostelId,
+      student._id,
+      date,
+      year,
+      month
+    );
+
+    return sendSuccess(res, FETCH_SUCCESS, {
+      results,
+      mealTimings,
+    });
+  });
+
+  // // ----------------------------warden APIs-----------------------------------
+
+  //SECTION Controller method to get student meal status by date
+
+  getMealStateAnalyticsByDate = asyncHandler(
+    async (req: Request, res: Response) => {
+      const { hostelId, date } = req.body;
+
+      const result = await getMealStateAnalyticsByDate(
+        hostelId,
+        date
+      );
+
+      return sendSuccess(res, FETCH_SUCCESS, result);
+    }
+  );
+
+  // // SECTION: Controller method to set hostel meal timings
+  setHostelMealTiming = asyncHandler(async (req: Request, res: Response) => {
+     await setHostelMealTiming(req.body);
+
+    return sendSuccess(res, UPDATE_DATA);
+  });
 }
 
 export default new MessMenuController();

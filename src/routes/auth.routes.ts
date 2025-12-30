@@ -10,7 +10,7 @@ import { validateZod } from "../middlewares/validateZod";
 import {
   requestOtpSchema,
   resetPasswordSchema,
-} from "../validators/otp.schema";
+} from "../utils/validators/otp.schema";
 const {
   staffLoginWithUserNameAndPwd,
   studentLoginWithIdAndPwd,
