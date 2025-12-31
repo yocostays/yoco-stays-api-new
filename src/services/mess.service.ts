@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { PipelineStage, Types } from "mongoose";
 import { normalizeDateKey } from "../utils/dateUtils";
 import moment from "moment-timezone"; // Keeping moment as per existing imports, but avoiding usage in optimized function
 import dayjs from "dayjs";
@@ -19,9 +19,10 @@ import HostelMealTiming from "../models/hostelMealTiming.model";
 import { getSignedUrl, pushToS3Bucket } from "../utils/awsUploadService";
 import { MESS_BULK_UPLOAD_FILES } from "../utils/s3bucketFolder";
 import UserService from "./user.service";
-import { Types } from "mongoose";
 import HostelPolicy from "../models/hostelPolicy.model";
 import StudentLeave from "../models/student-leave.model";
+import { paginateAggregate } from "../utils/pagination";
+import FoodWastage from "../models/foodWastage.model";
 
 import {
   excelDateToJSDate,
@@ -149,120 +150,148 @@ class MessService {
 
   //SECTION: Method to get all mess menu
   messMenuWithPagination = async (
-    page: number,
-    limit: number,
+    page: number = 1,
+    limit: number = 10,
     hostelId?: string,
-    mealType?: MealCountReportType,
     sort?: SortingTypes,
     startDate?: string,
     endDate?: string
-  ): Promise<{ data: any[]; count: number }> => {
+  ): Promise<{ count: number; data: any[] }> => {
     try {
-      const skip = (page - 1) * limit;
-      const sortOptions: any = {};
-      const searchParams: any = {};
+      // Service-Level Input Validation
+      if (hostelId && !Types.ObjectId.isValid(hostelId)) {
+        throw new Error(VALIDATION_MESSAGES.INVALID_ID);
+      }
+
+      const matchStage: Record<string, any> = {};
 
       if (hostelId) {
-        searchParams.hostelId = hostelId;
+        matchStage.hostelId = new Types.ObjectId(hostelId);
       }
 
-      switch (sort) {
-        case SortingTypes.RECENT:
-          sortOptions.date = -1;
-          break;
-        case SortingTypes.OLDEST:
-          sortOptions.date = 1;
-          break;
-        case SortingTypes.CUSTOM:
-          if (startDate && endDate) {
-            const start = new Date(startDate);
-            start.setUTCHours(0, 0, 0, 0);
+      //  Date Range Handling
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        if (!isNaN(start.getTime())) {
+          start.setUTCHours(0, 0, 0, 0);
 
-            const end = new Date(endDate);
+          const end = new Date(endDate);
+          if (!isNaN(end.getTime())) {
             end.setUTCHours(23, 59, 59, 999);
-
-            searchParams.date = {
-              $gte: start,
-              $lte: end,
-            };
-          } else {
-            sortOptions.date = -1;
+            matchStage.date = { $gte: start, $lte: end };
           }
-          break;
-        default:
-          sortOptions.date = -1;
-      }
-
-      if (mealType !== MealCountReportType.ALL) {
-        searchParams.$or = [];
-        if (mealType === MealCountReportType.BREAKFAST) {
-          searchParams.$or.push({ breakfast: { $exists: true, $ne: null } });
-        }
-        if (mealType === MealCountReportType.LUNCH) {
-          searchParams.$or.push({ lunch: { $exists: true, $ne: null } });
-        }
-        if (mealType === MealCountReportType.DINNER) {
-          searchParams.$or.push({ dinner: { $exists: true, $ne: null } });
-        }
-        if (mealType === MealCountReportType.HI_TEA) {
-          searchParams.$or.push({ snacks: { $exists: true, $ne: null } });
         }
       }
-      const [count, messMenuDetails] = await Promise.all([
-        MessMenu.countDocuments(searchParams),
-        MessMenu.find(searchParams)
-          .populate([
-            { path: "hostelId", select: "name" },
-            { path: "createdBy", select: "name" },
-          ])
-          .sort(sortOptions)
-          .skip(skip)
-          .limit(limit)
-          .lean(),
-      ]);
 
-      const result = await Promise.all(
-        messMenuDetails.map(async (menu: any) => {
-          return {
-            _id: menu._id,
-            uniqueId: menu.uniqueId ?? null,
-            hostelId: menu.hostelId?._id ?? null,
-            hostelName: (menu?.hostelId as any)?.name ?? null,
-            date: menu.date ?? null,
-            day: menu.day ?? null,
-            breakfast:
-              mealType === MealCountReportType.ALL ||
-              mealType === MealCountReportType.BREAKFAST
-                ? menu.breakfast ?? null
-                : null,
-            lunch:
-              mealType === MealCountReportType.ALL ||
-              mealType === MealCountReportType.LUNCH
-                ? menu.lunch ?? null
-                : null,
-            dinner:
-              mealType === MealCountReportType.ALL ||
-              mealType === MealCountReportType.DINNER
-                ? menu.dinner ?? null
-                : null,
-            snacks:
-              mealType === MealCountReportType.ALL ||
-              mealType === MealCountReportType.HI_TEA
-                ? menu.snacks ?? null
-                : null,
-            status: menu.status ?? null,
-            createdBy: (menu?.createdBy as any)?.name ?? null,
-            createdAt: menu.createdAt ?? null,
-            totalBooking: menu.totalBooking ?? 0,
-            totalCancelled: menu.totalCancelled ?? 0,
-            totalConsumed: menu.totalConsumed ?? 0,
-          };
-        })
+      const sortStage: Record<string, 1 | -1> = {};
+
+      // Default to DESCENDING (Recent First) for general listing.
+      const isChronological =
+        sort === SortingTypes.OLDEST ||
+        sort === SortingTypes.ASCENDING ||
+        (startDate && endDate && !sort);
+
+      if (isChronological) {
+        sortStage.date = 1;
+      } else {
+        sortStage.date = -1;
+      }
+
+      const pipeline: PipelineStage[] = [
+        { $match: matchStage },
+        { $sort: sortStage },
+        {
+          $lookup: {
+            from: "foodwastages",
+            localField: "_id",
+            foreignField: "mealIds",
+            as: "wastageData",
+          },
+        },
+        {
+          $addFields: {
+            wastage: { $arrayElemAt: ["$wastageData", 0] },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            uniqueId: 1,
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+            wastage: {
+              $cond: {
+                if: { $gt: [{ $ifNull: ["$wastage.totalWastage", 0] }, 0] },
+                then: {
+                  $concat: [
+                    { $toString: "$wastage.totalWastage" },
+                    " ",
+                    "$wastage.totalUnit",
+                  ],
+                },
+                else: null,
+              },
+            },
+            feedback: null,
+            meals: {
+              breakfast: {
+                name: {
+                  $cond: {
+                    if: { $or: [{ $eq: ["$breakfast", "-"] }, { $not: "$breakfast" }] },
+                    then: null,
+                    else: "$breakfast",
+                  },
+                },
+                wastage: { $ifNull: ["$wastage.breakfast", null] },
+                feedback: null,
+              },
+              lunch: {
+                name: {
+                  $cond: {
+                    if: { $or: [{ $eq: ["$lunch", "-"] }, { $not: "$lunch" }] },
+                    then: null,
+                    else: "$lunch",
+                  },
+                },
+                wastage: { $ifNull: ["$wastage.lunch", null] },
+                feedback: null,
+              },
+              snacks: {
+                name: {
+                  $cond: {
+                    if: { $or: [{ $eq: ["$snacks", "-"] }, { $not: "$snacks" }] },
+                    then: null,
+                    else: "$snacks",
+                  },
+                },
+                wastage: { $ifNull: ["$wastage.snacks", null] },
+                feedback: null,
+              },
+              dinner: {
+                name: {
+                  $cond: {
+                    if: { $or: [{ $eq: ["$dinner", "-"] }, { $not: "$dinner" }] },
+                    then: null,
+                    else: "$dinner",
+                  },
+                },
+                wastage: { $ifNull: ["$wastage.dinner", null] },
+                feedback: null,
+              },
+            },
+          },
+        },
+      ];
+
+      const { data, count } = await paginateAggregate(
+        MessMenu,
+        pipeline,
+        page,
+        limit
       );
 
-      return { data: result, count };
+      return { count, data: data || [] };
     } catch (error: any) {
-      throw new Error(error.message);
+      throw error;
     }
   };
 
@@ -1131,8 +1160,8 @@ class MessService {
       const bookingStatus = isFullDay
         ? MealBookingStatusTypes.CANCELLED
         : allMealsCancelled
-        ? MealBookingStatusTypes.CANCELLED
-        : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+          ? MealBookingStatusTypes.CANCELLED
+          : MealBookingStatusTypes.PARTIALLY_CANCELLED;
       // Update the booking with new meal status and booking status
       booking.set({
         ...bookingUpdateData,
@@ -1247,14 +1276,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                  MealBookingStatusTypes.BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ]
+                MealBookingStatusTypes.BOOKED,
+                MealBookingStatusTypes.PARTIALLY_BOOKED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ]
               : [
-                  MealBookingStatusTypes.CANCELLED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ];
+                MealBookingStatusTypes.CANCELLED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
@@ -2029,11 +2058,11 @@ class MessService {
         let currentMeals = existingBooking
           ? existingBooking.meals
           : {
-              breakfast: { status: MealBookingIntent.PENDING, locked: false },
-              lunch: { status: MealBookingIntent.PENDING, locked: false },
-              snacks: { status: MealBookingIntent.PENDING, locked: false },
-              dinner: { status: MealBookingIntent.PENDING, locked: false },
-            };
+            breakfast: { status: MealBookingIntent.PENDING, locked: false },
+            lunch: { status: MealBookingIntent.PENDING, locked: false },
+            snacks: { status: MealBookingIntent.PENDING, locked: false },
+            dinner: { status: MealBookingIntent.PENDING, locked: false },
+          };
 
         for (const meal of [
           "breakfast",

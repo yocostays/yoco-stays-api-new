@@ -107,6 +107,7 @@ const FoodWastageSchema: Schema = new Schema<IFoodWastage>(
 );
 
 // Add indexes to frequently queried fields
+FoodWastageSchema.index({ mealIds: 1 });
 FoodWastageSchema.index({ mealIds: 1, startDate: 1, endDate: 1 });
 FoodWastageSchema.index({ hostelId: 1, startDate: 1, endDate: 1 });
 FoodWastageSchema.index({ status: 1 }); // For quick lookups based on status

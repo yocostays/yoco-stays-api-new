@@ -70,3 +70,18 @@ export const MealStateAnalyticsSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format"),
 });
+
+export const MessMenuPaginationSchema = z.object({
+  page: z.number().int().min(1).optional(),
+  limit: z.number().int().min(1).optional(),
+  sort: z.enum(["RECENT", "OLDEST"]).optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Start date must be YYYY-MM-DD format")
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "End date must be YYYY-MM-DD format")
+    .optional(),
+}).passthrough();
+
