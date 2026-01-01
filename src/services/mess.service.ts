@@ -142,9 +142,10 @@ class MessService {
     page: number = 1,
     limit: number = 10,
     hostelId?: string,
-    sort?: SortingTypes,
+    sort?: SortingTypes | string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    onlyWithWastage: boolean = false
   ): Promise<{ count: number; data: any[] }> => {
     try {
       // Service-Level Input Validation
@@ -175,9 +176,12 @@ class MessService {
       const sortStage: Record<string, 1 | -1> = {};
 
       // Default to DESCENDING (Recent First) for general listing.
+      const sortValue = typeof sort === "string" ? sort.toUpperCase() : sort;
       const isChronological =
-        sort === SortingTypes.OLDEST ||
-        sort === SortingTypes.ASCENDING ||
+        sortValue === SortingTypes.OLDEST ||
+        sortValue === "OLDEST" ||
+        sortValue === SortingTypes.ASCENDING ||
+        sortValue === "ASCENDING" ||
         (startDate && endDate && !sort);
 
       if (isChronological) {
@@ -197,6 +201,10 @@ class MessService {
             as: "wastageData",
           },
         },
+        // Optimization: Filter for records with wastage if requested
+        ...(onlyWithWastage
+          ? [{ $match: { "wastageData.0": { $exists: true } } }]
+          : []),
         {
           $addFields: {
             wastage: { $arrayElemAt: ["$wastageData", 0] },
@@ -206,6 +214,7 @@ class MessService {
           $project: {
             _id: 0,
             uniqueId: 1,
+            foodWastageNumber: { $ifNull: ["$wastage.foodWastageNumber", null] },
             date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
             wastage: {
               $cond: {
