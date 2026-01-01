@@ -19,8 +19,11 @@ import {
   SortingTypes,
 } from "../utils/enum";
 
-// DRY Helper imports (only for newly created APIs)
 import { asyncHandler } from "../utils/asyncHandler";
+import {
+  CreateMessMenuSchema,
+  MessMenuPaginationSchema,
+} from "../utils/validators/mealBooking.validator";
 import { sendSuccess, sendError, sendZodError } from "../utils/responseHelpers";
 import { getValidatedStudent } from "../utils/entityHelpers";
 
@@ -65,64 +68,26 @@ const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 
 class MessMenuController {
   //SECTION Controller method to handle mess menu creation for hostel
-  async createMessMenuForHostel(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
+  createMessMenuForHostel = asyncHandler(
+    async (req: Request, res: Response) => {
+      const { fromDate, breakfast, lunch, snacks, dinner } = req.body;
       const createdById = req.body._valid._id;
+      const hostelId = req.body._valid?.hostelId || req.body.hostelId;
 
-      // Extract hostelId from token if available; otherwise, use the one from the body
-      const tokenHostelId = req.body._valid?.hostelId;
-
-      const hostelId = tokenHostelId || req.body.hostelId;
-
-      const { fromDate, toDate, breakfast, lunch, snacks, dinner } = req.body;
-
-      // Validate the createdById
-      if (!mongoose.isValidObjectId(createdById)) throw new Error(INVALID_ID);
-
-      // Call the service to retrieve staff
-      const { staff } = await getStaffById(createdById);
-
-      if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
-
-      // Validate required fields
-      if (
-        !hostelId ||
-        !fromDate ||
-        !toDate ||
-        !breakfast ||
-        !lunch ||
-        !snacks ||
-        !dinner
-      ) {
-        const missingField = !hostelId
-          ? "Hostel Id"
-          : !fromDate
-          ? "From Date"
-          : !toDate
-          ? "To Date"
-          : !breakfast
-          ? "Breakfast"
-          : !lunch
-          ? "Lunch"
-          : !snacks
-          ? "Snacks"
-          : "Dinner";
-
-        const errorResponse: HttpResponse = {
-          statusCode: 400,
-          message: `${missingField} is required`,
-        };
-        return res.status(400).json(errorResponse);
+      // Identity validation (Defensive)
+      if (!mongoose.isValidObjectId(createdById)) {
+        return sendError(res, INVALID_ID);
       }
 
-      // Call the service to create a new menu
-      await messMenuCreationForHostel(
+      const { staff } = await getStaffById(createdById);
+      if (!staff) {
+        return sendError(res, RECORD_NOT_FOUND("Staff"));
+      }
+
+      // Call Service
+      const result = await messMenuCreationForHostel(
         hostelId,
         fromDate,
-        toDate,
         breakfast,
         lunch,
         snacks,
@@ -130,20 +95,9 @@ class MessMenuController {
         createdById
       );
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: CREATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
+      return sendSuccess(res, result);
     }
-  }
+  );
 
   //SECTION Controller method to get mess menu with pagination and filters (POST)
   getAllMessMenuWithPagination = asyncHandler(

@@ -75,8 +75,7 @@ class MessService {
   //SECTION: Method to create a mess menu for hostel
   messMenuCreationForHostel = async (
     hostelId: string,
-    fromDate: Date,
-    toDate: Date,
+    fromDate: Date | string,
     breakfast: string,
     lunch: string,
     snacks: string,
@@ -84,62 +83,52 @@ class MessService {
     createdById?: string
   ): Promise<string> => {
     try {
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
+      const targetDate = dayjs.utc(fromDate).startOf("day");
+      const today = dayjs.utc().startOf("day");
 
-      if (new Date(fromDate) < today) throw new Error(START_DATE_ERROR);
+      if (targetDate.isBefore(today)) {
+        throw new Error(START_DATE_ERROR);
+      }
 
-      // Check if the hostel exists
+
       const existingHostel = await Hostel.exists({ _id: hostelId });
       if (!existingHostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
 
-      // Get all dates between fromDate and toDate
-      const dates = getDatesBetween(new Date(fromDate), new Date(toDate));
+      const normalizedDate = targetDate.toDate();
+      const dayOfWeek = targetDate.format("dddd").toLowerCase();
 
-      // Process all dates sequentially using a for loop
-      for (const date of dates) {
-        // Normalize the date to UTC midnight
-        const normalizedDate = new Date(date);
-        normalizedDate.setUTCHours(0, 0, 0, 0);
+      // Prepare the data to be inserted or updated
+      const updateData = {
+        breakfast,
+        lunch,
+        snacks,
+        dinner,
+        day: dayOfWeek,
+        updatedBy: createdById,
+        updatedAt: getCurrentISTTime(),
+      };
 
-        const dayOfWeek = getDayOfWeek(normalizedDate);
+      const existingRecord = await MessMenu.findOne({
+        hostelId,
+        date: normalizedDate,
+      });
 
-        const existingMenu: any = await MessMenu.findOne({
+      if (existingRecord) {
+        await MessMenu.updateOne(
+          { _id: existingRecord._id },
+          { $set: updateData }
+        );
+      } else {
+        const uniqueId = await this.generateMessMenuUniqueId();
+        const newMenu = new MessMenu({
+          ...updateData,
+          uniqueId,
           hostelId,
           date: normalizedDate,
+          createdBy: createdById,
+          createdAt: getCurrentISTTime(),
         });
-
-        if (existingMenu) {
-          // If the mess menu for the date already exists, update it
-          existingMenu.breakfast = breakfast;
-          existingMenu.lunch = lunch;
-          existingMenu.snacks = snacks;
-          existingMenu.dinner = dinner;
-          existingMenu.day = dayOfWeek.toLowerCase();
-          existingMenu.updatedBy = createdById;
-          existingMenu.updatedAt = getCurrentISTTime();
-          await existingMenu.save();
-        } else {
-          // Generate a uniqueId for the new entry
-          const uniqueId = await this.generateMessMenuUniqueId();
-
-          // Create the new menu object
-          const newMenu = new MessMenu({
-            uniqueId,
-            hostelId,
-            date: normalizedDate,
-            day: dayOfWeek.toLowerCase(),
-            breakfast,
-            lunch,
-            snacks,
-            dinner,
-            createdBy: createdById,
-            createdAt: getCurrentISTTime(),
-            updatedAt: getCurrentISTTime(),
-          });
-
-          await newMenu.save();
-        }
+        await newMenu.save();
       }
 
       return CREATE_DATA;
@@ -236,7 +225,12 @@ class MessService {
               breakfast: {
                 name: {
                   $cond: {
-                    if: { $or: [{ $eq: ["$breakfast", "-"] }, { $not: "$breakfast" }] },
+                    if: {
+                      $or: [
+                        { $eq: ["$breakfast", "-"] },
+                        { $not: "$breakfast" },
+                      ],
+                    },
                     then: null,
                     else: "$breakfast",
                   },
@@ -258,7 +252,9 @@ class MessService {
               snacks: {
                 name: {
                   $cond: {
-                    if: { $or: [{ $eq: ["$snacks", "-"] }, { $not: "$snacks" }] },
+                    if: {
+                      $or: [{ $eq: ["$snacks", "-"] }, { $not: "$snacks" }],
+                    },
                     then: null,
                     else: "$snacks",
                   },
@@ -269,7 +265,9 @@ class MessService {
               dinner: {
                 name: {
                   $cond: {
-                    if: { $or: [{ $eq: ["$dinner", "-"] }, { $not: "$dinner" }] },
+                    if: {
+                      $or: [{ $eq: ["$dinner", "-"] }, { $not: "$dinner" }],
+                    },
                     then: null,
                     else: "$dinner",
                   },

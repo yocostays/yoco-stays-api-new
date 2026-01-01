@@ -34,6 +34,7 @@ import {
 import {
   BulkMealBookingSchema,
   CalendarMonthViewSchema,
+  CreateMessMenuSchema,
   MealStateAnalyticsSchema,
   MessMenuPaginationSchema,
 } from "../utils/validators/mealBooking.validator";
@@ -50,7 +51,6 @@ messMenuRouter.get("/details", validateToken, getBookedMealDetails);
 messMenuRouter.get("/book-meal/:id", validateToken, getBookMealById);
 messMenuRouter.post("/get-gatepass-info", validateToken, fetchGatepassInfoByMealId);
 
-messMenuRouter.post("/create", validateToken, createMessMenuForHostel);
 messMenuRouter.get("/:id", validateToken, getMenudetailsById);
 messMenuRouter.delete("/delete", validateToken, deleteHosetelMessMenuById);
 messMenuRouter.patch(
@@ -112,5 +112,14 @@ messMenuRouter.post(
   validateToken,
   getAllMessMenuWithPagination
 );
+
+// create mess menu for hostel per day
+messMenuRouter.post(
+  "/create",
+  validateToken,
+  validateZod(CreateMessMenuSchema),
+  createMessMenuForHostel
+);
+
 
 export default messMenuRouter;

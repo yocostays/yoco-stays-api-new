@@ -85,3 +85,16 @@ export const MessMenuPaginationSchema = z.object({
     .optional(),
 }).passthrough();
 
+export const CreateMessMenuSchema = z.object({
+  hostelId: z
+    .string()
+    .regex(/^[0-9a-fA-F]{24}$/, "Invalid Hostel ID")
+    .optional(), // Can be from token
+  fromDate: z
+    .string({ message: "Date is required (YYYY-MM-DD)" })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format"),
+  breakfast: z.string().min(1, "Breakfast menu is required"),
+  lunch: z.string().min(1, "Lunch menu is required"),
+  snacks: z.string().min(1, "Snacks menu is required"),
+  dinner: z.string().min(1, "Dinner menu is required"),
+}).passthrough();
