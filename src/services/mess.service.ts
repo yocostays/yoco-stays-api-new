@@ -159,17 +159,13 @@ class MessService {
         matchStage.hostelId = new Types.ObjectId(hostelId);
       }
 
-      //  Date Range Handling
+      //  Date Range Handling (Shifted by -6h to capture IST-Midnight stored as 18:30 UTC)
       if (startDate && endDate) {
-        const start = new Date(startDate);
-        if (!isNaN(start.getTime())) {
-          start.setUTCHours(0, 0, 0, 0);
+        const start = dayjs(startDate).startOf("day").subtract(6, "hours").toDate();
+        const end = dayjs(endDate).endOf("day").subtract(6, "hours").toDate();
 
-          const end = new Date(endDate);
-          if (!isNaN(end.getTime())) {
-            end.setUTCHours(23, 59, 59, 999);
-            matchStage.date = { $gte: start, $lte: end };
-          }
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          matchStage.date = { $gte: start, $lte: end };
         }
       }
 
