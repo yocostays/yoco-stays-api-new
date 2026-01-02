@@ -34,12 +34,15 @@ import {
 import {
   BulkMealBookingSchema,
   CalendarMonthViewSchema,
+  CreateMessMenuSchema,
   MealStateAnalyticsSchema,
+  MessMenuPaginationSchema,
 } from "../utils/validators/mealBooking.validator";
 import { studentMealBookingRateLimiter } from "../middlewares/studentRateLimiter";
 import { uploadFileWithMulter } from "../utils/configureMulterStorage";
 
 const messMenuRouter = Router();
+
 
 //Book Meal
 messMenuRouter.get("/missed-booking", validateToken, fetchManuallyBookedMeals);
@@ -48,8 +51,6 @@ messMenuRouter.get("/details", validateToken, getBookedMealDetails);
 messMenuRouter.get("/book-meal/:id", validateToken, getBookMealById);
 messMenuRouter.post("/get-gatepass-info", validateToken, fetchGatepassInfoByMealId);
 
-messMenuRouter.post("/create", validateToken, createMessMenuForHostel);
-messMenuRouter.get("/", validateToken, getAllMessMenuWithPagination);
 messMenuRouter.get("/:id", validateToken, getMenudetailsById);
 messMenuRouter.delete("/delete", validateToken, deleteHosetelMessMenuById);
 messMenuRouter.patch(
@@ -104,5 +105,21 @@ messMenuRouter.post(
   validateZod(SetMealTimingSchema),
   setHostelMealTiming
 );
+
+//get meals analytics by date
+messMenuRouter.post(
+  "/menus",
+  validateToken,
+  getAllMessMenuWithPagination
+);
+
+// create mess menu for hostel per day
+messMenuRouter.post(
+  "/create",
+  validateToken,
+  validateZod(CreateMessMenuSchema),
+  createMessMenuForHostel
+);
+
 
 export default messMenuRouter;

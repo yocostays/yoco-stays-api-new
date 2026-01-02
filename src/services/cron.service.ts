@@ -2,9 +2,32 @@ import cron from "node-cron";
 import MessService from "./mess.service";
 import BookMeals from "../models/bookMeal.model";
 import HostelMealTiming from "../models/hostelMealTiming.model";
+import HostelPolicy from "../models/hostelPolicy.model";
 import Hostel from "../models/hostel.model";
-import moment from "moment-timezone";
+import dayjs, { Dayjs } from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import { MealBookingIntent } from "../utils/enum";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+const MEALS = ["breakfast", "lunch", "snacks", "dinner"] as const;
+type MealType = (typeof MEALS)[number];
+
+const DEFAULT_BOOKING_CUTOFFS: Record<MealType, { dayOffset: number; time: string }> = {
+  breakfast: { dayOffset: -1, time: "21:00" },
+  lunch: { dayOffset: 0, time: "08:00" },
+  snacks: { dayOffset: 0, time: "13:00" },
+  dinner: { dayOffset: 0, time: "16:00" },
+};
+
+const DEFAULT_CONSUMPTION_END: Record<MealType, string> = {
+  breakfast: "10:00",
+  lunch: "15:30",
+  snacks: "19:00",
+  dinner: "22:00",
+};
 
 class CronService {
   init() {
@@ -14,186 +37,141 @@ class CronService {
     cron.schedule(
       "0 12 * * *",
       async () => {
-        console.log(
-          "[CronService] Triggering Daily Auto-Booking (Asia/Kolkata)..."
-        );
         try {
           await MessService.autoBookMealsForNextDay();
         } catch (error: any) {
           console.error("[CronService] Auto-Booking Failed:", error.message);
         }
       },
-      {
-        timezone: "Asia/Kolkata",
-      }
+      { timezone: "Asia/Kolkata" }
     );
 
-    console.log("[CronService] Daily Auto-Booking scheduled for 12:00 PM IST.");
-
-    // Schedule: Every hour to mark meals as consumed after their end time
+    // Schedule: Every hour to sync meal statuses (IST)
     cron.schedule(
       "0 * * * *",
       async () => {
-        console.log(
-          "[CronService] Triggering Meal Consumption Update (Asia/Kolkata)..."
-        );
         try {
-          await this.markMealsAsConsumed();
+          await this.syncMealStatuses();
         } catch (error: any) {
-          console.error(
-            "[CronService] Meal Consumption Update Failed:",
-            error.message
-          );
+          console.error("[CronService] Meal Status Sync Failed:", error.message);
         }
       },
-      {
-        timezone: "Asia/Kolkata",
-      }
+      { timezone: "Asia/Kolkata" }
     );
 
-    console.log(
-      "[CronService] Meal Consumption Update scheduled for every hour (IST)."
-    );
+    console.log("[CronService] Production jobs scheduled (Asia/Kolkata).");
   }
 
   /**
-   * Marks meals as consumed based on hybrid time cutoffs
-   * Runs every hour to update consumption status
-   *
-   * Priority:
-   * 1. Uses hostel-specific meal timings from HostelMealTiming (if configured)
-   * 2. Falls back to hardcoded defaults if not configured:
-   *    - Breakfast: 10:00 AM
-   *    - Lunch: 3:30 PM
-   *    - Hi-Tea: 7:00 PM
-   *    - Dinner: 10:00 PM
+   * Production-hardened Status Sync:
+   * 1. Locks meals after booking cutoff.
+   * 2. Marks CONFIRMED meals as consumed after meal end time.
    */
-  private async markMealsAsConsumed(): Promise<void> {
+  private async syncMealStatuses(): Promise<void> {
     try {
-      const nowIST = moment().tz("Asia/Kolkata");
-      const todayUTC = moment.utc(nowIST.format("YYYY-MM-DD")).toDate();
+      const nowIST = dayjs().tz("Asia/Kolkata");
+      console.log(`[StatusSync] Starting sync at ${nowIST.format("YYYY-MM-DD HH:mm")} IST`);
 
-      console.log(
-        `[ConsumptionUpdate] Processing meals for ${nowIST.format(
-          "YYYY-MM-DD HH:mm"
-        )} IST`
-      );
+      const [allHostels, allPolicies, allTimings] = await Promise.all([
+        Hostel.find({ status: true }).select("_id").lean(),
+        HostelPolicy.find({ status: true }).lean(),
+        HostelMealTiming.find({ status: true }).lean(),
+      ]);
 
-      // Default fallback times (hour, minute)
-      const defaultCutoffs = {
-        breakfast: { hour: 10, minute: 0 },
-        lunch: { hour: 15, minute: 30 },
-        snacks: { hour: 19, minute: 0 }, // Hi-Tea
-        dinner: { hour: 22, minute: 0 },
-      };
+      const policiesMap = new Map(allPolicies.map((p) => [p.hostelId.toString(), p]));
+      const timingsMap = new Map(allTimings.map((t) => [t.hostelId.toString(), t]));
 
-      // Fetch all hostels with configured meal timings
-      const hostelTimings = await HostelMealTiming.find({
-        status: true,
-      }).lean();
+      const datesToSync = [
+        nowIST.subtract(1, "day").startOf("day"),
+        nowIST.startOf("day"),
+        nowIST.add(1, "day").startOf("day"),
+      ];
 
-      // Group by hostelId for easy lookup
-      const timingsByHostel = new Map(
-        hostelTimings.map((t) => [t.hostelId.toString(), t])
-      );
-
-      // Fetch all hostels to process both configured and unconfigured
-      const allHostels = await Hostel.find({ status: true })
-        .select("_id")
-        .lean();
-
-      let totalUpdated = 0;
+      const bulkOps: any[] = [];
 
       for (const hostel of allHostels) {
         const hostelId = hostel._id.toString();
-        const timing = timingsByHostel.get(hostelId);
+        const policy = policiesMap.get(hostelId);
+        const timing = timingsMap.get(hostelId);
 
-        const bulkOps: any[] = [];
+        for (const targetDate of datesToSync) {
+          const dateUTC = dayjs.utc(targetDate.format("YYYY-MM-DD")).toDate();
 
-        for (const mealName of [
-          "breakfast",
-          "lunch",
-          "snacks",
-          "dinner",
-        ] as const) {
-          // Determine cutoff time: DB timing first, then fall back to default
-          let cutoffTime: { hour: number; minute: number };
+          for (const meal of MEALS) {
+            const cutoff = this.getBookingCutoff(targetDate, meal, policy);
+            const mealEnd = this.getMealEndTime(targetDate, meal, timing);
 
-          if (timing) {
-            const endTimeField = `${mealName}EndTime` as keyof typeof timing;
-            const dbEndTime = timing[endTimeField] as string | undefined;
+            const isLockPassed = nowIST.isAfter(cutoff);
+            const isConsumePassed = nowIST.isAfter(mealEnd);
 
-            if (dbEndTime) {
-              // Use database timing
-              const [hour, minute] = dbEndTime.split(":").map(Number);
-              cutoffTime = { hour, minute };
-            } else {
-              // DB exists but this meal not configured, use default
-              cutoffTime = defaultCutoffs[mealName];
+            const updateSet: any = {};
+            const filter: any = { hostelId: hostel._id, date: dateUTC };
+
+            if (isConsumePassed) {
+              // RULE: Only CONFIRMED meals are marked consumed
+              // PENDING meals are just locked
+              filter[`meals.${meal}.status`] = MealBookingIntent.CONFIRMED;
+              filter[`meals.${meal}.consumed`] = { $ne: true }; // Idempotency
+
+              updateSet[`meals.${meal}.consumed`] = true;
+              updateSet[`meals.${meal}.consumedAt`] = mealEnd.toDate(); // Fixed semantics
+              updateSet[`meals.${meal}.locked`] = true;
+            } else if (isLockPassed) {
+              filter[`meals.${meal}.locked`] = { $ne: true }; // Idempotency
+              filter[`meals.${meal}.status`] = { $in: [MealBookingIntent.CONFIRMED, MealBookingIntent.PENDING] };
+
+              updateSet[`meals.${meal}.locked`] = true;
             }
-          } else {
-            // No timing configured for this hostel, use default
-            cutoffTime = defaultCutoffs[mealName];
-          }
 
-          // Check if current time has passed the cutoff
-          const hasPassed =
-            nowIST.hour() > cutoffTime.hour ||
-            (nowIST.hour() === cutoffTime.hour &&
-              nowIST.minute() >= cutoffTime.minute);
-
-          if (!hasPassed) {
-            continue; // Skip meals whose cutoff hasn't passed yet
-          }
-
-          // Mark as consumed for this hostel, meal, and date
-          bulkOps.push({
-            updateMany: {
-              filter: {
-                hostelId: hostel._id,
-                date: todayUTC,
-                [`meals.${mealName}.status`]: {
-                  $in: [MealBookingIntent.CONFIRMED, MealBookingIntent.PENDING],
-                },
-                $or: [
-                  { [`meals.${mealName}.consumed`]: false },
-                  { [`meals.${mealName}.consumed`]: { $exists: false } },
-                ],
-              },
-              update: {
-                $set: {
-                  [`meals.${mealName}.consumed`]: true,
-                  [`meals.${mealName}.consumedAt`]: nowIST.toDate(),
-                },
-              },
-            },
-          });
-        }
-
-        if (bulkOps.length > 0) {
-          const result = await BookMeals.bulkWrite(bulkOps);
-          const updated = result.modifiedCount || 0;
-          totalUpdated += updated;
-
-          if (updated > 0) {
-            const source = timing ? "DB timing" : "default timing";
-            console.log(
-              `[ConsumptionUpdate] Hostel ${hostelId} (${source}): Marked ${updated} meals as consumed`
-            );
+            if (Object.keys(updateSet).length > 0) {
+              bulkOps.push({
+                updateMany: { filter, update: { $set: updateSet } },
+              });
+            }
           }
         }
       }
 
-      console.log(
-        `[ConsumptionUpdate] Total meals marked as consumed: ${totalUpdated}`
-      );
+      const modifiedCount = await this.executeBulkInChunks(bulkOps);
+      console.log(`[StatusSync] Success. Synchronized ${modifiedCount} records.`);
     } catch (error: any) {
-      console.error(
-        "[ConsumptionUpdate] Error marking meals as consumed:",
-        error.message
-      );
+      console.error("[StatusSync] Fatal Error:", error.message);
       throw error;
     }
+  }
+
+  private getBookingCutoff(targetDate: Dayjs, meal: MealType, policy: any): Dayjs {
+    let dOffset = DEFAULT_BOOKING_CUTOFFS[meal].dayOffset;
+    let timeStr = DEFAULT_BOOKING_CUTOFFS[meal].time;
+
+    if (policy?.bookingCutoffs?.[meal]) {
+      dOffset = policy.bookingCutoffs[meal].dayOffset;
+      timeStr = policy.bookingCutoffs[meal].time;
+    }
+
+    const [h, m] = timeStr.split(":").map(Number);
+    return targetDate.clone().add(dOffset, "day").hour(h).minute(m).second(0).millisecond(0);
+  }
+
+  private getMealEndTime(targetDate: Dayjs, meal: MealType, timing: any): Dayjs {
+    let timeStr = DEFAULT_CONSUMPTION_END[meal];
+    const field = `${meal}EndTime`;
+    if (timing && timing[field]) {
+      timeStr = timing[field];
+    }
+
+    const [h, m] = timeStr.split(":").map(Number);
+    return targetDate.clone().hour(h).minute(m).second(0).millisecond(0);
+  }
+
+  private async executeBulkInChunks(ops: any[], chunkSize = 500): Promise<number> {
+    let totalModified = 0;
+    for (let i = 0; i < ops.length; i += chunkSize) {
+      const chunk = ops.slice(i, i + chunkSize);
+      const result = await BookMeals.bulkWrite(chunk);
+      totalModified += result.modifiedCount || 0;
+    }
+    return totalModified;
   }
 }
 

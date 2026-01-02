@@ -17,10 +17,5 @@ export const validateZod =
           message: err.issues.map((e) => e.message).join(", "),
         });
       }
-
-      return res.status(400).json({
-        statusCode: 400,
-        message: "Invalid request data",
-      });
     }
   };

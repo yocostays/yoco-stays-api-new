@@ -19,8 +19,11 @@ import {
   SortingTypes,
 } from "../utils/enum";
 
-// DRY Helper imports (only for newly created APIs)
 import { asyncHandler } from "../utils/asyncHandler";
+import {
+  CreateMessMenuSchema,
+  MessMenuPaginationSchema,
+} from "../utils/validators/mealBooking.validator";
 import { sendSuccess, sendError, sendZodError } from "../utils/responseHelpers";
 import { getValidatedStudent } from "../utils/entityHelpers";
 
@@ -50,7 +53,7 @@ const {
   studentBookMealBulk,
   getStudentMealBookingMonthlyView,
   setHostelMealTiming,
-  getMealStateAnalyticsByDate
+  getMealStateAnalyticsByDate,
 } = MessService;
 const {
   CREATE_DATA,
@@ -65,64 +68,26 @@ const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 
 class MessMenuController {
   //SECTION Controller method to handle mess menu creation for hostel
-  async createMessMenuForHostel(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
+  createMessMenuForHostel = asyncHandler(
+    async (req: Request, res: Response) => {
+      const { fromDate, breakfast, lunch, snacks, dinner } = req.body;
       const createdById = req.body._valid._id;
+      const hostelId = req.body._valid?.hostelId || req.body.hostelId;
 
-      // Extract hostelId from token if available; otherwise, use the one from the body
-      const tokenHostelId = req.body._valid?.hostelId;
-
-      const hostelId = tokenHostelId || req.body.hostelId;
-
-      const { fromDate, toDate, breakfast, lunch, snacks, dinner } = req.body;
-
-      // Validate the createdById
-      if (!mongoose.isValidObjectId(createdById)) throw new Error(INVALID_ID);
-
-      // Call the service to retrieve staff
-      const { staff } = await getStaffById(createdById);
-
-      if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
-
-      // Validate required fields
-      if (
-        !hostelId ||
-        !fromDate ||
-        !toDate ||
-        !breakfast ||
-        !lunch ||
-        !snacks ||
-        !dinner
-      ) {
-        const missingField = !hostelId
-          ? "Hostel Id"
-          : !fromDate
-            ? "From Date"
-            : !toDate
-              ? "To Date"
-              : !breakfast
-                ? "Breakfast"
-                : !lunch
-                  ? "Lunch"
-                  : !snacks
-                    ? "Snacks"
-                    : "Dinner";
-
-        const errorResponse: HttpResponse = {
-          statusCode: 400,
-          message: `${missingField} is required`,
-        };
-        return res.status(400).json(errorResponse);
+      // Identity validation (Defensive)
+      if (!mongoose.isValidObjectId(createdById)) {
+        return sendError(res, INVALID_ID);
       }
 
-      // Call the service to create a new menu
-      await messMenuCreationForHostel(
+      const { staff } = await getStaffById(createdById);
+      if (!staff) {
+        return sendError(res, RECORD_NOT_FOUND("Staff"));
+      }
+
+      // Call Service
+      const result = await messMenuCreationForHostel(
         hostelId,
         fromDate,
-        toDate,
         breakfast,
         lunch,
         snacks,
@@ -130,62 +95,54 @@ class MessMenuController {
         createdById
       );
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: CREATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
+      return sendSuccess(res, result);
     }
-  }
+  );
 
-  //SECTION Controller method to get mess menu with optional pagination and search
-  async getAllMessMenuWithPagination(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const hostelId = req.body._valid.hostelId;
+  //SECTION Controller method to get mess menu with pagination and filters (POST)
+  getAllMessMenuWithPagination = asyncHandler(
+    async (req: Request, res: Response) => {
+      const { hostelId, page, limit, sort, startDate, endDate } = req.body;
 
-      const { page, limit, mealType, sort, startDate, endDate } = req.query;
+      //  Validate hostelId
+      if (!hostelId || !mongoose.Types.ObjectId.isValid(hostelId)) {
+        return sendError(res, REQUIRED_FIELD("Valid Hostel ID"));
+      }
 
-      // Convert page and limit to integers
-      const parsedPage = parseInt(page as string);
-      const parsedLimit = parseInt(limit as string);
+      //  Validate Dates (ISO format YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (startDate && !dateRegex.test(startDate)) {
+        return sendError(res, "Start date must be in YYYY-MM-DD format");
+      }
+      if (endDate && !dateRegex.test(endDate)) {
+        return sendError(res, "End date must be in YYYY-MM-DD format");
+      }
 
-      // Call the service to retrieve all hostel
+      //  Pagination Safety
+      const parsedPage = Math.max(1, parseInt(page as string) || 1);
+      const parsedLimit = Math.min(
+        50,
+        Math.max(1, parseInt(limit as string) || 10)
+      );
+
+      const staffId = req.body._valid._id;
+      const { staff } = await getStaffById(staffId);
+      if (!staff) {
+        return sendError(res, RECORD_NOT_FOUND("Staff"));
+      }
+
       const { data, count } = await messMenuWithPagination(
         parsedPage,
         parsedLimit,
         hostelId as string,
-        mealType as MealCountReportType,
         sort as SortingTypes,
         startDate as string,
         endDate as string
       );
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: FETCH_SUCCESS,
-        count,
-        data,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
+      return sendSuccess(res, FETCH_SUCCESS, data, 200, count);
     }
-  }
+  );
 
   //SECTION Controller method to get menu by id
   async getMenudetailsById(
@@ -278,14 +235,14 @@ class MessMenuController {
         const missingField = !hostelId
           ? "Hostel Id"
           : !date
-            ? "Date"
-            : !breakfast
-              ? "Breakfast"
-              : !lunch
-                ? "Lunch"
-                : !snacks
-                  ? "Snacks"
-                  : "Dinner";
+          ? "Date"
+          : !breakfast
+          ? "Breakfast"
+          : !lunch
+          ? "Lunch"
+          : !snacks
+          ? "Snacks"
+          : "Dinner";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -940,8 +897,8 @@ class MessMenuController {
         const missingField = !date
           ? "Date"
           : !studentId
-            ? "Student"
-            : "Meal Type";
+          ? "Student"
+          : "Meal Type";
         const errorResponse: HttpResponse = {
           statusCode: 400,
           message: `${missingField} is required`,
@@ -1048,11 +1005,7 @@ class MessMenuController {
     const student = await getValidatedStudent(studentId);
 
     // Call the new service method
-    await studentBookMealBulk(
-      student.hostelId,
-      student._id,
-      bookings
-    );
+    await studentBookMealBulk(student.hostelId, student._id, bookings);
 
     return sendSuccess(res, CREATE_DATA);
   });
@@ -1096,10 +1049,7 @@ class MessMenuController {
     async (req: Request, res: Response) => {
       const { hostelId, date } = req.body;
 
-      const result = await getMealStateAnalyticsByDate(
-        hostelId,
-        date
-      );
+      const result = await getMealStateAnalyticsByDate(hostelId, date);
 
       return sendSuccess(res, FETCH_SUCCESS, result);
     }
@@ -1107,7 +1057,7 @@ class MessMenuController {
 
   // // SECTION: Controller method to set hostel meal timings
   setHostelMealTiming = asyncHandler(async (req: Request, res: Response) => {
-     await setHostelMealTiming(req.body);
+    await setHostelMealTiming(req.body);
 
     return sendSuccess(res, UPDATE_DATA);
   });

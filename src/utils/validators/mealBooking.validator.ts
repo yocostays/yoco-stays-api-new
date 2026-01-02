@@ -70,3 +70,31 @@ export const MealStateAnalyticsSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format"),
 });
+
+export const MessMenuPaginationSchema = z.object({
+  page: z.number().int().min(1).optional(),
+  limit: z.number().int().min(1).optional(),
+  sort: z.enum(["RECENT", "OLDEST"]).optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Start date must be YYYY-MM-DD format")
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "End date must be YYYY-MM-DD format")
+    .optional(),
+}).passthrough();
+
+export const CreateMessMenuSchema = z.object({
+  hostelId: z
+    .string()
+    .regex(/^[0-9a-fA-F]{24}$/, "Invalid Hostel ID")
+    .optional(), // Can be from token
+  fromDate: z
+    .string({ message: "Date is required (YYYY-MM-DD)" })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format"),
+  breakfast: z.string().min(1, "Breakfast menu is required"),
+  lunch: z.string().min(1, "Lunch menu is required"),
+  snacks: z.string().min(1, "Snacks menu is required"),
+  dinner: z.string().min(1, "Dinner menu is required"),
+}).passthrough();

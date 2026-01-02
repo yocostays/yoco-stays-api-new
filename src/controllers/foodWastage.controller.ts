@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { Request, Response } from "express";
 import FoodWastageService from "../services/foodWastage.service";
+import MessService from "../services/mess.service";
 import StaffService from "../services/staff.service";
 import { HttpResponse } from "../utils/httpResponse";
 import {
@@ -8,14 +9,16 @@ import {
   VALIDATION_MESSAGES,
   ERROR_MESSAGES,
 } from "../utils/messages";
-import { MealCountReportType, SortingTypes } from "../utils/enum";
+import { MealCountReportType, SortingTypes, UnitTypes } from "../utils/enum";
 import { excelToJson } from "../utils/excelToJson";
 import { uploadFileToCloudStorage } from "../utils/awsUploadService";
 import { FOOD_WASTAGE_BULK_UPLOAD_FILES } from "../utils/s3bucketFolder";
+import { asyncHandler } from "../utils/asyncHandler";
+import { sendSuccess, sendError, sendZodError } from "../utils/responseHelpers";
+import { CreateFoodWastageSchema, FoodWastagePaginationSchema } from "../utils/validators/foodWastage.validator";
 
 const {
   createFoodWastage,
-  getAllFoodWastage,
   getFoodWastageById,
   updateFoodWastage,
   deleteFoodWastageById,
@@ -35,64 +38,16 @@ const { INVALID_ID, REQUIRED_FIELD } = VALIDATION_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 
 class FoodWastageController {
-  //SECTION Controller to create FoodWastage
-  async createFoodWastage(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
+  //SECTION: Controller to create FoodWastage
+  createFoodWastage = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
+      // Validate input using Zod
+      const parseResult = CreateFoodWastageSchema.safeParse(req.body);
+      if (!parseResult.success) return sendZodError(res, parseResult) as any;
+
+      const { hostelId, date, breakfast, lunch, snacks, dinner } =
+        parseResult.data;
       const createdById = req.body._valid._id;
-      const hostelId = req.body._valid?.hostelId;
-      if (
-        !mongoose.isValidObjectId(createdById) ||
-        !mongoose.isValidObjectId(hostelId)
-      ) {
-        throw new Error(INVALID_ID);
-      }
-
-      // Call the service to retrieve staff
-      const { staff } = await getStaffById(createdById);
-
-      if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
-
-      const { startDate, endDate, breakfast, lunch, snacks, dinner } = req.body;
-
-      await createFoodWastage(
-        startDate,
-        endDate,
-        breakfast,
-        lunch,
-        snacks,
-        dinner,
-        hostelId,
-        createdById
-      );
-
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: CREATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
-
-  //SECTION Controller to get all FoodWastage
-  async getAllFoodWastage(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const createdById = req.body._valid._id;
-      const hostelId = req.body._valid?.hostelId;
-
-      const { page, limit, mealType, sort, startDate, endDate } = req.query;
 
       if (!mongoose.isValidObjectId(createdById)) {
         throw new Error(INVALID_ID);
@@ -100,99 +55,10 @@ class FoodWastageController {
 
       // Call the service to retrieve staff
       const { staff } = await getStaffById(createdById);
+      if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
 
-      if (!staff) {
-        throw new Error(RECORD_NOT_FOUND("Staff"));
-      }
-      // Convert page and limit to integers
-      const parsedPage = parseInt(page as string);
-      const parsedLimit = parseInt(limit as string);
-      const { data, count } = await getAllFoodWastage(
-        parsedPage,
-        parsedLimit,
-        mealType as MealCountReportType,
-        sort as SortingTypes,
-        hostelId as string,
-        startDate as string,
-        endDate as string
-      );
-
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: FETCH_SUCCESS,
-        count,
-        data,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
-
-  //SECTION Controller method to get FoodWastage by id
-  async getFoodWastageById(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const { id } = req.params;
-
-      if (!mongoose.isValidObjectId(id)) {
-        throw new Error(INVALID_ID);
-      }
-
-      // Call the service to retrieve course
-      const { data } = await getFoodWastageById(id);
-
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: FETCH_SUCCESS,
-        data,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
-
-  //SECTION Controller to create FoodWastage
-  async updateFoodWastage(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const createdById = req.body._valid._id;
-      const hostelId = req.body._valid?.hostelId;
-      const { id } = req.params;
-
-      if (
-        !mongoose.isValidObjectId(createdById) ||
-        !mongoose.isValidObjectId(hostelId) ||
-        !mongoose.isValidObjectId(id)
-      )
-        throw new Error(INVALID_ID);
-
-      // Call the service to retrieve staff
-      const { staff } = await getStaffById(createdById);
-
-      if (!staff) {
-        throw new Error(RECORD_NOT_FOUND("Staff"));
-      }
-      const { startDate, endDate, breakfast, lunch, snacks, dinner } = req.body;
-      await updateFoodWastage(
-        id,
-        startDate,
-        endDate,
+      await createFoodWastage(
+        date,
         breakfast,
         lunch,
         snacks,
@@ -201,50 +67,101 @@ class FoodWastageController {
         createdById
       );
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: UPDATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
+      return sendSuccess(res, CREATE_DATA);
     }
-  }
+  );
 
-  //SECTION Controller method to get FoodWastage by id
-  async deleteFoodWastageById(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const { id } = req.params;
+  //SECTION Controller to get all FoodWastage (POST)
+  getAllFoodWastage = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
+      // Validate input using Zod
+      const parseResult = FoodWastagePaginationSchema.safeParse(req.body);
+      if (!parseResult.success) return sendZodError(res, parseResult) as any;
 
-      if (!mongoose.isValidObjectId(id)) {
+      const { hostelId, page, limit, sort, startDate, endDate } = parseResult.data;
+      const staffId = req.body._valid._id;
+
+      if (!mongoose.isValidObjectId(staffId)) {
         throw new Error(INVALID_ID);
       }
 
-      // Call the service to retrieve course
-      await deleteFoodWastageById(id);
+      // Call the service to retrieve staff
+      const { staff } = await getStaffById(staffId);
+      if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: DELETE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
+      //we are reusing messMenuWithPagination service to get food wastage with pagination
+      const { data, count } = await MessService.messMenuWithPagination(
+        page,
+        limit,
+        hostelId,
+        sort as any,
+        startDate,
+        endDate,
+        true
+      );
+
+      return sendSuccess(res, FETCH_SUCCESS, data, 200, count);
     }
-  }
+  );
+
+  //SECTION Controller method to get FoodWastage by id
+  getFoodWastageById = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
+      const { id } = req.params;
+      if (!mongoose.isValidObjectId(id)) throw new Error(INVALID_ID);
+
+      const { data } = await getFoodWastageById(id);
+      return sendSuccess(res, FETCH_SUCCESS, data);
+    }
+  );
+
+  //SECTION Controller to update FoodWastage
+  updateFoodWastage = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
+      const { id } = req.params;
+      if (!mongoose.isValidObjectId(id)) throw new Error(INVALID_ID);
+
+      // Validate input using Zod
+      const parseResult = CreateFoodWastageSchema.safeParse(req.body);
+      if (!parseResult.success) return sendZodError(res, parseResult) as any;
+
+      const { hostelId, date, breakfast, lunch, snacks, dinner } =
+        parseResult.data;
+      const updatedById = req.body._valid._id;
+
+      if (!mongoose.isValidObjectId(updatedById)) {
+        throw new Error(INVALID_ID);
+      }
+
+      // Call the service to retrieve staff
+      const { staff } = await getStaffById(updatedById);
+      if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
+
+      await updateFoodWastage(
+        id,
+        date,
+        breakfast,
+        lunch,
+        snacks,
+        dinner,
+        hostelId,
+        updatedById
+      );
+
+      return sendSuccess(res, UPDATE_DATA);
+    }
+  );
+
+  //SECTION Controller method to delete FoodWastage by id
+  deleteFoodWastageById = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
+      const { id } = req.params;
+      if (!mongoose.isValidObjectId(id)) throw new Error(INVALID_ID);
+
+      await deleteFoodWastageById(id);
+      return sendSuccess(res, DELETE_DATA);
+    }
+  );
 
   //SECTION Controller method to handle food wastage bulk upload
   async foodWastageBulkUpload(
