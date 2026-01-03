@@ -21,9 +21,22 @@ import {
 
 import { asyncHandler } from "../utils/asyncHandler";
 import {
+  BulkMealBookingSchema,
+  CalendarMonthViewSchema,
   CreateMessMenuSchema,
+  MealStateAnalyticsSchema,
   MessMenuPaginationSchema,
 } from "../utils/validators/mealBooking.validator";
+import { WardenMealReportingSchema } from "../utils/validators/wardenMealReporting.validator";
+import {
+  SetMealCutoffSchema,
+  GetMealCutoffSchema,
+} from "../utils/validators/mealCutoff.validator";
+import {
+  SetMealTimingSchema,
+  GetMealTimingSchema,
+} from "../utils/validators/mealTiming.validator";
+import { studentMealBookingRateLimiter } from "../middlewares/studentRateLimiter";
 import { sendSuccess, sendError, sendZodError } from "../utils/responseHelpers";
 import { getValidatedStudent } from "../utils/entityHelpers";
 
@@ -54,6 +67,10 @@ const {
   getStudentMealBookingMonthlyView,
   setHostelMealTiming,
   getMealStateAnalyticsByDate,
+  fetchStudentsMealStatusByDate,
+  getHostelMealTiming,
+  setHostelMealCutoff,
+  getHostelMealCutoff,
 } = MessService;
 const {
   CREATE_DATA,
@@ -64,7 +81,7 @@ const {
   FILE_ON_PROCESS,
 } = SUCCESS_MESSAGES;
 const { INVALID_ID, REQUIRED_FIELD } = VALIDATION_MESSAGES;
-const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
+const { SERVER_ERROR, RECORD_NOT_FOUND, UNAUTHORIZED_ACCESS } = ERROR_MESSAGES;
 
 class MessMenuController {
   //SECTION Controller method to handle mess menu creation for hostel
@@ -235,14 +252,14 @@ class MessMenuController {
         const missingField = !hostelId
           ? "Hostel Id"
           : !date
-          ? "Date"
-          : !breakfast
-          ? "Breakfast"
-          : !lunch
-          ? "Lunch"
-          : !snacks
-          ? "Snacks"
-          : "Dinner";
+            ? "Date"
+            : !breakfast
+              ? "Breakfast"
+              : !lunch
+                ? "Lunch"
+                : !snacks
+                  ? "Snacks"
+                  : "Dinner";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -897,8 +914,8 @@ class MessMenuController {
         const missingField = !date
           ? "Date"
           : !studentId
-          ? "Student"
-          : "Meal Type";
+            ? "Student"
+            : "Meal Type";
         const errorResponse: HttpResponse = {
           statusCode: 400,
           message: `${missingField} is required`,
@@ -992,10 +1009,6 @@ class MessMenuController {
     const studentId = req.body._valid._id;
 
     // Validate request body with Zod
-    const { BulkMealBookingSchema } = await import(
-      "../utils/validators/mealBooking.validator"
-    );
-
     const parseResult = BulkMealBookingSchema.safeParse(req.body);
 
     const validationError = sendZodError(res, parseResult);
@@ -1015,9 +1028,6 @@ class MessMenuController {
     const studentId = req.body._valid._id;
 
     // Validate request body with Zod
-    const { CalendarMonthViewSchema } = await import(
-      "../utils/validators/mealBooking.validator"
-    );
     const parseResult = CalendarMonthViewSchema.safeParse(req.body);
 
     const validationError = sendZodError(res, parseResult);
@@ -1043,11 +1053,14 @@ class MessMenuController {
 
   // // ----------------------------warden APIs-----------------------------------
 
-  //SECTION Controller method to get student meal status by date
-
+  //SECTION Controller method to get meal state analytics by date
   getMealStateAnalyticsByDate = asyncHandler(
     async (req: Request, res: Response) => {
-      const { hostelId, date } = req.body;
+      const parseResult = MealStateAnalyticsSchema.safeParse(req.body);
+      const validationError = sendZodError(res, parseResult);
+      if (validationError) return validationError;
+
+      const { hostelId, date } = parseResult.data!;
 
       const result = await getMealStateAnalyticsByDate(hostelId, date);
 
@@ -1057,10 +1070,217 @@ class MessMenuController {
 
   // // SECTION: Controller method to set hostel meal timings
   setHostelMealTiming = asyncHandler(async (req: Request, res: Response) => {
-    await setHostelMealTiming(req.body);
+    const requesterId = (req as any).user.id;
+
+    // Fetch requester details for authorization
+    const { staff } = await getStaffById(requesterId);
+    if (!staff) {
+      return sendError(res, UNAUTHORIZED_ACCESS, 401);
+    }
+
+    // Role Authorization
+    const roleName = staff.roleId?.name?.toLowerCase() || "";
+    const isAdmin = roleName === "admin";
+    const isWarden = roleName === "warden";
+
+    if (!isAdmin && !isWarden) {
+      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+    }
+
+    // Input Validation
+    const parseResult = SetMealTimingSchema.safeParse(req.body);
+    const validationError = sendZodError(res, parseResult);
+    if (validationError) return validationError;
+
+    const dto = parseResult.data!;
+
+    // Warden data scoping: Wardens can only set timings for their assigned hostels.
+    if (isWarden) {
+      const isAssigned = staff.hostelIds?.some(
+        (id: any) => id._id.toString() === dto.hostelId
+      );
+      if (!isAssigned) {
+        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+      }
+    }
+
+    await setHostelMealTiming(dto, requesterId);
 
     return sendSuccess(res, UPDATE_DATA);
   });
+
+  //SECTION Controller method to get hostel meal timings
+  getHostelMealTiming = asyncHandler(async (req: Request, res: Response) => {
+    const requesterId = (req as any).user.id;
+
+    const { staff } = await getStaffById(requesterId);
+    if (!staff) {
+      return sendError(res, UNAUTHORIZED_ACCESS, 401);
+    }
+
+    const roleName = staff.roleId?.name?.toLowerCase() || "";
+    const isAdmin = roleName === "admin";
+    const isWarden = roleName === "warden";
+
+    if (!isAdmin && !isWarden) {
+      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+    }
+
+    const parseResult = GetMealTimingSchema.safeParse(req.body);
+    const validationError = sendZodError(res, parseResult);
+    if (validationError) return validationError;
+
+    const { hostelId } = parseResult.data!;
+
+    if (isWarden) {
+      const isAssigned = staff.hostelIds?.some(
+        (id: any) => id._id.toString() === hostelId
+      );
+      if (!isAssigned) {
+        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+      }
+    }
+
+    const result = await getHostelMealTiming(hostelId);
+
+    return sendSuccess(res, FETCH_SUCCESS, result);
+  });
+
+  //SECTION Controller method to set hostel meal cutoffs
+  setHostelMealCutoff = asyncHandler(async (req: Request, res: Response) => {
+    const requesterId = (req as any).user.id;
+
+    const { staff } = await getStaffById(requesterId);
+    if (!staff) {
+      return sendError(res, UNAUTHORIZED_ACCESS, 401);
+    }
+
+    const roleName = staff.roleId?.name?.toLowerCase() || "";
+    const isAdmin = roleName === "admin";
+    const isWarden = roleName === "warden";
+
+    if (!isAdmin && !isWarden) {
+      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+    }
+
+    const parseResult = SetMealCutoffSchema.safeParse(req.body);
+    const validationError = sendZodError(res, parseResult);
+    if (validationError) return validationError;
+
+    const dto = parseResult.data!;
+
+    if (isWarden) {
+      const isAssigned = staff.hostelIds?.some(
+        (id: any) => id._id.toString() === dto.hostelId
+      );
+      if (!isAssigned) {
+        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+      }
+    }
+
+    await setHostelMealCutoff(dto, requesterId);
+
+    return sendSuccess(res, UPDATE_DATA);
+  });
+
+
+  
+  //SECTION Controller method to get hostel meal cutoffs
+  getHostelMealCutoff = asyncHandler(async (req: Request, res: Response) => {
+    const requesterId = (req as any).user.id;
+
+    // Fetch requester details for authorization
+    const { staff } = await getStaffById(requesterId);
+    if (!staff) {
+      return sendError(res, UNAUTHORIZED_ACCESS, 401);
+    }
+
+    // Role Authorization
+    const roleName = staff.roleId?.name?.toLowerCase() || "";
+    const isAdmin = roleName === "admin";
+    const isWarden = roleName === "warden";
+
+    if (!isAdmin && !isWarden) {
+      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+    }
+
+    // Input Validation
+    const parseResult = GetMealCutoffSchema.safeParse(req.body);
+    const validationError = sendZodError(res, parseResult);
+    if (validationError) return validationError;
+
+    const { hostelId } = parseResult.data!;
+
+    // Warden data scoping
+    if (isWarden) {
+      const isAssigned = staff.hostelIds?.some(
+        (id: any) => id._id.toString() === hostelId
+      );
+      if (!isAssigned) {
+        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+      }
+    }
+
+    const result = await getHostelMealCutoff(hostelId);
+
+    return sendSuccess(res, FETCH_SUCCESS, result);
+  });
+
+
+
+  // SECTION: Controller method to get students meal status by date (Warden)
+  getStudentsMealStatusByDate = asyncHandler(
+    async (req: Request, res: Response) => {
+      const requesterId = (req as any).user.id;
+
+      // Fetch requester details for authorization
+      const { staff } = await getStaffById(requesterId);
+      if (!staff) {
+        return sendError(res, UNAUTHORIZED_ACCESS, 401);
+      }
+
+      // Role Authorization (Must be warden or admin)
+      const roleName = staff.roleId?.name?.toLowerCase() || "";
+      const isAdmin = roleName === "admin";
+      const isWarden = roleName === "warden";
+
+      if (!isAdmin && !isWarden) {
+        return sendError(
+          res,
+          "Access forbidden: Requester is not a Warden or Admin",
+          403
+        );
+      }
+
+      // Input Validation
+      const parseResult = WardenMealReportingSchema.safeParse(req.body);
+      const validationError = sendZodError(res, parseResult);
+      if (validationError) return validationError;
+
+      const dto = parseResult.data!;
+
+      // Wardens must be assigned to the requested hostelId.
+      // Admins are assumed to have access to all hostels unless specified otherwise in business rules.
+      if (isWarden) {
+        const isAssigned = staff.hostelIds?.some(
+          (id: any) => id._id.toString() === dto.hostelId
+        );
+
+        if (!isAssigned) {
+          return sendError(
+            res,
+            "Access forbidden: Warden not assigned to this hostel",
+            403
+          );
+        }
+      }
+
+      // Call Service with DTO
+      const result = await fetchStudentsMealStatusByDate(dto);
+
+      return sendSuccess(res, FETCH_SUCCESS, result);
+    }
+  );
 }
 
 export default new MessMenuController();

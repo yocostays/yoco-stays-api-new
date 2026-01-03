@@ -24,6 +24,10 @@ const {
   fetchManuallyBookedMeals,
   setHostelMealTiming,
   getMealStateAnalyticsByDate,
+  getStudentsMealStatusByDate,
+  getHostelMealTiming,
+  setHostelMealCutoff,
+  getHostelMealCutoff,
 } = MessMenuController;
 import validateToken from "../middlewares/validateToken";
 import { validateZod } from "../middlewares/validateZod";
@@ -32,12 +36,17 @@ import {
   GetMealTimingSchema,
 } from "../utils/validators/mealTiming.validator";
 import {
+  SetMealCutoffSchema,
+  GetMealCutoffSchema,
+} from "../utils/validators/mealCutoff.validator";
+import {
   BulkMealBookingSchema,
   CalendarMonthViewSchema,
   CreateMessMenuSchema,
   MealStateAnalyticsSchema,
   MessMenuPaginationSchema,
 } from "../utils/validators/mealBooking.validator";
+import { WardenMealReportingSchema } from "../utils/validators/wardenMealReporting.validator";
 import { studentMealBookingRateLimiter } from "../middlewares/studentRateLimiter";
 import { uploadFileWithMulter } from "../utils/configureMulterStorage";
 
@@ -88,6 +97,8 @@ messMenuRouter.post(
   studentMealBookingRateLimiter,
   bookMealByStudent
 );
+
+
 messMenuRouter.post("/v1/monthly-meal", validateToken, getMonthlyMealData);
 
 //--------------------------- (Warden Panel)------------------------------------------------
@@ -106,6 +117,27 @@ messMenuRouter.post(
   setHostelMealTiming
 );
 
+messMenuRouter.post(
+  "/warden/get/meal-timings",
+  validateToken,
+  validateZod(GetMealTimingSchema),
+  getHostelMealTiming
+);
+
+messMenuRouter.post(
+  "/warden/set/meal-cutoff",
+  validateToken,
+  validateZod(SetMealCutoffSchema),
+  setHostelMealCutoff
+);
+
+messMenuRouter.post(
+  "/warden/get/meal-cutoff",
+  validateToken,
+  validateZod(GetMealCutoffSchema),
+  getHostelMealCutoff
+);
+
 //get meals analytics by date
 messMenuRouter.post(
   "/menus",
@@ -119,6 +151,14 @@ messMenuRouter.post(
   validateToken,
   validateZod(CreateMessMenuSchema),
   createMessMenuForHostel
+);
+
+//get all student meal status by date
+messMenuRouter.post(
+  "/warden/meals/students",
+  validateToken,
+  validateZod(WardenMealReportingSchema),
+  getStudentsMealStatusByDate
 );
 
 

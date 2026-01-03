@@ -23,6 +23,7 @@ import HostelPolicy from "../models/hostelPolicy.model";
 import StudentLeave from "../models/student-leave.model";
 import { paginateAggregate } from "../utils/pagination";
 import FoodWastage from "../models/foodWastage.model";
+import { WardenMealReportingInput } from "../utils/validators/wardenMealReporting.validator";
 
 import {
   excelDateToJSDate,
@@ -50,6 +51,7 @@ import {
   LeaveStatusTypes,
   MealBookingIntent,
   MealCancelSource,
+  MealDerivedStatus,
 } from "../utils/enum";
 import { sendPushNotificationToUser } from "../utils/commonService/pushNotificationService";
 
@@ -159,17 +161,13 @@ class MessService {
         matchStage.hostelId = new Types.ObjectId(hostelId);
       }
 
-      //  Date Range Handling
+      //  Date Range Handling (Shifted by -6h to capture IST-Midnight stored as 18:30 UTC)
       if (startDate && endDate) {
-        const start = new Date(startDate);
-        if (!isNaN(start.getTime())) {
-          start.setUTCHours(0, 0, 0, 0);
+        const start = dayjs(startDate).startOf("day").subtract(6, "hours").toDate();
+        const end = dayjs(endDate).endOf("day").subtract(6, "hours").toDate();
 
-          const end = new Date(endDate);
-          if (!isNaN(end.getTime())) {
-            end.setUTCHours(23, 59, 59, 999);
-            matchStage.date = { $gte: start, $lte: end };
-          }
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          matchStage.date = { $gte: start, $lte: end };
         }
       }
 
@@ -2328,37 +2326,26 @@ class MessService {
         : `${displayHour}${period}`;
     };
 
-    // Format meal timings for response
-    const mealTimings: any = {};
-    if (hostelMealTiming) {
-      if (
-        hostelMealTiming.breakfastStartTime &&
-        hostelMealTiming.breakfastEndTime
-      ) {
-        mealTimings.breakfast = {
-          start: formatTime(hostelMealTiming.breakfastStartTime),
-          end: formatTime(hostelMealTiming.breakfastEndTime),
-        };
-      }
-      if (hostelMealTiming.lunchStartTime && hostelMealTiming.lunchEndTime) {
-        mealTimings.lunch = {
-          start: formatTime(hostelMealTiming.lunchStartTime),
-          end: formatTime(hostelMealTiming.lunchEndTime),
-        };
-      }
-      if (hostelMealTiming.snacksStartTime && hostelMealTiming.snacksEndTime) {
-        mealTimings.snacks = {
-          start: formatTime(hostelMealTiming.snacksStartTime),
-          end: formatTime(hostelMealTiming.snacksEndTime),
-        };
-      }
-      if (hostelMealTiming.dinnerStartTime && hostelMealTiming.dinnerEndTime) {
-        mealTimings.dinner = {
-          start: formatTime(hostelMealTiming.dinnerStartTime),
-          end: formatTime(hostelMealTiming.dinnerEndTime),
-        };
-      }
-    }
+    // Format meal timings for response with production defaults
+    const timings = (hostelMealTiming || {}) as any;
+    const mealTimings: any = {
+      breakfast: {
+        start: formatTime(timings.breakfastStartTime || "07:00"),
+        end: formatTime(timings.breakfastEndTime || "10:00"),
+      },
+      lunch: {
+        start: formatTime(timings.lunchStartTime || "12:00"),
+        end: formatTime(timings.lunchEndTime || "15:30"),
+      },
+      snacks: {
+        start: formatTime(timings.snacksStartTime || "17:00"),
+        end: formatTime(timings.snacksEndTime || "19:00"),
+      },
+      dinner: {
+        start: formatTime(timings.dinnerStartTime || "19:30"),
+        end: formatTime(timings.dinnerEndTime || "22:00"),
+      },
+    };
 
     // Precompute leave date ranges to avoid repeated timezone conversions
     const leaveRanges = leaves.map((leave) => ({
@@ -2906,20 +2893,23 @@ class MessService {
   };
 
   // SECTION: Method to set hostel meal timings
-  setHostelMealTiming = async (data: any) => {
+  setHostelMealTiming = async (data: any, userId: string) => {
     try {
       const { hostelId, ...timings } = data;
+      const userObjectId = new Types.ObjectId(userId);
 
       const result = await HostelMealTiming.findOneAndUpdate(
         { hostelId },
         {
           $set: {
             ...timings,
-            updatedAt: moment().tz("Asia/Kolkata").toDate(),
+            updatedBy: userObjectId,
+            updatedAt: dayjs().tz("Asia/Kolkata").toDate(),
           },
           $setOnInsert: {
-            createdAt: moment().tz("Asia/Kolkata").toDate(),
+            createdAt: dayjs().tz("Asia/Kolkata").toDate(),
             status: true,
+            createdBy: userObjectId,
           },
         },
         { upsert: true, new: true, lean: true }
@@ -2927,7 +2917,314 @@ class MessService {
 
       return result;
     } catch (error: any) {
-      throw new Error(`[MealTiming] Upsert failed: ${error.message}`);
+      throw new Error(`[setHostelMealTiming] Failed: ${error.message}`);
+    }
+  };
+
+
+  // SECTION: Method to get hostel meal timings
+  getHostelMealTiming = async (hostelId: string) => {
+    try {
+      const timing = await HostelMealTiming.findOne({
+        hostelId,
+        status: true,
+      }).lean();
+
+      if (timing) return timing;
+
+      return {
+        hostelId: new Types.ObjectId(hostelId),
+        breakfastStartTime: "07:00",
+        breakfastEndTime: "10:00",
+        lunchStartTime: "12:00",
+        lunchEndTime: "15:30",
+        snacksStartTime: "17:00",
+        snacksEndTime: "19:00",
+        dinnerStartTime: "19:30",
+        dinnerEndTime: "21:00",
+        status: true,
+        isDefault: true,
+      };
+    } catch (error: any) {
+      throw new Error(`[getHostelMealTiming] Failed: ${error.message}`);
+    }
+  };
+
+
+
+  // SECTION: Method to set hostel meal cutoff policies
+  setHostelMealCutoff = async (data: any, userId: string) => {
+    try {
+      const { hostelId, ...bookingCutoffs } = data;
+      const userObjectId = new Types.ObjectId(userId);
+
+      const result = await HostelPolicy.findOneAndUpdate(
+        { hostelId },
+        {
+          $set: {
+            bookingCutoffs,
+            updatedBy: userObjectId,
+            updatedAt: dayjs().tz("Asia/Kolkata").toDate(),
+          },
+          $setOnInsert: {
+            createdAt: dayjs().tz("Asia/Kolkata").toDate(),
+            status: true,
+            createdBy: userObjectId,
+          },
+        },
+        { upsert: true, new: true, lean: true }
+      );
+
+      return result;
+    } catch (error: any) {
+      throw new Error(`[setHostelMealCutoff] Failed: ${error.message}`);
+    }
+  };
+
+
+  // SECTION: Method to get hostel meal cutoff policies
+  getHostelMealCutoff = async (hostelId: string) => {
+    try {
+      const policy = await HostelPolicy.findOne({
+        hostelId,
+        status: true,
+      }).lean();
+
+      if (policy) return policy;
+
+      return {
+        hostelId,
+        bookingCutoffs: {
+          breakfast: { dayOffset: -1, time: "21:00" },
+          lunch: { dayOffset: 0, time: "08:00" },
+          snacks: { dayOffset: 0, time: "13:00" },
+          dinner: { dayOffset: 0, time: "16:00" },
+        },
+        status: true,
+        isDefault: true,
+      };
+    } catch (error: any) {
+      throw new Error(`[getHostelMealCutoff] Failed: ${error.message}`);
+    }
+  };
+
+  /**
+     * SECTION: Warden Meal Reporting - Get student-wise meal status by date
+     * Returns paginated list of students with their meal bookings for a specific hostel and date
+     * Supports filtering by student status, meal status, floor, room, and text search
+     */
+  fetchStudentsMealStatusByDate = async (params: WardenMealReportingInput): Promise<{
+    students: any[];
+    pagination: {
+      page: number;
+      limit: number;
+      totalPages: number;
+      totalRecords: number;
+    };
+  }> => {
+    try {
+      const {
+        hostelId: hostelIdStr,
+        date,
+        filters = {},
+        search = {},
+        pagination = { page: 1, limit: 10 },
+        sort = { field: "uniqueId", order: "asc" },
+      } = params;
+
+      const hostelId = new Types.ObjectId(hostelIdStr);
+
+      // Date Sanitization (Normalization to UTC Range)
+      const targetDateIST = dayjs.tz(date, "Asia/Kolkata").startOf("day");
+      const startOfDay = targetDateIST.utc().toDate();
+      const endOfDay = targetDateIST.endOf("day").utc().toDate();
+
+      // Pagination & Sorting Guardrails
+      const page = pagination?.page || 1;
+      const limit = Math.min(pagination?.limit || 10, 50);
+
+      const allowedSortFields = ["uniqueId", "name", "floorNumber", "roomNumber"];
+      const sortField = allowedSortFields.includes(sort?.field) ? sort.field : "uniqueId";
+      const sortOrder = sort?.order === "desc" ? -1 : 1;
+
+      const pipeline: PipelineStage[] = [];
+
+      // STAGE 1: Base Match (Student Hostel Allocations)
+      // NOTE: We start with allocations to ensure we only report on students assigned to this hostel.
+      // 'status: true' filters for active allocations (non-cancelled/non-expired records).
+      pipeline.push({
+        $match: {
+          hostelId,
+          status: true,
+        },
+      });
+
+      // STAGE 2: User Detail Lookup
+      pipeline.push({
+        $lookup: {
+          from: "users",
+          localField: "studentId",
+          foreignField: "_id",
+          as: "student",
+        },
+      });
+      pipeline.push({ $unwind: "$student" });
+
+      // STAGE 3: Student Status Filtering
+      const targetStatus = filters?.studentStatus || "ACTIVE";
+      if (targetStatus === "ACTIVE") {
+        pipeline.push({
+          $match: {
+            "student.status": true,
+            "student.isLeft": false,
+          },
+        });
+      } else if (targetStatus === "INACTIVE") {
+        pipeline.push({
+          $match: {
+            $or: [{ "student.status": false }, { "student.isLeft": true }],
+          },
+        });
+      }
+
+      // STAGE 4: Meal Booking Lookup
+      pipeline.push({
+        $lookup: {
+          from: "bookmeals",
+          let: { studentId: "$studentId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$studentId", "$$studentId"] },
+                    { $gte: ["$date", startOfDay] },
+                    { $lte: ["$date", endOfDay] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "booking",
+        },
+      });
+      pipeline.push({
+        $unwind: { path: "$booking", preserveNullAndEmptyArrays: true },
+      });
+
+      // STAGE 5: Centralized Derived Meal Status Logic (State Machine)
+      // -------------------------------------------------------------------------
+      // Business Rules for Derived Status:
+      // CONFIRMED + consumed: true  => CONSUMED
+      // CONFIRMED + consumed: false => MISSED
+      // SKIPPED   + consumed: false => SKIPPED
+      // SKIPPED   + consumed: true  => SKIPPED_CONSUMED
+      // No booking record found     => NOT_BOOKED
+      // -------------------------------------------------------------------------
+      const deriveMealObject = (mealKey: string) => ({
+        derivedStatus: {
+          $switch: {
+            branches: [
+              {
+                case: { $eq: [`$booking.meals.${mealKey}.status`, MealBookingIntent.CONFIRMED] },
+                then: { $cond: [`$booking.meals.${mealKey}.consumed`, MealDerivedStatus.CONSUMED, MealDerivedStatus.MISSED] },
+              },
+              {
+                case: { $eq: [`$booking.meals.${mealKey}.status`, MealBookingIntent.SKIPPED] },
+                then: { $cond: [`$booking.meals.${mealKey}.consumed`, MealDerivedStatus.SKIPPED_CONSUMED, MealDerivedStatus.SKIPPED] },
+              },
+            ],
+            default: MealDerivedStatus.NOT_BOOKED,
+          },
+        },
+      });
+
+      pipeline.push({
+        $addFields: {
+          "meals.breakfast": deriveMealObject("breakfast"),
+          "meals.lunch": deriveMealObject("lunch"),
+          "meals.snacks": deriveMealObject("snacks"),
+          "meals.dinner": deriveMealObject("dinner"),
+        },
+      });
+
+      // STAGE 6: Room/Floor & Meal Status Filtering
+      if (filters?.floor !== undefined) {
+        pipeline.push({ $match: { floorNumber: filters.floor } });
+      }
+      if (filters?.room !== undefined) {
+        pipeline.push({ $match: { roomNumber: filters.room } });
+      }
+
+      if (filters?.mealStatus && filters.mealStatus.length > 0) {
+        // Map legacy UI filter types to new derived statuses
+        const statusMap: Record<string, MealDerivedStatus> = {
+          "Confirmed": MealDerivedStatus.CONSUMED,
+          "Cancelled": MealDerivedStatus.SKIPPED,
+          "Missed": MealDerivedStatus.MISSED,
+          "Cancelled-Consumed": MealDerivedStatus.SKIPPED_CONSUMED,
+        };
+        const mappedStatuses = filters.mealStatus.map(s => statusMap[s] || s);
+
+        pipeline.push({
+          $match: {
+            $or: [
+              { "meals.breakfast.derivedStatus": { $in: mappedStatuses } },
+              { "meals.lunch.derivedStatus": { $in: mappedStatuses } },
+              { "meals.snacks.derivedStatus": { $in: mappedStatuses } },
+              { "meals.dinner.derivedStatus": { $in: mappedStatuses } },
+            ],
+          },
+        });
+      }
+
+      // STAGE 7: Text Search
+      if (search?.text && search.text.trim()) {
+        const regex = new RegExp(search.text.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        pipeline.push({
+          $match: {
+            $or: [
+              { "student.uniqueId": regex },
+              { "student.name": regex },
+            ],
+          },
+        });
+      }
+
+      // STAGE 8: Sorting & Final Projection
+      pipeline.push({ $sort: { [sortField]: sortOrder } });
+      pipeline.push({
+        $project: {
+          _id: 0,
+          studentId: "$studentId",
+          uniqueId: "$student.uniqueId",
+          name: "$student.name",
+          phone: { $toString: "$student.phone" },
+          roomNumber: 1,
+          floorNumber: 1,
+          meals: 1,
+        },
+      });
+
+      // STAGE 9: Paginate using project utility
+      const { data, count } = await paginateAggregate(
+        StudentHostelAllocation,
+        pipeline,
+        page,
+        limit
+      );
+
+      return {
+        students: data,
+        pagination: {
+          page,
+          limit,
+          totalPages: Math.ceil(count / limit),
+          totalRecords: count,
+        },
+      };
+    } catch (error: any) {
+      throw new Error(`MealReportingService: Failed to fetch student meal status. Detail: ${error.message}`);
     }
   };
 }

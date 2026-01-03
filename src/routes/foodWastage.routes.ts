@@ -6,7 +6,8 @@ const {
   getFoodWastageById,
   updateFoodWastage,
   deleteFoodWastageById,
-  foodWastageBulkUpload
+  foodWastageBulkUpload,
+  getDateWastage
 } = FoodWastageController;
 import { uploadFileWithMulter } from "../utils/configureMulterStorage";
 import validateToken from "../middlewares/validateToken";
@@ -24,4 +25,7 @@ foodWastageRouter.post(
     validateToken,
     foodWastageBulkUpload
   );
+
+  //get wastage count datewise
+  foodWastageRouter.post("/get-wastage", validateToken, getDateWastage);
 export default foodWastageRouter;

@@ -1,4 +1,6 @@
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+dayjs.extend(utc);
 import FoodWastage from "../models/foodWastage.model";
 import Hostel from "../models/hostel.model";
 import MessMenu from "../models/messMenu.model";
@@ -34,12 +36,14 @@ class FoodWastageService {
     createdById: string
   ): Promise<string> => {
     try {
-      const normalizedDate = dayjs(date).startOf("day").toDate();
-
+      const inputDate = dayjs(date).startOf("day");
       const today = dayjs().startOf("day");
-      if (dayjs(normalizedDate).isAfter(today)) {
+
+      if (inputDate.isAfter(today)) {
         throw new Error("Cannot record food wastage for future dates");
       }
+
+      const normalizedDate = dayjs.utc(date).startOf("day").toDate();
 
       // Validate mess menu using single date helper
       const mealIds = await this.validateMessMenuSingleDate(
@@ -57,32 +61,35 @@ class FoodWastageService {
       if (!(await Hostel.exists({ _id: hostelId })))
         throw new Error(RECORD_NOT_FOUND("Hostel"));
 
-      // Check for existing record to perform Upsert
+      // Check for existing record to perform Upsert (shifted range to catch IST-midnight stored as 18:30 UTC)
       const existingRecord = await FoodWastage.findOne({
         hostelId,
-        date: normalizedDate,
+        date: {
+          $gte: dayjs.utc(normalizedDate).subtract(6, "hours").toDate(),
+          $lte: dayjs.utc(normalizedDate).add(18, "hours").toDate(),
+        },
       });
 
       const finalBreakfast = breakfast
         ? { ...breakfast, unit: UnitTypes.G }
         : existingRecord
-        ? existingRecord.breakfast
-        : null;
+          ? existingRecord.breakfast
+          : null;
       const finalLunch = lunch
         ? { ...lunch, unit: UnitTypes.G }
         : existingRecord
-        ? existingRecord.lunch
-        : null;
+          ? existingRecord.lunch
+          : null;
       const finalSnacks = snacks
         ? { ...snacks, unit: UnitTypes.G }
         : existingRecord
-        ? existingRecord.snacks
-        : null;
+          ? existingRecord.snacks
+          : null;
       const finalDinner = dinner
         ? { ...dinner, unit: UnitTypes.G }
         : existingRecord
-        ? existingRecord.dinner
-        : null;
+          ? existingRecord.dinner
+          : null;
 
       // Aggregate meal wastage strictly in grams from final state
       const totalAmount =
@@ -518,6 +525,45 @@ class FoodWastageService {
     }
   };
 
+  getDateWiseWastageCount = async (
+    hostelId: string,
+    date: Date | string
+  ): Promise<any> => {
+    try {
+      const searchDate = dayjs.utc(date).startOf("day");
+      const startRange = searchDate.subtract(6, "hours").toDate();
+      const endRange = searchDate.add(18, "hours").toDate();
+
+      const foodWastage = await FoodWastage.findOne({
+        hostelId,
+        date: { $gte: startRange, $lte: endRange },
+      });
+
+      if (!foodWastage) {
+        return {
+          breakfast: { amount: 0, unit: UnitTypes.G },
+          lunch: { amount: 0, unit: UnitTypes.G },
+          snacks: { amount: 0, unit: UnitTypes.G },
+          dinner: { amount: 0, unit: UnitTypes.G },
+          totalWastage: 0,
+          totalUnit: UnitTypes.G,
+        };
+      }
+
+      return {
+        breakfast: foodWastage.breakfast || { amount: 0, unit: UnitTypes.G },
+        lunch: foodWastage.lunch || { amount: 0, unit: UnitTypes.G },
+        snacks: foodWastage.snacks || { amount: 0, unit: UnitTypes.G },
+        dinner: foodWastage.dinner || { amount: 0, unit: UnitTypes.G },
+        totalWastage: foodWastage.totalWastage,
+        totalUnit: foodWastage.totalUnit,
+        foodWastageNumber: foodWastage.foodWastageNumber,
+      };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  };
+
   //ANCHOR - format Date Range
   private formatDateRange(
     startDate: Date,
@@ -600,9 +646,14 @@ class FoodWastageService {
       dinner?: { amount: number; unit: UnitTypes };
     }
   ): Promise<string[]> {
+    // Shifted range searching window to align UTC with IST days
+    const searchDate = dayjs.utc(date).startOf("day");
+    const startRange = searchDate.subtract(6, "hours").toDate();
+    const endRange = searchDate.add(18, "hours").toDate();
+
     const checkMessMenu: any = await MessMenu.findOne({
       hostelId,
-      date,
+      date: { $gte: startRange, $lte: endRange },
     });
 
     if (!checkMessMenu) {

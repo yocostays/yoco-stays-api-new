@@ -23,6 +23,7 @@ const {
   updateFoodWastage,
   deleteFoodWastageById,
   bulkUploadFoodWastageForHostel,
+  getDateWiseWastageCount,
 } = FoodWastageService;
 
 const { getStaffById } = StaffService;
@@ -213,6 +214,37 @@ class FoodWastageController {
       return res.status(400).json(errorResponse);
     }
   }
+
+
+  //SECTION Controller to get food wastage count datewise
+  getDateWastage = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
+      const { hostelId, date } = req.body;
+
+      //  Validate hostelId
+      if (!hostelId || !mongoose.Types.ObjectId.isValid(hostelId)) {
+        return sendError(res, REQUIRED_FIELD("Valid Hostel ID"));
+      }
+
+      // Validate date
+      if (!date) {
+        return sendError(res, REQUIRED_FIELD("Date"));
+      }
+
+      const staffId = req.body._valid._id;
+      const { staff } = await getStaffById(staffId);
+      if (!staff) {
+        return sendError(res, RECORD_NOT_FOUND("Staff"));
+      }
+
+      const data = await getDateWiseWastageCount(
+        hostelId as string,
+        date as string
+      );
+
+      return sendSuccess(res, FETCH_SUCCESS, data);
+    }
+  );
 }
 
 export default new FoodWastageController();
