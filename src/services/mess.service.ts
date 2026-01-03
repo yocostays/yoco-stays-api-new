@@ -2348,7 +2348,7 @@ class MessService {
     // };
 
 
-     const mealTimings: any = {};
+    const mealTimings: any = {};
     if (hostelMealTiming) {
       if (
         hostelMealTiming.breakfastStartTime &&
@@ -2447,13 +2447,20 @@ class MessService {
       const currentDate = startMoment.clone().add(i, "days");
       const dateKey = currentDate.format("YYYY-MM-DD");
 
-      // Range check for leaves using precomputed ranges
       const hasLeave = leaveRanges.some(({ start, end }) => {
-        return (
-          (currentDate.isAfter(start) || currentDate.isSame(start, "day")) &&
-          (currentDate.isBefore(end) || currentDate.isSame(end, "day"))
+        const d = dayjs(dateKey).tz("Asia/Kolkata").startOf("day");
+        const isMatch = (
+          (d.isAfter(start) || d.isSame(start, "day")) &&
+          (d.isBefore(end) || d.isSame(end, "day"))
         );
+        if (dateKey === "2026-01-04") {
+          console.log(`[MonthlyView] Date=2026-01-04, Start=${start.format()}, End=${end.format()}, isMatch=${isMatch}`);
+        }
+        return isMatch;
       });
+      if (dateKey === "2026-01-04") {
+        console.log(`[MonthlyView] Date=2026-01-04 Final hasLeave=${hasLeave}`);
+      }
 
       const booking = bookingMap.get(dateKey);
       const menu = menuMap.get(dateKey);
@@ -2478,6 +2485,8 @@ class MessService {
 
         if (!foodExists) {
           displayStatus = MealBookingIntent.NOT_APPLICABLE;
+        } else if (hasLeave && (displayStatus === MealBookingIntent.PENDING || displayStatus === MealBookingIntent.CONFIRMED)) {
+          displayStatus = MealBookingIntent.SKIPPED;
         }
 
         dayResult.meals[meal] = {
@@ -2698,6 +2707,7 @@ class MessService {
                   date: targetDateUTC,
                   meals: newMeals,
                   isManualBooking: false,
+                  createdBy: studentIdObj,
                   createdAt: nowIST.toDate(),
                   updatedAt: nowIST.toDate(),
                 },
