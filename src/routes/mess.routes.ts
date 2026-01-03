@@ -24,6 +24,7 @@ const {
   fetchManuallyBookedMeals,
   setHostelMealTiming,
   getMealStateAnalyticsByDate,
+  getStudentsMealStatusByDate,
 } = MessMenuController;
 import validateToken from "../middlewares/validateToken";
 import { validateZod } from "../middlewares/validateZod";
@@ -38,6 +39,7 @@ import {
   MealStateAnalyticsSchema,
   MessMenuPaginationSchema,
 } from "../utils/validators/mealBooking.validator";
+import { WardenMealReportingSchema } from "../utils/validators/wardenMealReporting.validator";
 import { studentMealBookingRateLimiter } from "../middlewares/studentRateLimiter";
 import { uploadFileWithMulter } from "../utils/configureMulterStorage";
 
@@ -119,6 +121,14 @@ messMenuRouter.post(
   validateToken,
   validateZod(CreateMessMenuSchema),
   createMessMenuForHostel
+);
+
+//get all student meal status by date
+messMenuRouter.post(
+  "/warden/meals/students",
+  validateToken,
+  validateZod(WardenMealReportingSchema),
+  getStudentsMealStatusByDate
 );
 
 

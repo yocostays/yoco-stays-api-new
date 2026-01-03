@@ -541,6 +541,8 @@ UserSchema.index(
   }
 );
 
+UserSchema.index({ name: 1, uniqueId: 1, status: 1, isLeft: 1 });
+UserSchema.index({ status: 1, isLeft: 1 });
 
 const User = mongoose.model<IUser>("User", UserSchema);
 export default User;

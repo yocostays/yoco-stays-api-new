@@ -101,11 +101,22 @@ export enum MealBookingIntent {
 }
 
 // Source of meal cancellation for audit and tracking purposes.
-
 export enum MealCancelSource {
   MANUAL = "manual", // User cancelled manually
   LEAVE = "leave", // Cancelled due to approved leave
   SYSTEM = "system", // System-triggered cancellation
+}
+
+/**
+ * Derived status for reporting and display purposes.
+ * Calculated based on booking intent and consumption status.
+ */
+export enum MealDerivedStatus {
+  CONSUMED = "CONSUMED",
+  MISSED = "MISSED",
+  SKIPPED = "SKIPPED",
+  SKIPPED_CONSUMED = "SKIPPED_CONSUMED",
+  NOT_BOOKED = "NOT_BOOKED",
 }
 
 export enum ComplainStatusTypes {
