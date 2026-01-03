@@ -2,7 +2,16 @@ import mongoose from "mongoose";
 import StudentLeave, { IStudentLeave } from "../models/student-leave.model";
 import User from "../models/user.model";
 import Notice from "../models/notice.model";
-import moment from "moment";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(isSameOrBefore);
+dayjs.extend(isSameOrAfter);
 import StudentHostelAllocation from "../models/studentHostelAllocation.model";
 import BookMeals from "../models/bookMeal.model";
 import HostelMealTiming from "../models/hostelMealTiming.model";
@@ -1191,8 +1200,8 @@ class StudentLeaveService {
       // Map leave data to the desired structure with `isCanEdit`
       const response = await Promise.all(
         leaves.map(async (leave: any) => {
-          // Convert startDate to UTC moment
-          const startDate = moment.utc(leave.startDate);
+          // Convert startDate to UTC dayjs
+          const startDate = dayjs.utc(leave.startDate);
 
           const canEdit =
             leave.leaveStatus === LeaveStatusTypes.APPROVED &&
@@ -1470,19 +1479,24 @@ class StudentLeaveService {
   cancelMealsForLeavePeriod = async (leave: IStudentLeave): Promise<void> => {
     try {
       const { startDate, endDate, userId, hostelId } = leave;
+      const studentIdObj = new mongoose.Types.ObjectId(String(userId));
+      const hostelIdObj = new mongoose.Types.ObjectId(String(hostelId));
 
       // Calculate the full date range for the leave in IST
-      const startMoment = moment(startDate).tz("Asia/Kolkata");
-      const endMoment = moment(endDate).tz("Asia/Kolkata");
+      const startDayjs = dayjs(startDate).tz("Asia/Kolkata");
+      const endDayjs = dayjs(endDate).tz("Asia/Kolkata");
+
+      console.log(`[LeaveCancellation] TRACE: leaveId=${leave._id}, start=${leave.startDate}, end=${leave.endDate}`);
+      console.log(`[LeaveCancellation] startDayjs=${startDayjs.format()}, endDayjs=${endDayjs.format()}`);
 
       // Get all unique dates (YYYY-MM-DD) in the range
       const datesInRange: string[] = [];
-      let current = moment(startMoment).startOf("day");
-      const endMarker = moment(endMoment).startOf("day");
+      let current = dayjs(startDayjs).startOf("day");
+      const endMarker = dayjs(endDayjs).startOf("day");
 
       while (current.isSameOrBefore(endMarker)) {
         datesInRange.push(current.format("YYYY-MM-DD"));
-        current.add(1, "day");
+        current = current.add(1, "day");
       }
 
       console.log(`[LeaveCancellation] Processing ${datesInRange.length} days for leave ${leave._id}`);
@@ -1492,34 +1506,39 @@ class StudentLeaveService {
         HostelMealTiming.findOne({ hostelId, status: true }).lean(),
         MessMenu.find({
           hostelId,
-          date: { $in: datesInRange.map(d => moment.utc(d).toDate()) },
+          date: { $in: datesInRange.map(d => dayjs.utc(d).toDate()) },
           status: true
         }).lean()
       ]);
 
       // Maps for quick lookup
       const menuMap = new Map();
-      menus.forEach(m => menuMap.set(moment(m.date).format("YYYY-MM-DD"), m));
+      menus.forEach(m => menuMap.set(dayjs(m.date).format("YYYY-MM-DD"), m));
 
       const bulkOps: any[] = [];
 
       // Process each date
       for (const dateKey of datesInRange) {
-        const targetDateUTC = moment.utc(dateKey).toDate();
-        const dMoment = moment.tz(dateKey, "Asia/Kolkata");
+        const targetDateUTC = dayjs.utc(dateKey).toDate();
+        const dDayjs = dayjs.tz(dateKey, "Asia/Kolkata");
         const menu = menuMap.get(dateKey);
 
         if (!generalTimings) {
-          console.log(`[LeaveCancellation] No general meal timings for hostel ${hostelId}, skipping cancellation.`);
-          break; // Stop if no timings are configured for this hostel
+          console.log(`[LeaveCancellation] Using production default timings for hostel ${hostelId}`);
         }
-        const timings = generalTimings;
+
+        const timings = generalTimings || {
+          breakfastEndTime: "10:00",
+          lunchEndTime: "15:30",
+          snacksEndTime: "19:00",
+          dinnerEndTime: "22:00"
+        };
 
         // Define outside-hostel window
-        let windowStart = moment(dMoment).startOf("day");
-        let windowEnd = moment(dMoment).endOf("day");
-        if (dateKey === startMoment.format("YYYY-MM-DD")) windowStart = startMoment;
-        if (dateKey === endMoment.format("YYYY-MM-DD")) windowEnd = endMoment;
+        let windowStart = dayjs(dDayjs).startOf("day");
+        let windowEnd = dayjs(dDayjs).endOf("day");
+        if (dateKey === startDayjs.format("YYYY-MM-DD")) windowStart = startDayjs;
+        if (dateKey === endDayjs.format("YYYY-MM-DD")) windowEnd = endDayjs;
 
         const mealDefs = [
           { name: "breakfast", end: timings.breakfastEndTime, bool: "isBreakfastBooked" },
@@ -1529,53 +1548,45 @@ class StudentLeaveService {
         ];
 
         const setUpdates: any = {
-          updatedAt: moment().tz("Asia/Kolkata").toDate(),
+          updatedAt: dayjs().tz("Asia/Kolkata").toDate(),
           status: true,
         };
         const setOnInsert: any = {
-          hostelId,
-          studentId: userId,
+          hostelId: hostelIdObj,
+          studentId: studentIdObj,
           date: targetDateUTC,
           isManualBooking: false, // Default for new records; existing records preserve their flag
-          createdAt: moment().tz("Asia/Kolkata").toDate(),
-          createdBy: userId,
-          updatedBy: userId
+          createdAt: dayjs().tz("Asia/Kolkata").toDate(),
+          createdBy: studentIdObj,
+          updatedBy: studentIdObj
         };
         if (menu) setOnInsert.mealId = menu._id;
 
         let cancelledInDay = 0;
 
         for (const mDef of mealDefs) {
-          let isCancelled = false;
-          if (mDef.end) {
-            const [h, m] = mDef.end.split(":").map(Number);
-            const mealEndAbs = moment.tz(dateKey, "Asia/Kolkata").set({ hour: h, minute: m, second: 0, millisecond: 0 });
-            if (mealEndAbs.isSameOrAfter(windowStart) && mealEndAbs.isSameOrBefore(windowEnd)) {
-              isCancelled = true;
-            }
-          }
-
-          if (isCancelled) {
-            setUpdates[mDef.bool] = false;
-            setUpdates[`meals.${mDef.name}`] = {
-              status: MealBookingIntent.SKIPPED,
-              locked: false,
-              consumed: false,
-              consumedAt: null,
-              cancelSource: MealCancelSource.LEAVE,
-            };
-            cancelledInDay++;
-          }
+          // USER REQUIREMENT: All meals should be skipped during leave time.
+          // We will mark all meals for the dates in range as SKIPPED.
+          setUpdates[mDef.bool] = false; // Legacy Boolean flag
+          setUpdates[`meals.${mDef.name}`] = {
+            status: MealBookingIntent.SKIPPED,
+            locked: true,
+            consumed: false,
+            consumedAt: null,
+            cancelSource: MealCancelSource.LEAVE,
+          };
+          cancelledInDay++;
         }
 
         if (cancelledInDay > 0) {
-          // If all meals for the day are cancelled, mark the entire record status
-          if (cancelledInDay === 4) {
-            setUpdates.bookingStatus = MealBookingStatusTypes.SKIPPED;
-          }
+          // Determine overall booking status for the record
+          setUpdates.bookingStatus = (cancelledInDay === 4)
+            ? MealBookingStatusTypes.SKIPPED
+            : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+
           bulkOps.push({
             updateOne: {
-              filter: { studentId: userId, date: targetDateUTC, hostelId },
+              filter: { studentId: studentIdObj, date: targetDateUTC, hostelId: hostelIdObj },
               update: { $set: setUpdates, $setOnInsert: setOnInsert },
               upsert: true
             }
