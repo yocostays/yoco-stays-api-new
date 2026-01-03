@@ -2326,37 +2326,26 @@ class MessService {
         : `${displayHour}${period}`;
     };
 
-    // Format meal timings for response
-    const mealTimings: any = {};
-    if (hostelMealTiming) {
-      if (
-        hostelMealTiming.breakfastStartTime &&
-        hostelMealTiming.breakfastEndTime
-      ) {
-        mealTimings.breakfast = {
-          start: formatTime(hostelMealTiming.breakfastStartTime),
-          end: formatTime(hostelMealTiming.breakfastEndTime),
-        };
-      }
-      if (hostelMealTiming.lunchStartTime && hostelMealTiming.lunchEndTime) {
-        mealTimings.lunch = {
-          start: formatTime(hostelMealTiming.lunchStartTime),
-          end: formatTime(hostelMealTiming.lunchEndTime),
-        };
-      }
-      if (hostelMealTiming.snacksStartTime && hostelMealTiming.snacksEndTime) {
-        mealTimings.snacks = {
-          start: formatTime(hostelMealTiming.snacksStartTime),
-          end: formatTime(hostelMealTiming.snacksEndTime),
-        };
-      }
-      if (hostelMealTiming.dinnerStartTime && hostelMealTiming.dinnerEndTime) {
-        mealTimings.dinner = {
-          start: formatTime(hostelMealTiming.dinnerStartTime),
-          end: formatTime(hostelMealTiming.dinnerEndTime),
-        };
-      }
-    }
+    // Format meal timings for response with production defaults
+    const timings = (hostelMealTiming || {}) as any;
+    const mealTimings: any = {
+      breakfast: {
+        start: formatTime(timings.breakfastStartTime || "07:00"),
+        end: formatTime(timings.breakfastEndTime || "10:00"),
+      },
+      lunch: {
+        start: formatTime(timings.lunchStartTime || "12:00"),
+        end: formatTime(timings.lunchEndTime || "15:30"),
+      },
+      snacks: {
+        start: formatTime(timings.snacksStartTime || "17:00"),
+        end: formatTime(timings.snacksEndTime || "19:00"),
+      },
+      dinner: {
+        start: formatTime(timings.dinnerStartTime || "19:30"),
+        end: formatTime(timings.dinnerEndTime || "22:00"),
+      },
+    };
 
     // Precompute leave date ranges to avoid repeated timezone conversions
     const leaveRanges = leaves.map((leave) => ({
@@ -2904,20 +2893,23 @@ class MessService {
   };
 
   // SECTION: Method to set hostel meal timings
-  setHostelMealTiming = async (data: any) => {
+  setHostelMealTiming = async (data: any, userId: string) => {
     try {
       const { hostelId, ...timings } = data;
+      const userObjectId = new Types.ObjectId(userId);
 
       const result = await HostelMealTiming.findOneAndUpdate(
         { hostelId },
         {
           $set: {
             ...timings,
-            updatedAt: moment().tz("Asia/Kolkata").toDate(),
+            updatedBy: userObjectId,
+            updatedAt: dayjs().tz("Asia/Kolkata").toDate(),
           },
           $setOnInsert: {
-            createdAt: moment().tz("Asia/Kolkata").toDate(),
+            createdAt: dayjs().tz("Asia/Kolkata").toDate(),
             status: true,
+            createdBy: userObjectId,
           },
         },
         { upsert: true, new: true, lean: true }
@@ -2925,7 +2917,94 @@ class MessService {
 
       return result;
     } catch (error: any) {
-      throw new Error(`[MealTiming] Upsert failed: ${error.message}`);
+      throw new Error(`[setHostelMealTiming] Failed: ${error.message}`);
+    }
+  };
+
+
+  // SECTION: Method to get hostel meal timings
+  getHostelMealTiming = async (hostelId: string) => {
+    try {
+      const timing = await HostelMealTiming.findOne({
+        hostelId,
+        status: true,
+      }).lean();
+
+      if (timing) return timing;
+
+      return {
+        hostelId: new Types.ObjectId(hostelId),
+        breakfastStartTime: "07:00",
+        breakfastEndTime: "10:00",
+        lunchStartTime: "12:00",
+        lunchEndTime: "15:30",
+        snacksStartTime: "17:00",
+        snacksEndTime: "19:00",
+        dinnerStartTime: "19:30",
+        dinnerEndTime: "21:00",
+        status: true,
+        isDefault: true,
+      };
+    } catch (error: any) {
+      throw new Error(`[getHostelMealTiming] Failed: ${error.message}`);
+    }
+  };
+
+
+
+  // SECTION: Method to set hostel meal cutoff policies
+  setHostelMealCutoff = async (data: any, userId: string) => {
+    try {
+      const { hostelId, ...bookingCutoffs } = data;
+      const userObjectId = new Types.ObjectId(userId);
+
+      const result = await HostelPolicy.findOneAndUpdate(
+        { hostelId },
+        {
+          $set: {
+            bookingCutoffs,
+            updatedBy: userObjectId,
+            updatedAt: dayjs().tz("Asia/Kolkata").toDate(),
+          },
+          $setOnInsert: {
+            createdAt: dayjs().tz("Asia/Kolkata").toDate(),
+            status: true,
+            createdBy: userObjectId,
+          },
+        },
+        { upsert: true, new: true, lean: true }
+      );
+
+      return result;
+    } catch (error: any) {
+      throw new Error(`[setHostelMealCutoff] Failed: ${error.message}`);
+    }
+  };
+
+
+  // SECTION: Method to get hostel meal cutoff policies
+  getHostelMealCutoff = async (hostelId: string) => {
+    try {
+      const policy = await HostelPolicy.findOne({
+        hostelId,
+        status: true,
+      }).lean();
+
+      if (policy) return policy;
+
+      return {
+        hostelId,
+        bookingCutoffs: {
+          breakfast: { dayOffset: -1, time: "21:00" },
+          lunch: { dayOffset: 0, time: "08:00" },
+          snacks: { dayOffset: 0, time: "13:00" },
+          dinner: { dayOffset: 0, time: "16:00" },
+        },
+        status: true,
+        isDefault: true,
+      };
+    } catch (error: any) {
+      throw new Error(`[getHostelMealCutoff] Failed: ${error.message}`);
     }
   };
 

@@ -25,6 +25,9 @@ const {
   setHostelMealTiming,
   getMealStateAnalyticsByDate,
   getStudentsMealStatusByDate,
+  getHostelMealTiming,
+  setHostelMealCutoff,
+  getHostelMealCutoff,
 } = MessMenuController;
 import validateToken from "../middlewares/validateToken";
 import { validateZod } from "../middlewares/validateZod";
@@ -32,6 +35,10 @@ import {
   SetMealTimingSchema,
   GetMealTimingSchema,
 } from "../utils/validators/mealTiming.validator";
+import {
+  SetMealCutoffSchema,
+  GetMealCutoffSchema,
+} from "../utils/validators/mealCutoff.validator";
 import {
   BulkMealBookingSchema,
   CalendarMonthViewSchema,
@@ -90,6 +97,8 @@ messMenuRouter.post(
   studentMealBookingRateLimiter,
   bookMealByStudent
 );
+
+
 messMenuRouter.post("/v1/monthly-meal", validateToken, getMonthlyMealData);
 
 //--------------------------- (Warden Panel)------------------------------------------------
@@ -106,6 +115,27 @@ messMenuRouter.post(
   validateToken,
   validateZod(SetMealTimingSchema),
   setHostelMealTiming
+);
+
+messMenuRouter.post(
+  "/warden/get/meal-timings",
+  validateToken,
+  validateZod(GetMealTimingSchema),
+  getHostelMealTiming
+);
+
+messMenuRouter.post(
+  "/warden/set/meal-cutoff",
+  validateToken,
+  validateZod(SetMealCutoffSchema),
+  setHostelMealCutoff
+);
+
+messMenuRouter.post(
+  "/warden/get/meal-cutoff",
+  validateToken,
+  validateZod(GetMealCutoffSchema),
+  getHostelMealCutoff
 );
 
 //get meals analytics by date
