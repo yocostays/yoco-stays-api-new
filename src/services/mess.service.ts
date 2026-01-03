@@ -2327,25 +2327,57 @@ class MessService {
     };
 
     // Format meal timings for response with production defaults
-    const timings = (hostelMealTiming || {}) as any;
-    const mealTimings: any = {
-      breakfast: {
-        start: formatTime(timings.breakfastStartTime || "07:00"),
-        end: formatTime(timings.breakfastEndTime || "10:00"),
-      },
-      lunch: {
-        start: formatTime(timings.lunchStartTime || "12:00"),
-        end: formatTime(timings.lunchEndTime || "15:30"),
-      },
-      snacks: {
-        start: formatTime(timings.snacksStartTime || "17:00"),
-        end: formatTime(timings.snacksEndTime || "19:00"),
-      },
-      dinner: {
-        start: formatTime(timings.dinnerStartTime || "19:30"),
-        end: formatTime(timings.dinnerEndTime || "22:00"),
-      },
-    };
+    // const timings = (hostelMealTiming || {}) as any;
+    // const mealTimings: any = {
+    //   breakfast: {
+    //     start: formatTime(timings.breakfastStartTime || "07:00"),
+    //     end: formatTime(timings.breakfastEndTime || "10:00"),
+    //   },
+    //   lunch: {
+    //     start: formatTime(timings.lunchStartTime || "12:00"),
+    //     end: formatTime(timings.lunchEndTime || "15:30"),
+    //   },
+    //   snacks: {
+    //     start: formatTime(timings.snacksStartTime || "17:00"),
+    //     end: formatTime(timings.snacksEndTime || "19:00"),
+    //   },
+    //   dinner: {
+    //     start: formatTime(timings.dinnerStartTime || "19:30"),
+    //     end: formatTime(timings.dinnerEndTime || "22:00"),
+    //   },
+    // };
+
+
+     const mealTimings: any = {};
+    if (hostelMealTiming) {
+      if (
+        hostelMealTiming.breakfastStartTime &&
+        hostelMealTiming.breakfastEndTime
+      ) {
+        mealTimings.breakfast = {
+          start: formatTime(hostelMealTiming.breakfastStartTime),
+          end: formatTime(hostelMealTiming.breakfastEndTime),
+        };
+      }
+      if (hostelMealTiming.lunchStartTime && hostelMealTiming.lunchEndTime) {
+        mealTimings.lunch = {
+          start: formatTime(hostelMealTiming.lunchStartTime),
+          end: formatTime(hostelMealTiming.lunchEndTime),
+        };
+      }
+      if (hostelMealTiming.snacksStartTime && hostelMealTiming.snacksEndTime) {
+        mealTimings.snacks = {
+          start: formatTime(hostelMealTiming.snacksStartTime),
+          end: formatTime(hostelMealTiming.snacksEndTime),
+        };
+      }
+      if (hostelMealTiming.dinnerStartTime && hostelMealTiming.dinnerEndTime) {
+        mealTimings.dinner = {
+          start: formatTime(hostelMealTiming.dinnerStartTime),
+          end: formatTime(hostelMealTiming.dinnerEndTime),
+        };
+      }
+    }
 
     // Precompute leave date ranges to avoid repeated timezone conversions
     const leaveRanges = leaves.map((leave) => ({
