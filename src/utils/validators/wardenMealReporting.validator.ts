@@ -53,4 +53,30 @@ export const WardenMealReportingSchema = z.object({
         .optional(),
 });
 
+export const WardenStudentMonthlyViewSchema = z
+    .object({
+        studentId: z
+            .string()
+            .regex(/^[0-9a-fA-F]{24}$/, "Invalid Student ID"),
+        year: z.number().int().min(2000).max(2100),
+        month: z.number().int().min(1).max(12),
+        filters: z
+            .object({
+                mealStatus: z
+                    .array(
+                        z.enum([
+                            "CONSUMED",
+                            "MISSED",
+                            "CONFIRMED",
+                            "SKIPPED_CONSUMED",
+                            "SKIPPED",
+                            "NOT_BOOKED",
+                            "PENDING"
+                        ])
+                    )
+                    .optional(),
+            })
+            .optional(),
+    });
+
 export type WardenMealReportingInput = z.infer<typeof WardenMealReportingSchema>;

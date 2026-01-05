@@ -1169,8 +1169,8 @@ class MessService {
       const bookingStatus = isFullDay
         ? MealBookingStatusTypes.CANCELLED
         : allMealsCancelled
-        ? MealBookingStatusTypes.CANCELLED
-        : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+          ? MealBookingStatusTypes.CANCELLED
+          : MealBookingStatusTypes.PARTIALLY_CANCELLED;
       // Update the booking with new meal status and booking status
       booking.set({
         ...bookingUpdateData,
@@ -1285,14 +1285,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                  MealBookingStatusTypes.BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ]
+                MealBookingStatusTypes.BOOKED,
+                MealBookingStatusTypes.PARTIALLY_BOOKED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ]
               : [
-                  MealBookingStatusTypes.CANCELLED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ];
+                MealBookingStatusTypes.CANCELLED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
@@ -2067,11 +2067,11 @@ class MessService {
         let currentMeals = existingBooking
           ? existingBooking.meals
           : {
-              breakfast: { status: MealBookingIntent.PENDING, locked: false },
-              lunch: { status: MealBookingIntent.PENDING, locked: false },
-              snacks: { status: MealBookingIntent.PENDING, locked: false },
-              dinner: { status: MealBookingIntent.PENDING, locked: false },
-            };
+            breakfast: { status: MealBookingIntent.PENDING, locked: false },
+            lunch: { status: MealBookingIntent.PENDING, locked: false },
+            snacks: { status: MealBookingIntent.PENDING, locked: false },
+            dinner: { status: MealBookingIntent.PENDING, locked: false },
+          };
 
         for (const meal of [
           "breakfast",
@@ -2455,16 +2455,9 @@ class MessService {
         const isMatch =
           (d.isAfter(start) || d.isSame(start, "day")) &&
           (d.isBefore(end) || d.isSame(end, "day"));
-        if (dateKey === "2026-01-04") {
-          console.log(
-            `[MonthlyView] Date=2026-01-04, Start=${start.format()}, End=${end.format()}, isMatch=${isMatch}`
-          );
-        }
         return isMatch;
       });
-      if (dateKey === "2026-01-04") {
-        console.log(`[MonthlyView] Date=2026-01-04 Final hasLeave=${hasLeave}`);
-      }
+     
 
       const booking = bookingMap.get(dateKey);
       const menu = menuMap.get(dateKey);
@@ -2623,11 +2616,6 @@ class MessService {
             const existing = existingBookingsMap.get(studentId);
 
             if (existing) {
-              if (existing.isManualBooking) {
-                stats.skippedManual++;
-                continue;
-              }
-
               // Check if we can confirm any PENDING meals?
               let hasUpdates = false;
               const updatedMeals = existing.meals ? { ...existing.meals } : {};

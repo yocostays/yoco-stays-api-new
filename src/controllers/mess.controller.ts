@@ -1184,7 +1184,7 @@ class MessMenuController {
   });
 
 
-  
+
   //SECTION Controller method to get hostel meal cutoffs
   getHostelMealCutoff = asyncHandler(async (req: Request, res: Response) => {
     const requesterId = (req as any).user.id;
@@ -1279,6 +1279,152 @@ class MessMenuController {
       const result = await fetchStudentsMealStatusByDate(dto);
 
       return sendSuccess(res, FETCH_SUCCESS, result);
+    }
+  );
+
+  // SECTION: Controller method to get monthly meal data for a specific student (Warden)
+  getStudentMonthlyMealDataForWarden = asyncHandler(
+    async (req: Request, res: Response) => {
+      const requesterId = (req as any).user.id;
+      const { WardenStudentMonthlyViewSchema } = await import(
+        "../utils/validators/wardenMealReporting.validator"
+      );
+
+      // Fetch requester details for authorization
+      const { staff } = await getStaffById(requesterId);
+      if (!staff) {
+        return sendError(res, UNAUTHORIZED_ACCESS, 401);
+      }
+
+      // Role Authorization
+      const roleName = staff.roleId?.name?.toLowerCase() || "";
+      const isAdmin = roleName === "admin";
+      const isWarden = roleName === "warden";
+
+      if (!isAdmin && !isWarden) {
+        return sendError(
+          res,
+          "Access forbidden: Requester is not a Warden or Admin",
+          403
+        );
+      }
+
+      // Input Validation
+      const parseResult = WardenStudentMonthlyViewSchema.safeParse(req.body);
+      const validationError = sendZodError(res, parseResult);
+      if (validationError) return validationError;
+
+      const { studentId, year, month, filters } = parseResult.data!;
+
+      // Fetch Student to get Hostel ID
+      const { student } = await getStudentById(studentId);
+      if (!student) {
+        return sendError(res, RECORD_NOT_FOUND("Student"));
+      }
+
+      // Warden Scoping: Check if student belongs to a hostel assigned to the Warden
+      if (isWarden) {
+        const isAssigned = staff.hostelIds?.some(
+          (id: any) => id._id.toString() === student.hostelId?._id?.toString()
+        );
+
+        if (!isAssigned) {
+          return sendError(
+            res,
+            "Access forbidden: Student belongs to a hostel not assigned to this Warden",
+            403
+          );
+        }
+      }
+
+      // Call the service method
+      const { results } = await getStudentMealBookingMonthlyView(
+        student.hostelId?._id?.toString() || student.hostelId?.toString(),
+        student._id,
+        undefined, // Date undefined as we drive by Month/Year
+        year,
+        month
+      );
+
+      // Status Transformation for Warden View (Derived Status Only)
+      let transformedResults = results.map((dayParams: any) => {
+        const dateObj = new Date(dayParams.date);
+
+        // Helper to determine status
+        const getStatus = (mealData: any) => {
+          // 1. No Data / No Menu
+          if (!mealData) return "NOT_BOOKED";
+          const { state, consumed } = mealData;
+
+          if (state === "NOT_APPLICABLE") return "NOT_BOOKED";
+
+          // 2. Confirmed Cases
+          if (state === "CONFIRMED") {
+            if (consumed) return "CONSUMED";
+
+            // Check for "MISSED": Confirmed + Not Consumed + Past date
+            // We compare the booking date with "today" (start of day).
+            // If booking date < today, it is strictly in the past => MISSED.
+            const bookingDate = new Date(dayParams.date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (bookingDate < today) return "MISSED";
+
+            return "CONFIRMED"; // Future/Today pending consumption
+          }
+
+          // 3. Skipped Cases
+          if (state === "SKIPPED") {
+            if (consumed) return "SKIPPED_CONSUMED";
+            return "SKIPPED";
+          }
+
+          // 4. Pending / Other
+          return state || "NOT_BOOKED";
+        };
+
+        return {
+          date: dayParams.date,
+          meals: {
+            breakfast: { status: getStatus(dayParams.meals.breakfast) },
+            lunch: { status: getStatus(dayParams.meals.lunch) },
+            snacks: { status: getStatus(dayParams.meals.snacks) },
+            dinner: { status: getStatus(dayParams.meals.dinner) },
+          }
+        };
+      });
+
+      // Apply Filters if provided
+      if (filters?.mealStatus && filters.mealStatus.length > 0) {
+        const validStatuses = new Set(filters.mealStatus);
+
+        transformedResults = transformedResults.map((day) => {
+          let hasMatch = false;
+
+          for (const [meal, data] of Object.entries(day.meals)) {
+            if (validStatuses.has((data as any).status)) {
+              hasMatch = true;
+              break; // Found one match, keep the whole day
+            }
+          }
+
+          if (hasMatch) {
+            return day; // Return the full day object with all meals
+          }
+          return null; // Drop day if no meals match
+        }).filter((day) => day !== null);
+      }
+
+      return sendSuccess(res, FETCH_SUCCESS, {
+        results: transformedResults,
+        student: {
+          _id: student._id,
+          name: student.name,
+          uniqueId: student.uniqueId,
+          hostelId: student.hostelId
+        }
+      });
     }
   );
 }
