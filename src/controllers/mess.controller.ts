@@ -1350,6 +1350,24 @@ class MessMenuController {
       let transformedResults = results.map((dayParams: any) => {
         const dateObj = new Date(dayParams.date);
 
+        // Format Created At if available
+        let createdDate: string | null = null;
+        let createdTime: string | null = null;
+
+        if (dayParams.createdAt) {
+          const createdAtDate = new Date(dayParams.createdAt);
+          // Format YYYY-MM-DD
+          const year = createdAtDate.getFullYear();
+          const month = String(createdAtDate.getMonth() + 1).padStart(2, "0");
+          const day = String(createdAtDate.getDate()).padStart(2, "0");
+          createdDate = `${year}-${month}-${day}`;
+
+          // Format HH:mm
+          const hours = String(createdAtDate.getHours()).padStart(2, "0");
+          const minutes = String(createdAtDate.getMinutes()).padStart(2, "0");
+          createdTime = `${hours}:${minutes}`;
+        }
+
         // Helper to determine status
         const getStatus = (mealData: any) => {
           // 1. No Data / No Menu
@@ -1363,8 +1381,6 @@ class MessMenuController {
             if (consumed) return "CONSUMED";
 
             // Check for "MISSED": Confirmed + Not Consumed + Past date
-            // We compare the booking date with "today" (start of day).
-            // If booking date < today, it is strictly in the past => MISSED.
             const bookingDate = new Date(dayParams.date);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -1384,13 +1400,21 @@ class MessMenuController {
           return state || "NOT_BOOKED";
         };
 
+        const buildMealResponse = (mealData: any) => {
+          const status = getStatus(mealData);
+          // Return only status as requested
+          return { status };
+        };
+
         return {
           date: dayParams.date,
+          createdDate,
+          createdTime,
           meals: {
-            breakfast: { status: getStatus(dayParams.meals.breakfast) },
-            lunch: { status: getStatus(dayParams.meals.lunch) },
-            snacks: { status: getStatus(dayParams.meals.snacks) },
-            dinner: { status: getStatus(dayParams.meals.dinner) },
+            breakfast: buildMealResponse(dayParams.meals.breakfast),
+            lunch: buildMealResponse(dayParams.meals.lunch),
+            snacks: buildMealResponse(dayParams.meals.snacks),
+            dinner: buildMealResponse(dayParams.meals.dinner),
           }
         };
       });

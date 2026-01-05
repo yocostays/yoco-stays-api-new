@@ -2457,7 +2457,7 @@ class MessService {
           (d.isBefore(end) || d.isSame(end, "day"));
         return isMatch;
       });
-     
+
 
       const booking = bookingMap.get(dateKey);
       const menu = menuMap.get(dateKey);
@@ -2497,6 +2497,12 @@ class MessService {
           consumed: isConsumed,
         };
       }
+
+      // Attach creation timestamp if booking exists
+      if (booking && booking.createdAt) {
+        dayResult.createdAt = booking.createdAt;
+      }
+
       results.push(dayResult);
     }
     return { results, mealTimings };
