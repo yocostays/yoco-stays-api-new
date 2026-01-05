@@ -92,7 +92,6 @@ class MessService {
         throw new Error(START_DATE_ERROR);
       }
 
-
       const existingHostel = await Hostel.exists({ _id: hostelId });
       if (!existingHostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
 
@@ -163,7 +162,10 @@ class MessService {
 
       //  Date Range Handling (Shifted by -6h to capture IST-Midnight stored as 18:30 UTC)
       if (startDate && endDate) {
-        const start = dayjs(startDate).startOf("day").subtract(6, "hours").toDate();
+        const start = dayjs(startDate)
+          .startOf("day")
+          .subtract(6, "hours")
+          .toDate();
         const end = dayjs(endDate).endOf("day").subtract(6, "hours").toDate();
 
         if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
@@ -212,7 +214,9 @@ class MessService {
           $project: {
             _id: 0,
             uniqueId: 1,
-            foodWastageNumber: { $ifNull: ["$wastage.foodWastageNumber", null] },
+            foodWastageNumber: {
+              $ifNull: ["$wastage.foodWastageNumber", null],
+            },
             date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
             wastage: {
               $cond: {
@@ -1165,8 +1169,8 @@ class MessService {
       const bookingStatus = isFullDay
         ? MealBookingStatusTypes.CANCELLED
         : allMealsCancelled
-          ? MealBookingStatusTypes.CANCELLED
-          : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+        ? MealBookingStatusTypes.CANCELLED
+        : MealBookingStatusTypes.PARTIALLY_CANCELLED;
       // Update the booking with new meal status and booking status
       booking.set({
         ...bookingUpdateData,
@@ -1281,14 +1285,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                MealBookingStatusTypes.BOOKED,
-                MealBookingStatusTypes.PARTIALLY_BOOKED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ]
+                  MealBookingStatusTypes.BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ]
               : [
-                MealBookingStatusTypes.CANCELLED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ];
+                  MealBookingStatusTypes.CANCELLED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
@@ -2063,11 +2067,11 @@ class MessService {
         let currentMeals = existingBooking
           ? existingBooking.meals
           : {
-            breakfast: { status: MealBookingIntent.PENDING, locked: false },
-            lunch: { status: MealBookingIntent.PENDING, locked: false },
-            snacks: { status: MealBookingIntent.PENDING, locked: false },
-            dinner: { status: MealBookingIntent.PENDING, locked: false },
-          };
+              breakfast: { status: MealBookingIntent.PENDING, locked: false },
+              lunch: { status: MealBookingIntent.PENDING, locked: false },
+              snacks: { status: MealBookingIntent.PENDING, locked: false },
+              dinner: { status: MealBookingIntent.PENDING, locked: false },
+            };
 
         for (const meal of [
           "breakfast",
@@ -2347,7 +2351,6 @@ class MessService {
     //   },
     // };
 
-
     const mealTimings: any = {};
     if (hostelMealTiming) {
       if (
@@ -2449,12 +2452,13 @@ class MessService {
 
       const hasLeave = leaveRanges.some(({ start, end }) => {
         const d = dayjs(dateKey).tz("Asia/Kolkata").startOf("day");
-        const isMatch = (
+        const isMatch =
           (d.isAfter(start) || d.isSame(start, "day")) &&
-          (d.isBefore(end) || d.isSame(end, "day"))
-        );
+          (d.isBefore(end) || d.isSame(end, "day"));
         if (dateKey === "2026-01-04") {
-          console.log(`[MonthlyView] Date=2026-01-04, Start=${start.format()}, End=${end.format()}, isMatch=${isMatch}`);
+          console.log(
+            `[MonthlyView] Date=2026-01-04, Start=${start.format()}, End=${end.format()}, isMatch=${isMatch}`
+          );
         }
         return isMatch;
       });
@@ -2485,7 +2489,11 @@ class MessService {
 
         if (!foodExists) {
           displayStatus = MealBookingIntent.NOT_APPLICABLE;
-        } else if (hasLeave && (displayStatus === MealBookingIntent.PENDING || displayStatus === MealBookingIntent.CONFIRMED)) {
+        } else if (
+          hasLeave &&
+          (displayStatus === MealBookingIntent.PENDING ||
+            displayStatus === MealBookingIntent.CONFIRMED)
+        ) {
           displayStatus = MealBookingIntent.SKIPPED;
         }
 
@@ -2963,7 +2971,6 @@ class MessService {
     }
   };
 
-
   // SECTION: Method to get hostel meal timings
   getHostelMealTiming = async (hostelId: string) => {
     try {
@@ -2991,8 +2998,6 @@ class MessService {
       throw new Error(`[getHostelMealTiming] Failed: ${error.message}`);
     }
   };
-
-
 
   // SECTION: Method to set hostel meal cutoff policies
   setHostelMealCutoff = async (data: any, userId: string) => {
@@ -3023,7 +3028,6 @@ class MessService {
     }
   };
 
-
   // SECTION: Method to get hostel meal cutoff policies
   getHostelMealCutoff = async (hostelId: string) => {
     try {
@@ -3051,11 +3055,13 @@ class MessService {
   };
 
   /**
-     * SECTION: Warden Meal Reporting - Get student-wise meal status by date
-     * Returns paginated list of students with their meal bookings for a specific hostel and date
-     * Supports filtering by student status, meal status, floor, room, and text search
-     */
-  fetchStudentsMealStatusByDate = async (params: WardenMealReportingInput): Promise<{
+   * SECTION: Warden Meal Reporting - Get student-wise meal status by date
+   * Returns paginated list of students with their meal bookings for a specific hostel and date
+   * Supports filtering by student status, meal status, floor, room, and text search
+   */
+  fetchStudentsMealStatusByDate = async (
+    params: WardenMealReportingInput
+  ): Promise<{
     students: any[];
     pagination: {
       page: number;
@@ -3085,8 +3091,15 @@ class MessService {
       const page = pagination?.page || 1;
       const limit = Math.min(pagination?.limit || 10, 50);
 
-      const allowedSortFields = ["uniqueId", "name", "floorNumber", "roomNumber"];
-      const sortField = allowedSortFields.includes(sort?.field) ? sort.field : "uniqueId";
+      const allowedSortFields = [
+        "uniqueId",
+        "name",
+        "floorNumber",
+        "roomNumber",
+      ];
+      const sortField = allowedSortFields.includes(sort?.field)
+        ? sort.field
+        : "uniqueId";
       const sortOrder = sort?.order === "desc" ? -1 : 1;
 
       const pipeline: PipelineStage[] = [];
@@ -3154,39 +3167,46 @@ class MessService {
         $unwind: { path: "$booking", preserveNullAndEmptyArrays: true },
       });
 
-      // STAGE 5: Centralized Derived Meal Status Logic (State Machine)
-      // -------------------------------------------------------------------------
-      // Business Rules for Derived Status:
-      // CONFIRMED + consumed: true  => CONSUMED
-      // CONFIRMED + consumed: false => MISSED
-      // SKIPPED   + consumed: false => SKIPPED
-      // SKIPPED   + consumed: true  => SKIPPED_CONSUMED
-      // No booking record found     => NOT_BOOKED
-      // -------------------------------------------------------------------------
-      const deriveMealObject = (mealKey: string) => ({
-        derivedStatus: {
-          $switch: {
-            branches: [
-              {
-                case: { $eq: [`$booking.meals.${mealKey}.status`, MealBookingIntent.CONFIRMED] },
-                then: { $cond: [`$booking.meals.${mealKey}.consumed`, MealDerivedStatus.CONSUMED, MealDerivedStatus.MISSED] },
-              },
-              {
-                case: { $eq: [`$booking.meals.${mealKey}.status`, MealBookingIntent.SKIPPED] },
-                then: { $cond: [`$booking.meals.${mealKey}.consumed`, MealDerivedStatus.SKIPPED_CONSUMED, MealDerivedStatus.SKIPPED] },
-              },
-            ],
-            default: MealDerivedStatus.NOT_BOOKED,
-          },
-        },
-      });
-
+      // STAGE 5: Construct Meal Objects with Raw Status & Consumed
+      // We directly project the status and consumed fields from the booking.
       pipeline.push({
         $addFields: {
-          "meals.breakfast": deriveMealObject("breakfast"),
-          "meals.lunch": deriveMealObject("lunch"),
-          "meals.snacks": deriveMealObject("snacks"),
-          "meals.dinner": deriveMealObject("dinner"),
+          "meals.breakfast": {
+            status: {
+              $ifNull: [
+                `$booking.meals.breakfast.status`,
+                MealBookingIntent.PENDING,
+              ],
+            },
+            consumed: { $ifNull: [`$booking.meals.breakfast.consumed`, false] },
+          },
+          "meals.lunch": {
+            status: {
+              $ifNull: [
+                `$booking.meals.lunch.status`,
+                MealBookingIntent.PENDING,
+              ],
+            },
+            consumed: { $ifNull: [`$booking.meals.lunch.consumed`, false] },
+          },
+          "meals.snacks": {
+            status: {
+              $ifNull: [
+                `$booking.meals.snacks.status`,
+                MealBookingIntent.PENDING,
+              ],
+            },
+            consumed: { $ifNull: [`$booking.meals.snacks.consumed`, false] },
+          },
+          "meals.dinner": {
+            status: {
+              $ifNull: [
+                `$booking.meals.dinner.status`,
+                MealBookingIntent.PENDING,
+              ],
+            },
+            consumed: { $ifNull: [`$booking.meals.dinner.consumed`, false] },
+          },
         },
       });
 
@@ -3198,37 +3218,15 @@ class MessService {
         pipeline.push({ $match: { roomNumber: filters.room } });
       }
 
-      if (filters?.mealStatus && filters.mealStatus.length > 0) {
-        // Map legacy UI filter types to new derived statuses
-        const statusMap: Record<string, MealDerivedStatus> = {
-          "Confirmed": MealDerivedStatus.CONSUMED,
-          "Cancelled": MealDerivedStatus.SKIPPED,
-          "Missed": MealDerivedStatus.MISSED,
-          "Cancelled-Consumed": MealDerivedStatus.SKIPPED_CONSUMED,
-        };
-        const mappedStatuses = filters.mealStatus.map(s => statusMap[s] || s);
-
-        pipeline.push({
-          $match: {
-            $or: [
-              { "meals.breakfast.derivedStatus": { $in: mappedStatuses } },
-              { "meals.lunch.derivedStatus": { $in: mappedStatuses } },
-              { "meals.snacks.derivedStatus": { $in: mappedStatuses } },
-              { "meals.dinner.derivedStatus": { $in: mappedStatuses } },
-            ],
-          },
-        });
-      }
-
       // STAGE 7: Text Search
       if (search?.text && search.text.trim()) {
-        const regex = new RegExp(search.text.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        const regex = new RegExp(
+          search.text.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          "i"
+        );
         pipeline.push({
           $match: {
-            $or: [
-              { "student.uniqueId": regex },
-              { "student.name": regex },
-            ],
+            $or: [{ "student.uniqueId": regex }, { "student.name": regex }],
           },
         });
       }
@@ -3266,7 +3264,9 @@ class MessService {
         },
       };
     } catch (error: any) {
-      throw new Error(`MealReportingService: Failed to fetch student meal status. Detail: ${error.message}`);
+      throw new Error(
+        `MealReportingService: Failed to fetch student meal status. Detail: ${error.message}`
+      );
     }
   };
 }
