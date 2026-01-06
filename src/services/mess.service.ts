@@ -2252,6 +2252,7 @@ class MessService {
           consumed: boolean;
         };
       };
+      createdAt?: Date | string;
     }>;
     mealTimings?: {
       breakfast?: { start: string; end: string };
@@ -2330,57 +2331,32 @@ class MessService {
         : `${displayHour}${period}`;
     };
 
-    // Format meal timings for response with production defaults
-    // const timings = (hostelMealTiming || {}) as any;
-    // const mealTimings: any = {
-    //   breakfast: {
-    //     start: formatTime(timings.breakfastStartTime || "07:00"),
-    //     end: formatTime(timings.breakfastEndTime || "10:00"),
-    //   },
-    //   lunch: {
-    //     start: formatTime(timings.lunchStartTime || "12:00"),
-    //     end: formatTime(timings.lunchEndTime || "15:30"),
-    //   },
-    //   snacks: {
-    //     start: formatTime(timings.snacksStartTime || "17:00"),
-    //     end: formatTime(timings.snacksEndTime || "19:00"),
-    //   },
-    //   dinner: {
-    //     start: formatTime(timings.dinnerStartTime || "19:30"),
-    //     end: formatTime(timings.dinnerEndTime || "22:00"),
-    //   },
-    // };
+    const mealTimings: {
+      breakfast?: { start: string; end: string };
+      lunch?: { start: string; end: string };
+      snacks?: { start: string; end: string };
+      dinner?: { start: string; end: string };
+    } = {};
 
-    const mealTimings: any = {};
-    if (hostelMealTiming) {
-      if (
-        hostelMealTiming.breakfastStartTime &&
-        hostelMealTiming.breakfastEndTime
-      ) {
-        mealTimings.breakfast = {
-          start: formatTime(hostelMealTiming.breakfastStartTime),
-          end: formatTime(hostelMealTiming.breakfastEndTime),
-        };
-      }
-      if (hostelMealTiming.lunchStartTime && hostelMealTiming.lunchEndTime) {
-        mealTimings.lunch = {
-          start: formatTime(hostelMealTiming.lunchStartTime),
-          end: formatTime(hostelMealTiming.lunchEndTime),
-        };
-      }
-      if (hostelMealTiming.snacksStartTime && hostelMealTiming.snacksEndTime) {
-        mealTimings.snacks = {
-          start: formatTime(hostelMealTiming.snacksStartTime),
-          end: formatTime(hostelMealTiming.snacksEndTime),
-        };
-      }
-      if (hostelMealTiming.dinnerStartTime && hostelMealTiming.dinnerEndTime) {
-        mealTimings.dinner = {
-          start: formatTime(hostelMealTiming.dinnerStartTime),
-          end: formatTime(hostelMealTiming.dinnerEndTime),
-        };
-      }
-    }
+    // Format meal timings for response with production defaults
+    const timings = (hostelMealTiming || {}) as any;
+    mealTimings.breakfast = {
+      start: formatTime(timings.breakfastStartTime || "07:00"),
+      end: formatTime(timings.breakfastEndTime || "10:00"),
+    };
+    mealTimings.lunch = {
+      start: formatTime(timings.lunchStartTime || "12:00"),
+      end: formatTime(timings.lunchEndTime || "15:30"),
+    };
+    mealTimings.snacks = {
+      start: formatTime(timings.snacksStartTime || "17:00"),
+      end: formatTime(timings.snacksEndTime || "19:00"),
+    };
+    mealTimings.dinner = {
+      start: formatTime(timings.dinnerStartTime || "19:30"),
+      end: formatTime(timings.dinnerEndTime || "22:00"),
+    };
+
 
     // Precompute leave date ranges to avoid repeated timezone conversions
     const leaveRanges = leaves.map((leave) => ({
@@ -2400,7 +2376,16 @@ class MessService {
       menuMap.set(key, m);
     }
 
-    const results: any[] = [];
+    const results: Array<{
+      date: string;
+      meals: {
+        breakfast: { state: string; locked: boolean; food: string | null; consumed: boolean };
+        lunch: { state: string; locked: boolean; food: string | null; consumed: boolean };
+        snacks: { state: string; locked: boolean; food: string | null; consumed: boolean };
+        dinner: { state: string; locked: boolean; food: string | null; consumed: boolean };
+      };
+      createdAt?: Date | string;
+    }> = [];
     const startMoment = dayjs(startDateKey).tz("Asia/Kolkata");
 
     // Pre-compute cutoff checks for all dates and meals
@@ -2458,13 +2443,17 @@ class MessService {
         return isMatch;
       });
 
-
       const booking = bookingMap.get(dateKey);
       const menu = menuMap.get(dateKey);
 
-      const dayResult: any = {
+      const dayResult: (typeof results)[number] = {
         date: dateKey,
-        meals: {},
+        meals: {
+          breakfast: { state: "", locked: false, food: null, consumed: false },
+          lunch: { state: "", locked: false, food: null, consumed: false },
+          snacks: { state: "", locked: false, food: null, consumed: false },
+          dinner: { state: "", locked: false, food: null, consumed: false },
+        },
       };
 
       for (const meal of ["breakfast", "lunch", "snacks", "dinner"] as const) {

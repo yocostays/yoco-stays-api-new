@@ -252,14 +252,14 @@ class MessMenuController {
         const missingField = !hostelId
           ? "Hostel Id"
           : !date
-            ? "Date"
-            : !breakfast
-              ? "Breakfast"
-              : !lunch
-                ? "Lunch"
-                : !snacks
-                  ? "Snacks"
-                  : "Dinner";
+          ? "Date"
+          : !breakfast
+          ? "Breakfast"
+          : !lunch
+          ? "Lunch"
+          : !snacks
+          ? "Snacks"
+          : "Dinner";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -914,8 +914,8 @@ class MessMenuController {
         const missingField = !date
           ? "Date"
           : !studentId
-            ? "Student"
-            : "Meal Type";
+          ? "Student"
+          : "Meal Type";
         const errorResponse: HttpResponse = {
           statusCode: 400,
           message: `${missingField} is required`,
@@ -1084,7 +1084,11 @@ class MessMenuController {
     const isWarden = roleName === "warden";
 
     if (!isAdmin && !isWarden) {
-      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+      return sendError(
+        res,
+        "Access forbidden: Requester is not a Warden or Admin",
+        403
+      );
     }
 
     // Input Validation
@@ -1100,7 +1104,11 @@ class MessMenuController {
         (id: any) => id._id.toString() === dto.hostelId
       );
       if (!isAssigned) {
-        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+        return sendError(
+          res,
+          "Access forbidden: Warden not assigned to this hostel",
+          403
+        );
       }
     }
 
@@ -1123,7 +1131,11 @@ class MessMenuController {
     const isWarden = roleName === "warden";
 
     if (!isAdmin && !isWarden) {
-      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+      return sendError(
+        res,
+        "Access forbidden: Requester is not a Warden or Admin",
+        403
+      );
     }
 
     const parseResult = GetMealTimingSchema.safeParse(req.body);
@@ -1137,7 +1149,11 @@ class MessMenuController {
         (id: any) => id._id.toString() === hostelId
       );
       if (!isAssigned) {
-        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+        return sendError(
+          res,
+          "Access forbidden: Warden not assigned to this hostel",
+          403
+        );
       }
     }
 
@@ -1160,7 +1176,11 @@ class MessMenuController {
     const isWarden = roleName === "warden";
 
     if (!isAdmin && !isWarden) {
-      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+      return sendError(
+        res,
+        "Access forbidden: Requester is not a Warden or Admin",
+        403
+      );
     }
 
     const parseResult = SetMealCutoffSchema.safeParse(req.body);
@@ -1174,7 +1194,11 @@ class MessMenuController {
         (id: any) => id._id.toString() === dto.hostelId
       );
       if (!isAssigned) {
-        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+        return sendError(
+          res,
+          "Access forbidden: Warden not assigned to this hostel",
+          403
+        );
       }
     }
 
@@ -1182,8 +1206,6 @@ class MessMenuController {
 
     return sendSuccess(res, UPDATE_DATA);
   });
-
-
 
   //SECTION Controller method to get hostel meal cutoffs
   getHostelMealCutoff = asyncHandler(async (req: Request, res: Response) => {
@@ -1201,7 +1223,11 @@ class MessMenuController {
     const isWarden = roleName === "warden";
 
     if (!isAdmin && !isWarden) {
-      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+      return sendError(
+        res,
+        "Access forbidden: Requester is not a Warden or Admin",
+        403
+      );
     }
 
     // Input Validation
@@ -1217,7 +1243,11 @@ class MessMenuController {
         (id: any) => id._id.toString() === hostelId
       );
       if (!isAssigned) {
-        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+        return sendError(
+          res,
+          "Access forbidden: Warden not assigned to this hostel",
+          403
+        );
       }
     }
 
@@ -1225,8 +1255,6 @@ class MessMenuController {
 
     return sendSuccess(res, FETCH_SUCCESS, result);
   });
-
-
 
   // SECTION: Controller method to get students meal status by date (Warden)
   getStudentsMealStatusByDate = asyncHandler(
@@ -1346,8 +1374,35 @@ class MessMenuController {
         month
       );
 
-      // Status Transformation for Warden View (Derived Status Only)
-      let transformedResults = results.map((dayParams: any) => {
+      type WardenMealStatus =
+        | "CONSUMED"
+        | "MISSED"
+        | "CONFIRMED"
+        | "SKIPPED_CONSUMED"
+        | "SKIPPED"
+        | "NOT_BOOKED"
+        | "PENDING";
+
+      interface IMealWardenView {
+        state: string;
+        consumed: boolean;
+        _status?: WardenMealStatus;
+      }
+
+      interface IDailyMealHistory {
+        date: string;
+        createdDate: string | null;
+        createdTime: string | null;
+        meals: {
+          breakfast: IMealWardenView;
+          lunch: IMealWardenView;
+          snacks: IMealWardenView;
+          dinner: IMealWardenView;
+        };
+      }
+
+      // Status Transformation for Warden View
+      let transformedResults: IDailyMealHistory[] = results.map((dayParams) => {
         const dateObj = new Date(dayParams.date);
 
         // Format Created At if available
@@ -1356,54 +1411,50 @@ class MessMenuController {
 
         if (dayParams.createdAt) {
           const createdAtDate = new Date(dayParams.createdAt);
-          // Format YYYY-MM-DD
-          const year = createdAtDate.getFullYear();
-          const month = String(createdAtDate.getMonth() + 1).padStart(2, "0");
-          const day = String(createdAtDate.getDate()).padStart(2, "0");
-          createdDate = `${year}-${month}-${day}`;
+          const yearNum = createdAtDate.getFullYear();
+          const monthNum = String(createdAtDate.getMonth() + 1).padStart(
+            2,
+            "0"
+          );
+          const dayNum = String(createdAtDate.getDate()).padStart(2, "0");
+          createdDate = `${yearNum}-${monthNum}-${dayNum}`;
 
-          // Format HH:mm
           const hours = String(createdAtDate.getHours()).padStart(2, "0");
           const minutes = String(createdAtDate.getMinutes()).padStart(2, "0");
           createdTime = `${hours}:${minutes}`;
         }
 
-        // Helper to determine status
-        const getStatus = (mealData: any) => {
-          // 1. No Data / No Menu
+        // Helper to determine derived status for filtering
+        const getDerivedStatus = (
+          mealData: { state: string; consumed: boolean } | undefined
+        ): WardenMealStatus => {
           if (!mealData) return "NOT_BOOKED";
           const { state, consumed } = mealData;
-
           if (state === "NOT_APPLICABLE") return "NOT_BOOKED";
 
-          // 2. Confirmed Cases
           if (state === "CONFIRMED") {
             if (consumed) return "CONSUMED";
-
-            // Check for "MISSED": Confirmed + Not Consumed + Past date
             const bookingDate = new Date(dayParams.date);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-
             if (bookingDate < today) return "MISSED";
-
-            return "CONFIRMED"; // Future/Today pending consumption
+            return "CONFIRMED";
           }
-
-          // 3. Skipped Cases
           if (state === "SKIPPED") {
             if (consumed) return "SKIPPED_CONSUMED";
             return "SKIPPED";
           }
-
-          // 4. Pending / Other
-          return state || "NOT_BOOKED";
+          return (state || "NOT_BOOKED") as WardenMealStatus;
         };
 
-        const buildMealResponse = (mealData: any) => {
-          const status = getStatus(mealData);
-          // Return only status as requested
-          return { status };
+        const buildMealResponse = (
+          mealData: { state: string; consumed: boolean } | undefined
+        ): IMealWardenView => {
+          return {
+            state: mealData?.state || "NOT_APPLICABLE",
+            consumed: mealData?.consumed || false,
+            _status: getDerivedStatus(mealData), // filtering
+          };
         };
 
         return {
@@ -1415,7 +1466,7 @@ class MessMenuController {
             lunch: buildMealResponse(dayParams.meals.lunch),
             snacks: buildMealResponse(dayParams.meals.snacks),
             dinner: buildMealResponse(dayParams.meals.dinner),
-          }
+          },
         };
       });
 
@@ -1423,31 +1474,38 @@ class MessMenuController {
       if (filters?.mealStatus && filters.mealStatus.length > 0) {
         const validStatuses = new Set(filters.mealStatus);
 
-        transformedResults = transformedResults.map((day) => {
-          let hasMatch = false;
-
-          for (const [meal, data] of Object.entries(day.meals)) {
-            if (validStatuses.has((data as any).status)) {
-              hasMatch = true;
-              break; // Found one match, keep the whole day
-            }
-          }
-
-          if (hasMatch) {
-            return day; // Return the full day object with all meals
-          }
-          return null; // Drop day if no meals match
-        }).filter((day) => day !== null);
+        transformedResults = transformedResults.filter((day) => {
+          const meals = day.meals;
+          return Object.values(meals).some(
+            (m) => m._status && validStatuses.has(m._status)
+          );
+        });
       }
 
+      // Cleanup temporary _status field before sending
+      const finalResults = transformedResults.map((day) => {
+        const cleanedMeals: any = {}; 
+        (Object.keys(day.meals) as Array<keyof typeof day.meals>).forEach(
+          (key) => {
+            const { _status, ...rest } = day.meals[key];
+            cleanedMeals[key] = rest;
+          }
+        );
+
+        return {
+          ...day,
+          meals: cleanedMeals as IDailyMealHistory["meals"],
+        };
+      });
+
       return sendSuccess(res, FETCH_SUCCESS, {
-        results: transformedResults,
+        results: finalResults,
         student: {
           _id: student._id,
           name: student.name,
           uniqueId: student.uniqueId,
-          hostelId: student.hostelId
-        }
+          hostelId: student.hostelId,
+        },
       });
     }
   );
