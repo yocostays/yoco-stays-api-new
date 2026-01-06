@@ -37,6 +37,16 @@ export const SetMealCutoffSchema = z.object({
             });
         }
     }
+
+    // 4. Strict Meal-Specific Rules
+    // Rule: Breakfast cutoff must be <= 12 AM (Midnight) of the meal day.
+    if (meals[0].val > 0) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Breakfast cutoff must be on or before 12 AM of the meal day (Day 0, 00:00).",
+            path: ["breakfast"],
+        });
+    }
 });
 
 export const GetMealCutoffSchema = z.object({

@@ -1486,8 +1486,6 @@ class StudentLeaveService {
       const startDayjs = dayjs(startDate).tz("Asia/Kolkata");
       const endDayjs = dayjs(endDate).tz("Asia/Kolkata");
 
-      console.log(`[LeaveCancellation] TRACE: leaveId=${leave._id}, start=${leave.startDate}, end=${leave.endDate}`);
-      console.log(`[LeaveCancellation] startDayjs=${startDayjs.format()}, endDayjs=${endDayjs.format()}`);
 
       // Get all unique dates (YYYY-MM-DD) in the range
       const datesInRange: string[] = [];
@@ -1499,7 +1497,6 @@ class StudentLeaveService {
         current = current.add(1, "day");
       }
 
-      console.log(`[LeaveCancellation] Processing ${datesInRange.length} days for leave ${leave._id}`);
 
       // Fetch dependencies in bulk (General Timing and Daily Menus)
       const [generalTimings, menus] = await Promise.all([
@@ -1523,28 +1520,23 @@ class StudentLeaveService {
         const dDayjs = dayjs.tz(dateKey, "Asia/Kolkata");
         const menu = menuMap.get(dateKey);
 
-        if (!generalTimings) {
-          console.log(`[LeaveCancellation] Using production default timings for hostel ${hostelId}`);
-        }
 
-        const timings = generalTimings || {
+        const timings: any = generalTimings || {
+          breakfastStartTime: "07:00",
+          lunchStartTime: "12:00",
+          snacksStartTime: "17:00",
+          dinnerStartTime: "19:30",
           breakfastEndTime: "10:00",
           lunchEndTime: "15:30",
           snacksEndTime: "19:00",
           dinnerEndTime: "22:00"
         };
 
-        // Define outside-hostel window
-        let windowStart = dayjs(dDayjs).startOf("day");
-        let windowEnd = dayjs(dDayjs).endOf("day");
-        if (dateKey === startDayjs.format("YYYY-MM-DD")) windowStart = startDayjs;
-        if (dateKey === endDayjs.format("YYYY-MM-DD")) windowEnd = endDayjs;
-
         const mealDefs = [
-          { name: "breakfast", end: timings.breakfastEndTime, bool: "isBreakfastBooked" },
-          { name: "lunch", end: timings.lunchEndTime, bool: "isLunchBooked" },
-          { name: "snacks", end: timings.snacksEndTime, bool: "isSnacksBooked" },
-          { name: "dinner", end: timings.dinnerEndTime, bool: "isDinnerBooked" }
+          { name: "breakfast", start: timings.breakfastStartTime, bool: "isBreakfastBooked" },
+          { name: "lunch", start: timings.lunchStartTime, bool: "isLunchBooked" },
+          { name: "snacks", start: timings.snacksStartTime, bool: "isSnacksBooked" },
+          { name: "dinner", start: timings.dinnerStartTime, bool: "isDinnerBooked" }
         ];
 
         const setUpdates: any = {
@@ -1565,17 +1557,22 @@ class StudentLeaveService {
         let cancelledInDay = 0;
 
         for (const mDef of mealDefs) {
-          // USER REQUIREMENT: All meals should be skipped during leave time.
-          // We will mark all meals for the dates in range as SKIPPED.
-          setUpdates[mDef.bool] = false; // Legacy Boolean flag
-          setUpdates[`meals.${mDef.name}`] = {
-            status: MealBookingIntent.SKIPPED,
-            locked: true,
-            consumed: false,
-            consumedAt: null,
-            cancelSource: MealCancelSource.LEAVE,
-          };
-          cancelledInDay++;
+          const [h, m] = mDef.start.split(":").map(Number);
+          const mealStartMoment = dDayjs.clone().set("hour", h).set("minute", m).set("second", 0).set("millisecond", 0);
+
+          const isAtLeave = mealStartMoment.isAfter(startDayjs) && mealStartMoment.isBefore(endDayjs);
+
+          if (isAtLeave) {
+            setUpdates[mDef.bool] = false; // Legacy Boolean flag
+            setUpdates[`meals.${mDef.name}`] = {
+              status: MealBookingIntent.SKIPPED,
+              locked: true,
+              consumed: false,
+              consumedAt: null,
+              cancelSource: MealCancelSource.LEAVE,
+            };
+            cancelledInDay++;
+          }
         }
 
         if (cancelledInDay > 0) {
@@ -1596,7 +1593,6 @@ class StudentLeaveService {
 
       if (bulkOps.length > 0) {
         const result = await BookMeals.bulkWrite(bulkOps);
-        console.log(`[LeaveCancellation] Precision applied: ${result.upsertedCount} new, ${result.modifiedCount} updated.`);
       }
     } catch (error: any) {
       console.error(`[LeaveCancellation] Final Fix Failure: ${error.message}`);

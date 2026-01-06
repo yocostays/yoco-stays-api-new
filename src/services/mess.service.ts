@@ -1169,8 +1169,8 @@ class MessService {
       const bookingStatus = isFullDay
         ? MealBookingStatusTypes.CANCELLED
         : allMealsCancelled
-          ? MealBookingStatusTypes.CANCELLED
-          : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+        ? MealBookingStatusTypes.CANCELLED
+        : MealBookingStatusTypes.PARTIALLY_CANCELLED;
       // Update the booking with new meal status and booking status
       booking.set({
         ...bookingUpdateData,
@@ -1285,14 +1285,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                MealBookingStatusTypes.BOOKED,
-                MealBookingStatusTypes.PARTIALLY_BOOKED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ]
+                  MealBookingStatusTypes.BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ]
               : [
-                MealBookingStatusTypes.CANCELLED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ];
+                  MealBookingStatusTypes.CANCELLED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
@@ -2067,11 +2067,11 @@ class MessService {
         let currentMeals = existingBooking
           ? existingBooking.meals
           : {
-            breakfast: { status: MealBookingIntent.PENDING, locked: false },
-            lunch: { status: MealBookingIntent.PENDING, locked: false },
-            snacks: { status: MealBookingIntent.PENDING, locked: false },
-            dinner: { status: MealBookingIntent.PENDING, locked: false },
-          };
+              breakfast: { status: MealBookingIntent.PENDING, locked: false },
+              lunch: { status: MealBookingIntent.PENDING, locked: false },
+              snacks: { status: MealBookingIntent.PENDING, locked: false },
+              dinner: { status: MealBookingIntent.PENDING, locked: false },
+            };
 
         for (const meal of [
           "breakfast",
@@ -2338,30 +2338,37 @@ class MessService {
       dinner?: { start: string; end: string };
     } = {};
 
-    // Format meal timings for response with production defaults
+    // Raw timings for logic (24h format)
     const timings = (hostelMealTiming || {}) as any;
+    const rawMealTimings: Record<string, string> = {
+      breakfast: timings.breakfastStartTime || "07:00",
+      lunch: timings.lunchStartTime || "12:00",
+      snacks: timings.snacksStartTime || "17:00",
+      dinner: timings.dinnerStartTime || "19:30",
+    };
+
+    // Format meal timings for response
     mealTimings.breakfast = {
-      start: formatTime(timings.breakfastStartTime || "07:00"),
+      start: formatTime(rawMealTimings.breakfast),
       end: formatTime(timings.breakfastEndTime || "10:00"),
     };
     mealTimings.lunch = {
-      start: formatTime(timings.lunchStartTime || "12:00"),
+      start: formatTime(rawMealTimings.lunch),
       end: formatTime(timings.lunchEndTime || "15:30"),
     };
     mealTimings.snacks = {
-      start: formatTime(timings.snacksStartTime || "17:00"),
+      start: formatTime(rawMealTimings.snacks),
       end: formatTime(timings.snacksEndTime || "19:00"),
     };
     mealTimings.dinner = {
-      start: formatTime(timings.dinnerStartTime || "19:30"),
+      start: formatTime(rawMealTimings.dinner),
       end: formatTime(timings.dinnerEndTime || "22:00"),
     };
 
-
     // Precompute leave date ranges to avoid repeated timezone conversions
     const leaveRanges = leaves.map((leave) => ({
-      start: dayjs(leave.startDate).tz("Asia/Kolkata").startOf("day"),
-      end: dayjs(leave.endDate).tz("Asia/Kolkata").startOf("day"),
+      start: dayjs(leave.startDate).tz("Asia/Kolkata"),
+      end: dayjs(leave.endDate).tz("Asia/Kolkata"),
     }));
 
     const bookingMap = new Map<string, any>();
@@ -2379,10 +2386,30 @@ class MessService {
     const results: Array<{
       date: string;
       meals: {
-        breakfast: { state: string; locked: boolean; food: string | null; consumed: boolean };
-        lunch: { state: string; locked: boolean; food: string | null; consumed: boolean };
-        snacks: { state: string; locked: boolean; food: string | null; consumed: boolean };
-        dinner: { state: string; locked: boolean; food: string | null; consumed: boolean };
+        breakfast: {
+          state: string;
+          locked: boolean;
+          food: string | null;
+          consumed: boolean;
+        };
+        lunch: {
+          state: string;
+          locked: boolean;
+          food: string | null;
+          consumed: boolean;
+        };
+        snacks: {
+          state: string;
+          locked: boolean;
+          food: string | null;
+          consumed: boolean;
+        };
+        dinner: {
+          state: string;
+          locked: boolean;
+          food: string | null;
+          consumed: boolean;
+        };
       };
       createdAt?: Date | string;
     }> = [];
@@ -2435,14 +2462,6 @@ class MessService {
       const currentDate = startMoment.clone().add(i, "days");
       const dateKey = currentDate.format("YYYY-MM-DD");
 
-      const hasLeave = leaveRanges.some(({ start, end }) => {
-        const d = dayjs(dateKey).tz("Asia/Kolkata").startOf("day");
-        const isMatch =
-          (d.isAfter(start) || d.isSame(start, "day")) &&
-          (d.isBefore(end) || d.isSame(end, "day"));
-        return isMatch;
-      });
-
       const booking = bookingMap.get(dateKey);
       const menu = menuMap.get(dateKey);
 
@@ -2469,10 +2488,29 @@ class MessService {
         const foodExists = menu && menu[meal] && menu[meal].trim() !== "";
         let displayStatus = currentStatus;
 
+        // Granular Leave Check (Meal Start Time)
+        let isMealOnLeave = false;
+        const rawStartTime = rawMealTimings[meal];
+        if (rawStartTime && leaveRanges.length > 0) {
+          const [h, m] = rawStartTime.split(":").map(Number);
+          const mealStartMoment = currentDate
+            .clone()
+            .set("hour", h)
+            .set("minute", m)
+            .set("second", 0)
+            .set("millisecond", 0);
+
+          isMealOnLeave = leaveRanges.some(({ start, end }) => {
+            return (
+              mealStartMoment.isAfter(start) && mealStartMoment.isBefore(end)
+            );
+          });
+        }
+
         if (!foodExists) {
           displayStatus = MealBookingIntent.NOT_APPLICABLE;
         } else if (
-          hasLeave &&
+          isMealOnLeave &&
           (displayStatus === MealBookingIntent.PENDING ||
             displayStatus === MealBookingIntent.CONFIRMED)
         ) {
@@ -2987,6 +3025,46 @@ class MessService {
     try {
       const { hostelId, ...bookingCutoffs } = data;
       const userObjectId = new Types.ObjectId(userId);
+
+      // Verify 2-hour gap rule for Lunch, Snacks, Dinner
+      // Fetch meal timings for the hostel
+      const timings = await HostelMealTiming.findOne({
+        hostelId,
+        status: true,
+      }).lean();
+      if (!timings) {
+        throw new Error(
+          "Meal timings for this hostel must be set before configuring cutoffs."
+        );
+      }
+
+      const timeToMinutes = (time: string) => {
+        const [h, m] = time.split(":").map(Number);
+        return h * 60 + m;
+      };
+
+      const validateGap = (
+        mealName: string,
+        startTimeStr: string,
+        cutoff: { dayOffset: number; time: string }
+      ) => {
+        const startMins = timeToMinutes(startTimeStr);
+        const cutoffMins = cutoff.dayOffset * 1440 + timeToMinutes(cutoff.time);
+
+        // Gap = startMins - cutoffMins
+        if (startMins - cutoffMins < 120) {
+          throw new Error(
+            `${mealName} cutoff must be at least 2 hours before its start time (${startTimeStr}).`
+          );
+        }
+      };
+
+      if (bookingCutoffs.lunch)
+        validateGap("Lunch", timings.lunchStartTime, bookingCutoffs.lunch);
+      if (bookingCutoffs.snacks)
+        validateGap("Snacks", timings.snacksStartTime, bookingCutoffs.snacks);
+      if (bookingCutoffs.dinner)
+        validateGap("Dinner", timings.dinnerStartTime, bookingCutoffs.dinner);
 
       const result = await HostelPolicy.findOneAndUpdate(
         { hostelId },
