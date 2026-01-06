@@ -77,6 +77,13 @@ export const WardenStudentMonthlyViewSchema = z
                     .optional(),
             })
             .optional(),
+        pagination: z
+            .object({
+                page: z.number().int().min(1).default(1),
+                limit: z.number().int().min(1).max(50).default(10),
+            })
+            .optional()
+            .default({ page: 1, limit: 10 }),
     });
 
 export type WardenMealReportingInput = z.infer<typeof WardenMealReportingSchema>;

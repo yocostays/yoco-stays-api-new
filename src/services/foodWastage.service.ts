@@ -744,7 +744,7 @@ class FoodWastageService {
     const mealEndConfigs = [
       { key: "breakfast", label: "Breakfast", endTime: timings?.breakfastEndTime || "10:00" },
       { key: "lunch", label: "Lunch", endTime: timings?.lunchEndTime || "15:30" },
-      { key: "snacks", label: "Snacks", endTime: timings?.snacksEndTime || "19:00" },
+      { key: "snacks", label: "Hi-Tea", endTime: timings?.snacksEndTime || "19:00" },
       { key: "dinner", label: "Dinner", endTime: timings?.dinnerEndTime || "22:00" },
     ];
 

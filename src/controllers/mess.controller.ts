@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import dayjs from "dayjs";
 import { Request, Response } from "express";
 import MessService from "../services/mess.service";
 import StaffService from "../services/staff.service";
@@ -14,6 +15,7 @@ import { uploadFileToCloudStorage } from "../utils/awsUploadService";
 import { MESS_BULK_UPLOAD_FILES } from "../utils/s3bucketFolder";
 import {
   MealBookingStatusTypes,
+  MealBookingIntent,
   MealCountReportType,
   ReportDropDownTypes,
   SortingTypes,
@@ -252,14 +254,14 @@ class MessMenuController {
         const missingField = !hostelId
           ? "Hostel Id"
           : !date
-          ? "Date"
-          : !breakfast
-          ? "Breakfast"
-          : !lunch
-          ? "Lunch"
-          : !snacks
-          ? "Snacks"
-          : "Dinner";
+            ? "Date"
+            : !breakfast
+              ? "Breakfast"
+              : !lunch
+                ? "Lunch"
+                : !snacks
+                  ? "Snacks"
+                  : "Dinner";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -914,8 +916,8 @@ class MessMenuController {
         const missingField = !date
           ? "Date"
           : !studentId
-          ? "Student"
-          : "Meal Type";
+            ? "Student"
+            : "Meal Type";
         const errorResponse: HttpResponse = {
           statusCode: 400,
           message: `${missingField} is required`,
@@ -1342,7 +1344,8 @@ class MessMenuController {
       const validationError = sendZodError(res, parseResult);
       if (validationError) return validationError;
 
-      const { studentId, year, month, filters } = parseResult.data!;
+      const { studentId, year, month, filters, pagination } = parseResult.data!;
+      const { page, limit } = pagination;
 
       // Fetch Student to get Hostel ID
       const { student } = await getStudentById(studentId);
@@ -1410,50 +1413,18 @@ class MessMenuController {
         let createdTime: string | null = null;
 
         if (dayParams.createdAt) {
-          const createdAtDate = new Date(dayParams.createdAt);
-          const yearNum = createdAtDate.getFullYear();
-          const monthNum = String(createdAtDate.getMonth() + 1).padStart(
-            2,
-            "0"
-          );
-          const dayNum = String(createdAtDate.getDate()).padStart(2, "0");
-          createdDate = `${yearNum}-${monthNum}-${dayNum}`;
-
-          const hours = String(createdAtDate.getHours()).padStart(2, "0");
-          const minutes = String(createdAtDate.getMinutes()).padStart(2, "0");
-          createdTime = `${hours}:${minutes}`;
+          const createdAtIST = dayjs(dayParams.createdAt).tz("Asia/Kolkata");
+          createdDate = createdAtIST.format("YYYY-MM-DD");
+          createdTime = createdAtIST.format("hh:mm A");
         }
-
-        // Helper to determine derived status for filtering
-        const getDerivedStatus = (
-          mealData: { state: string; consumed: boolean } | undefined
-        ): WardenMealStatus => {
-          if (!mealData) return "NOT_BOOKED";
-          const { state, consumed } = mealData;
-          if (state === "NOT_APPLICABLE") return "NOT_BOOKED";
-
-          if (state === "CONFIRMED") {
-            if (consumed) return "CONSUMED";
-            const bookingDate = new Date(dayParams.date);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            if (bookingDate < today) return "MISSED";
-            return "CONFIRMED";
-          }
-          if (state === "SKIPPED") {
-            if (consumed) return "SKIPPED_CONSUMED";
-            return "SKIPPED";
-          }
-          return (state || "NOT_BOOKED") as WardenMealStatus;
-        };
 
         const buildMealResponse = (
           mealData: { state: string; consumed: boolean } | undefined
         ): IMealWardenView => {
           return {
-            state: mealData?.state || "NOT_APPLICABLE",
+            state: mealData?.state || "NOT_BOOKED",
             consumed: mealData?.consumed || false,
-            _status: getDerivedStatus(mealData), // filtering
+            _status: this.getDerivedStatus(mealData, dayParams.date),
           };
         };
 
@@ -1482,9 +1453,15 @@ class MessMenuController {
         });
       }
 
+      const totalCount = transformedResults.length;
+
+      // Apply Pagination
+      const skip = (page - 1) * limit;
+      const paginatedResults = transformedResults.slice(skip, skip + limit);
+
       // Cleanup temporary _status field before sending
-      const finalResults = transformedResults.map((day) => {
-        const cleanedMeals: any = {}; 
+      const finalResults = paginatedResults.map((day) => {
+        const cleanedMeals: any = {};
         (Object.keys(day.meals) as Array<keyof typeof day.meals>).forEach(
           (key) => {
             const { _status, ...rest } = day.meals[key];
@@ -1506,9 +1483,32 @@ class MessMenuController {
           uniqueId: student.uniqueId,
           hostelId: student.hostelId,
         },
-      });
+      }, 200, totalCount);
     }
   );
+
+  // Helper to determine derived status for filtering
+  private getDerivedStatus(
+    mealData: { state: string; consumed: boolean } | undefined,
+    date: string
+  ): any {
+    if (!mealData) return "NOT_BOOKED";
+    const { state, consumed } = mealData;
+    if (state === MealBookingIntent.NOT_APPLICABLE) return "NOT_BOOKED";
+
+    if (state === MealBookingIntent.CONFIRMED) {
+      if (consumed) return "CONSUMED";
+      const bookingDate = dayjs(date).tz("Asia/Kolkata").startOf("day");
+      const today = dayjs().tz("Asia/Kolkata").startOf("day");
+      if (bookingDate.isBefore(today)) return "MISSED";
+      return "CONFIRMED";
+    }
+    if (state === MealBookingIntent.SKIPPED) {
+      if (consumed) return "SKIPPED_CONSUMED";
+      return "SKIPPED";
+    }
+    return (state || "NOT_BOOKED");
+  }
 }
 
 export default new MessMenuController();
