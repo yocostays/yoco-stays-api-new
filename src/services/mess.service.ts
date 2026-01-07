@@ -1169,8 +1169,8 @@ class MessService {
       const bookingStatus = isFullDay
         ? MealBookingStatusTypes.CANCELLED
         : allMealsCancelled
-        ? MealBookingStatusTypes.CANCELLED
-        : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+          ? MealBookingStatusTypes.CANCELLED
+          : MealBookingStatusTypes.PARTIALLY_CANCELLED;
       // Update the booking with new meal status and booking status
       booking.set({
         ...bookingUpdateData,
@@ -1285,14 +1285,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                  MealBookingStatusTypes.BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ]
+                MealBookingStatusTypes.BOOKED,
+                MealBookingStatusTypes.PARTIALLY_BOOKED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ]
               : [
-                  MealBookingStatusTypes.CANCELLED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ];
+                MealBookingStatusTypes.CANCELLED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
@@ -2067,11 +2067,11 @@ class MessService {
         let currentMeals = existingBooking
           ? existingBooking.meals
           : {
-              breakfast: { status: MealBookingIntent.PENDING, locked: false },
-              lunch: { status: MealBookingIntent.PENDING, locked: false },
-              snacks: { status: MealBookingIntent.PENDING, locked: false },
-              dinner: { status: MealBookingIntent.PENDING, locked: false },
-            };
+            breakfast: { status: MealBookingIntent.PENDING, locked: false },
+            lunch: { status: MealBookingIntent.PENDING, locked: false },
+            snacks: { status: MealBookingIntent.PENDING, locked: false },
+            dinner: { status: MealBookingIntent.PENDING, locked: false },
+          };
 
         for (const meal of [
           "breakfast",
@@ -3138,7 +3138,7 @@ class MessService {
         filters = {},
         search = {},
         pagination = { page: 1, limit: 10 },
-        sort = { field: "uniqueId", order: "asc" },
+        sort = { field: "name", order: "asc" },
       } = params;
 
       const hostelId = new Types.ObjectId(hostelIdStr);
@@ -3152,16 +3152,15 @@ class MessService {
       const page = pagination?.page || 1;
       const limit = Math.min(pagination?.limit || 10, 50);
 
-      const allowedSortFields = [
-        "uniqueId",
-        "name",
-        "floorNumber",
-        "roomNumber",
-      ];
-      const sortField = allowedSortFields.includes(sort?.field)
-        ? sort.field
-        : "uniqueId";
-      const sortOrder = sort?.order === "desc" ? -1 : 1;
+      const sortFieldMapping: Record<string, string> = {
+        uniqueId: "student.uniqueId",
+        name: "student.name",
+        floorNumber: "floorNumber",
+        roomNumber: "roomNumber",
+      };
+
+      const sortField = sortFieldMapping[sort?.field] || "student.name";
+      const sortOrder = sort?.order === "asc" ? -1 : 1;
 
       const pipeline: PipelineStage[] = [];
 
