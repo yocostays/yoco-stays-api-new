@@ -1477,13 +1477,14 @@ class MessMenuController {
 
       return sendSuccess(res, FETCH_SUCCESS, {
         results: finalResults,
+        totalCount,
         student: {
           _id: student._id,
           name: student.name,
           uniqueId: student.uniqueId,
           hostelId: student.hostelId,
         },
-      }, 200, totalCount);
+      }, 200);
     }
   );
 
