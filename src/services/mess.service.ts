@@ -3186,7 +3186,7 @@ class MessService {
       pipeline.push({ $unwind: "$student" });
 
       // STAGE 3: Student Status Filtering
-      const targetStatus = filters?.studentStatus || "ACTIVE";
+      const targetStatus = filters?.studentStatus;
       if (targetStatus === "ACTIVE") {
         pipeline.push({
           $match: {

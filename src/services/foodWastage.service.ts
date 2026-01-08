@@ -549,21 +549,29 @@ class FoodWastageService {
 
       if (!foodWastage) {
         return {
-          breakfast: { amount: 0, unit: UnitTypes.G },
-          lunch: { amount: 0, unit: UnitTypes.G },
-          snacks: { amount: 0, unit: UnitTypes.G },
-          dinner: { amount: 0, unit: UnitTypes.G },
-          totalWastage: 0,
+          breakfast: { amount: "", unit: UnitTypes.G },
+          lunch: { amount: "", unit: UnitTypes.G },
+          snacks: { amount: "", unit: UnitTypes.G },
+          dinner: { amount: "", unit: UnitTypes.G },
+          totalWastage: "",
           totalUnit: UnitTypes.G,
         };
       }
 
       return {
-        breakfast: foodWastage.breakfast || { amount: 0, unit: UnitTypes.G },
-        lunch: foodWastage.lunch || { amount: 0, unit: UnitTypes.G },
-        snacks: foodWastage.snacks || { amount: 0, unit: UnitTypes.G },
-        dinner: foodWastage.dinner || { amount: 0, unit: UnitTypes.G },
-        totalWastage: foodWastage.totalWastage,
+        breakfast: foodWastage.breakfast
+          ? { amount: foodWastage.breakfast.amount, unit: foodWastage.breakfast.unit }
+          : { amount: "", unit: UnitTypes.G },
+        lunch: foodWastage.lunch
+          ? { amount: foodWastage.lunch.amount, unit: foodWastage.lunch.unit }
+          : { amount: "", unit: UnitTypes.G },
+        snacks: foodWastage.snacks
+          ? { amount: foodWastage.snacks.amount, unit: foodWastage.snacks.unit }
+          : { amount: "", unit: UnitTypes.G },
+        dinner: foodWastage.dinner
+          ? { amount: foodWastage.dinner.amount, unit: foodWastage.dinner.unit }
+          : { amount: "", unit: UnitTypes.G },
+        totalWastage: foodWastage.totalWastage || "",
         totalUnit: foodWastage.totalUnit,
         foodWastageNumber: foodWastage.foodWastageNumber,
       };
