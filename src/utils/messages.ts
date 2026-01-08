@@ -12,6 +12,7 @@ export const SUCCESS_MESSAGES = {
   REFRESH_TOKEN: "Your session has been updated with a new refresh token.",
   GENERATE_OTP: "Your OTP has been generated and sent.",
   VERIFY_OTP: "Verification successful, your OTP has been validated!",
+  QR_GENERATED_SUCCESSFULLY: "QR code generated successfully.",
   NOTIFICATION_SEND_SUCCESS: (field: string) => {
     return `Push notification for ${field} send successfully.`;
   },
@@ -76,6 +77,7 @@ export const ERROR_MESSAGES = {
     `Bed count (${field}) doesn't match bed type '${field2}' (should be ${field3})`,
   USER_STILL_ACTIVE:
     "Cannot mark student as left while they are still active in the hostel.",
+  REQUIRED_FIELD: (field: string) => `${field} is required.`,
 };
 
 export const VALIDATION_MESSAGES = {

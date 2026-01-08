@@ -362,3 +362,9 @@ export enum PushNotificationTypes {
   AUTO = "auto",
   MANUAL = "manual",
 }
+
+export enum QRPurpose {
+  MESS_ATTENDANCE = "MESS_ATTENDANCE",
+  LEAVE = "LEAVE",
+  HOSTEL_ATTENDANCE = "HOSTEL_ATTENDANCE",
+}
