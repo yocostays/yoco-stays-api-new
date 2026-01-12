@@ -2599,7 +2599,6 @@ class MessService {
           const activeStudents = await User.find({
             hostelId,
             status: true,
-            isLeft: false,
           })
             .select("_id")
             .lean();
@@ -3270,6 +3269,98 @@ class MessService {
         },
       });
 
+      // STAGE 5.1: Calculate Derived Status for Filtering
+      // We calculate a status that matches the filter options: "Confirmed", "Cancelled", "Missed", "Cancelled-Consumed"
+      const currentDayStart = dayjs().tz("Asia/Kolkata").startOf("day");
+      const isPastDate = targetDateIST.isBefore(currentDayStart);
+
+      const deriveStatusExpression = (statusField: string, consumedField: string) => {
+        return {
+          $switch: {
+            branches: [
+              // Case 1: Cancelled/Skipped & Consumed
+              {
+                case: {
+                  $and: [
+                    {
+                      $or: [
+                        { $eq: [statusField, MealBookingIntent.CANCELLED] },
+                        { $eq: [statusField, MealBookingIntent.SKIPPED] },
+                      ],
+                    },
+                    { $eq: [consumedField, true] },
+                  ],
+                },
+                then: "Cancelled-Consumed",
+              },
+              // Case 2: Cancelled/Skipped
+              {
+                case: {
+                  $or: [
+                    { $eq: [statusField, MealBookingIntent.CANCELLED] },
+                    { $eq: [statusField, MealBookingIntent.SKIPPED] },
+                  ],
+                },
+                then: "Cancelled",
+              },
+              // Case 3: Missed (Confirmed + Not Consumed) - User requested strict definition
+              {
+                case: {
+                  $and: [
+                    { $eq: [statusField, MealBookingIntent.CONFIRMED] },
+                    { $eq: [consumedField, false] },
+                    isPastDate,
+                  ],
+                },
+                then: "Missed",
+              },
+              // Case 4: Confirmed (Everything else Confirmed)
+              {
+                case: { $eq: [statusField, MealBookingIntent.CONFIRMED] },
+                then: "Confirmed",
+              },
+            ],
+            default: "Other", // PENDING, SKIPPED, or N/A
+          },
+        };
+      };
+
+      pipeline.push({
+        $addFields: {
+          "meals.breakfast.derivedStatus": deriveStatusExpression(
+            "$meals.breakfast.status",
+            "$meals.breakfast.consumed"
+          ),
+          "meals.lunch.derivedStatus": deriveStatusExpression(
+            "$meals.lunch.status",
+            "$meals.lunch.consumed"
+          ),
+          "meals.snacks.derivedStatus": deriveStatusExpression(
+            "$meals.snacks.status",
+            "$meals.snacks.consumed"
+          ),
+          "meals.dinner.derivedStatus": deriveStatusExpression(
+            "$meals.dinner.status",
+            "$meals.dinner.consumed"
+          ),
+        },
+      });
+
+      // Meal Status Filtering
+      if (filters?.mealStatus && filters.mealStatus.length > 0) {
+        pipeline.push({
+          $match: {
+            $or: [
+              { "meals.breakfast.derivedStatus": { $in: filters.mealStatus } },
+              { "meals.lunch.derivedStatus": { $in: filters.mealStatus } },
+              { "meals.snacks.derivedStatus": { $in: filters.mealStatus } },
+              { "meals.dinner.derivedStatus": { $in: filters.mealStatus } },
+            ],
+          },
+        });
+      }
+
+
       // STAGE 6: Room/Floor & Meal Status Filtering
       if (filters?.floor !== undefined) {
         pipeline.push({ $match: { floorNumber: filters.floor } });
@@ -3297,6 +3388,7 @@ class MessService {
         $project: {
           _id: 0,
           studentId: "$studentId",
+          image: "$student.image",
           uniqueId: "$student.uniqueId",
           name: "$student.name",
           phone: { $toString: "$student.phone" },

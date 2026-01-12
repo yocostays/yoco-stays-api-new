@@ -65,13 +65,11 @@ export const WardenStudentMonthlyViewSchema = z
                 mealStatus: z
                     .array(
                         z.enum([
-                            "CONSUMED",
-                            "MISSED",
-                            "CONFIRMED",
-                            "SKIPPED_CONSUMED",
-                            "SKIPPED",
-                            "NOT_BOOKED",
-                            "PENDING"
+                            "PENDING",
+                            "Confirmed",
+                            "Cancelled",
+                            "Missed",
+                            "Cancelled-Consumed"
                         ])
                     )
                     .optional(),

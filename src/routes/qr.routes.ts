@@ -5,6 +5,7 @@ import { validateZod } from "../middlewares/validateZod";
 import { validateWardenHostelAccess } from "../middlewares/validateWardenHostelAccess";
 import { validateStudent } from "../middlewares/validateStudent";
 import { GenerateQRSchema, ScanQRSchema, GetActiveQRsSchema } from "../utils/validators/qr.validator";
+import { checkActiveStudent } from "../middlewares/checkActiveStudent";
 
 const { generateQR, scanQR, getActiveQR } = QRController;
 
@@ -34,6 +35,7 @@ qrRouter.post(
   "/user/scan",
   validateToken,
   validateStudent,
+  checkActiveStudent,
   validateZod(ScanQRSchema),
   scanQR
 );

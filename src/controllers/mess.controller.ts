@@ -38,6 +38,14 @@ import {
   SetMealTimingSchema,
   GetMealTimingSchema,
 } from "../utils/validators/mealTiming.validator";
+
+type WardenMealStatus =
+  | "Confirmed"
+  | "Cancelled"
+  | "Missed"
+  | "Cancelled-Consumed"
+  | "PENDING"
+  | "NOT_BOOKED";
 import { studentMealBookingRateLimiter } from "../middlewares/studentRateLimiter";
 import { sendSuccess, sendError, sendZodError } from "../utils/responseHelpers";
 import { getValidatedStudent } from "../utils/entityHelpers";
@@ -1377,15 +1385,6 @@ class MessMenuController {
         month
       );
 
-      type WardenMealStatus =
-        | "CONSUMED"
-        | "MISSED"
-        | "CONFIRMED"
-        | "SKIPPED_CONSUMED"
-        | "SKIPPED"
-        | "NOT_BOOKED"
-        | "PENDING";
-
       interface IMealWardenView {
         state: string;
         consumed: boolean;
@@ -1447,9 +1446,10 @@ class MessMenuController {
 
         transformedResults = transformedResults.filter((day) => {
           const meals = day.meals;
-          return Object.values(meals).some(
-            (m) => m._status && validStatuses.has(m._status)
+          const hasMatch = Object.values(meals).some(
+            (m) => m._status && validStatuses.has(m._status as any)
           );
+          return hasMatch;
         });
       }
 
@@ -1475,16 +1475,21 @@ class MessMenuController {
         };
       });
 
-      return sendSuccess(res, FETCH_SUCCESS, {
-        results: finalResults,
-        totalCount,
-        student: {
-          _id: student._id,
-          name: student.name,
-          uniqueId: student.uniqueId,
-          hostelId: student.hostelId,
+      return sendSuccess(
+        res,
+        FETCH_SUCCESS,
+        {
+          results: finalResults,
+          totalCount,
+          student: {
+            _id: student._id,
+            name: student.name,
+            uniqueId: student.uniqueId,
+            hostelId: student.hostelId,
+          },
         },
-      }, 200);
+        200
+      );
     }
   );
 
@@ -1492,23 +1497,34 @@ class MessMenuController {
   private getDerivedStatus(
     mealData: { state: string; consumed: boolean } | undefined,
     date: string
-  ): any {
+  ): WardenMealStatus {
     if (!mealData) return "NOT_BOOKED";
     const { state, consumed } = mealData;
     if (state === MealBookingIntent.NOT_APPLICABLE) return "NOT_BOOKED";
 
+    // 1. Cancelled or Skipped
+    if (
+      state === MealBookingIntent.CANCELLED ||
+      state === MealBookingIntent.SKIPPED
+    ) {
+      if (consumed) return "Cancelled-Consumed";
+      return "Cancelled";
+    }
+
+    // 2. Confirmed
     if (state === MealBookingIntent.CONFIRMED) {
-      if (consumed) return "CONSUMED";
-      const bookingDate = dayjs(date).tz("Asia/Kolkata").startOf("day");
-      const today = dayjs().tz("Asia/Kolkata").startOf("day");
-      if (bookingDate.isBefore(today)) return "MISSED";
-      return "CONFIRMED";
+      if (!consumed) {
+        const bookingDate = dayjs(date).tz("Asia/Kolkata").startOf("day");
+        const today = dayjs().tz("Asia/Kolkata").startOf("day"); // Past date check for Missed
+        if (bookingDate.isBefore(today)) return "Missed";
+      }
+      return "Confirmed";
     }
-    if (state === MealBookingIntent.SKIPPED) {
-      if (consumed) return "SKIPPED_CONSUMED";
-      return "SKIPPED";
-    }
-    return (state || "NOT_BOOKED");
+
+    // 3. Pending
+    if (state === MealBookingIntent.PENDING) return "PENDING";
+
+    return "NOT_BOOKED";
   }
 }
 

@@ -50,6 +50,7 @@ import {
 import { WardenMealReportingSchema } from "../utils/validators/wardenMealReporting.validator";
 import { studentMealBookingRateLimiter } from "../middlewares/studentRateLimiter";
 import { uploadFileWithMulter } from "../utils/configureMulterStorage";
+import { checkActiveStudent } from "../middlewares/checkActiveStudent";
 
 const messMenuRouter = Router();
 
@@ -95,6 +96,7 @@ messMenuRouter.post("/booked/manual", validateToken, manuallyBookMeal);
 messMenuRouter.post(
   "/v1/book-meals",
   validateToken,
+  checkActiveStudent,
   studentMealBookingRateLimiter,
   bookMealByStudent
 );

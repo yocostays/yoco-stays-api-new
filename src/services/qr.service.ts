@@ -235,11 +235,12 @@ class QRService {
         [`meals.${bookMealField}.consumed`]: false,
       },
       {
-        $set: {
-          [`meals.${bookMealField}.consumed`]: true,
-          [`meals.${bookMealField}.locked`]: true,
-          [`meals.${bookMealField}.consumedAt`]: nowIST.toDate(),
-        },
+        //remove this after testing
+        // $set: {
+        //   [`meals.${bookMealField}.consumed`]: true,
+        //   [`meals.${bookMealField}.locked`]: true,
+        //   [`meals.${bookMealField}.consumedAt`]: nowIST.toDate(),
+        // },
       },
       { new: true }
     );
@@ -269,9 +270,10 @@ class QRService {
         );
       }
 
-      if (mealState?.consumed) {
-        throw new ConflictError("Meal already consumed");
-      }
+      //remove this after testing
+      // if (mealState?.consumed) {
+      //   throw new ConflictError("Meal already consumed");
+      // }
 
       throw new ConflictError(
         `Unable to process attendance. Ensure your ${activeMeal} is valid.`
