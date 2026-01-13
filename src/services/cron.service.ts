@@ -15,7 +15,10 @@ dayjs.extend(timezone);
 const MEALS = ["breakfast", "lunch", "snacks", "dinner"] as const;
 type MealType = (typeof MEALS)[number];
 
-const DEFAULT_BOOKING_CUTOFFS: Record<MealType, { dayOffset: number; time: string }> = {
+const DEFAULT_BOOKING_CUTOFFS: Record<
+  MealType,
+  { dayOffset: number; time: string }
+> = {
   breakfast: { dayOffset: -1, time: "21:00" },
   lunch: { dayOffset: 0, time: "08:00" },
   snacks: { dayOffset: 0, time: "13:00" },
@@ -53,7 +56,10 @@ class CronService {
         try {
           await this.syncMealStatuses();
         } catch (error: any) {
-          console.error("[CronService] Meal Status Sync Failed:", error.message);
+          console.error(
+            "[CronService] Meal Status Sync Failed:",
+            error.message
+          );
         }
       },
       { timezone: "Asia/Kolkata" }
@@ -70,7 +76,9 @@ class CronService {
   private async syncMealStatuses(): Promise<void> {
     try {
       const nowIST = dayjs().tz("Asia/Kolkata");
-      console.log(`[StatusSync] Starting sync at ${nowIST.format("YYYY-MM-DD HH:mm")} IST`);
+      console.log(
+        `[StatusSync] Starting sync at ${nowIST.format("YYYY-MM-DD HH:mm")} IST`
+      );
 
       const [allHostels, allPolicies, allTimings] = await Promise.all([
         Hostel.find({ status: true }).select("_id").lean(),
@@ -78,8 +86,12 @@ class CronService {
         HostelMealTiming.find({ status: true }).lean(),
       ]);
 
-      const policiesMap = new Map(allPolicies.map((p) => [p.hostelId.toString(), p]));
-      const timingsMap = new Map(allTimings.map((t) => [t.hostelId.toString(), t]));
+      const policiesMap = new Map(
+        allPolicies.map((p) => [p.hostelId.toString(), p])
+      );
+      const timingsMap = new Map(
+        allTimings.map((t) => [t.hostelId.toString(), t])
+      );
 
       const datesToSync = [
         nowIST.subtract(1, "day").startOf("day"),
@@ -99,14 +111,15 @@ class CronService {
 
           for (const meal of MEALS) {
             const cutoff = this.getBookingCutoff(targetDate, meal, policy);
-            const mealEnd = this.getMealEndTime(targetDate, meal, timing);
+            // const mealEnd = this.getMealEndTime(targetDate, meal, timing);
 
             const isLockPassed = nowIST.isAfter(cutoff);
-            const isConsumePassed = nowIST.isAfter(mealEnd);
+            // const isConsumePassed = nowIST.isAfter(mealEnd);
 
             const updateSet: any = {};
             const filter: any = { hostelId: hostel._id, date: dateUTC };
 
+            /** Commenting out consumption marking for now
             if (isConsumePassed) {
               // RULE: Only CONFIRMED meals are marked consumed
               // PENDING meals are just locked
@@ -116,9 +129,13 @@ class CronService {
               updateSet[`meals.${meal}.consumed`] = true;
               updateSet[`meals.${meal}.consumedAt`] = mealEnd.toDate(); // Fixed semantics
               updateSet[`meals.${meal}.locked`] = true;
-            } else if (isLockPassed) {
+            } else
+           */
+            if (isLockPassed) {
               filter[`meals.${meal}.locked`] = { $ne: true }; // Idempotency
-              filter[`meals.${meal}.status`] = { $in: [MealBookingIntent.CONFIRMED, MealBookingIntent.PENDING] };
+              filter[`meals.${meal}.status`] = {
+                $in: [MealBookingIntent.CONFIRMED, MealBookingIntent.PENDING],
+              };
 
               updateSet[`meals.${meal}.locked`] = true;
             }
@@ -133,14 +150,20 @@ class CronService {
       }
 
       const modifiedCount = await this.executeBulkInChunks(bulkOps);
-      console.log(`[StatusSync] Success. Synchronized ${modifiedCount} records.`);
+      console.log(
+        `[StatusSync] Success. Synchronized ${modifiedCount} records.`
+      );
     } catch (error: any) {
       console.error("[StatusSync] Fatal Error:", error.message);
       throw error;
     }
   }
 
-  private getBookingCutoff(targetDate: Dayjs, meal: MealType, policy: any): Dayjs {
+  private getBookingCutoff(
+    targetDate: Dayjs,
+    meal: MealType,
+    policy: any
+  ): Dayjs {
     let dOffset = DEFAULT_BOOKING_CUTOFFS[meal].dayOffset;
     let timeStr = DEFAULT_BOOKING_CUTOFFS[meal].time;
 
@@ -150,10 +173,20 @@ class CronService {
     }
 
     const [h, m] = timeStr.split(":").map(Number);
-    return targetDate.clone().add(dOffset, "day").hour(h).minute(m).second(0).millisecond(0);
+    return targetDate
+      .clone()
+      .add(dOffset, "day")
+      .hour(h)
+      .minute(m)
+      .second(0)
+      .millisecond(0);
   }
 
-  private getMealEndTime(targetDate: Dayjs, meal: MealType, timing: any): Dayjs {
+  private getMealEndTime(
+    targetDate: Dayjs,
+    meal: MealType,
+    timing: any
+  ): Dayjs {
     let timeStr = DEFAULT_CONSUMPTION_END[meal];
     const field = `${meal}EndTime`;
     if (timing && timing[field]) {
@@ -164,7 +197,10 @@ class CronService {
     return targetDate.clone().hour(h).minute(m).second(0).millisecond(0);
   }
 
-  private async executeBulkInChunks(ops: any[], chunkSize = 500): Promise<number> {
+  private async executeBulkInChunks(
+    ops: any[],
+    chunkSize = 500
+  ): Promise<number> {
     let totalModified = 0;
     for (let i = 0; i < ops.length; i += chunkSize) {
       const chunk = ops.slice(i, i + chunkSize);

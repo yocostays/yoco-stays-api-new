@@ -1169,8 +1169,8 @@ class MessService {
       const bookingStatus = isFullDay
         ? MealBookingStatusTypes.CANCELLED
         : allMealsCancelled
-          ? MealBookingStatusTypes.CANCELLED
-          : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+        ? MealBookingStatusTypes.CANCELLED
+        : MealBookingStatusTypes.PARTIALLY_CANCELLED;
       // Update the booking with new meal status and booking status
       booking.set({
         ...bookingUpdateData,
@@ -1285,14 +1285,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                MealBookingStatusTypes.BOOKED,
-                MealBookingStatusTypes.PARTIALLY_BOOKED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ]
+                  MealBookingStatusTypes.BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ]
               : [
-                MealBookingStatusTypes.CANCELLED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ];
+                  MealBookingStatusTypes.CANCELLED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
@@ -2067,11 +2067,11 @@ class MessService {
         let currentMeals = existingBooking
           ? existingBooking.meals
           : {
-            breakfast: { status: MealBookingIntent.PENDING, locked: false },
-            lunch: { status: MealBookingIntent.PENDING, locked: false },
-            snacks: { status: MealBookingIntent.PENDING, locked: false },
-            dinner: { status: MealBookingIntent.PENDING, locked: false },
-          };
+              breakfast: { status: MealBookingIntent.PENDING, locked: false },
+              lunch: { status: MealBookingIntent.PENDING, locked: false },
+              snacks: { status: MealBookingIntent.PENDING, locked: false },
+              dinner: { status: MealBookingIntent.PENDING, locked: false },
+            };
 
         for (const meal of [
           "breakfast",
@@ -2207,6 +2207,61 @@ class MessService {
       }
 
       await session.commitTransaction();
+
+      // Send summary notification if any meals were confirmed
+      if (confirmed > 0) {
+        try {
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await fetchPlayerNotificationConfig(
+              studentId,
+              TemplateTypes.MEAL_BOOKED
+            );
+
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              TemplateTypes.MEAL_BOOKED
+            );
+
+          const finalNoticeCreated =
+            isPlayedNoticeCreated && isHostelNoticeCreated;
+          const notificationLog = [log, hostelLogs].filter(Boolean);
+
+          // Simplified message: No dates as per user request
+          const description =
+            template?.description || "Your meal booking has been confirmed.";
+
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+
+          if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title || "Meal Booking",
+              description,
+              TemplateTypes.MEAL_BOOKED
+            );
+          }
+        } catch (notificationError: any) {
+          console.error(
+            `[Bulk Meal Notification Failed] StudentId: ${studentId}, Error: ${notificationError.message}`
+          );
+        }
+      }
+
       return { results, summary: { confirmed, rejected, cancelled } };
     } catch (error) {
       await session.abortTransaction();
@@ -2596,13 +2651,17 @@ class MessService {
           }
 
           // Fetch Active Students
-          const activeStudents = await User.find({
+          const activeStudents: any[] = await User.find({
             hostelId,
             status: true,
           })
             .select("_id")
             .lean();
+
           const studentIds = activeStudents.map((u) => u._id);
+          const studentsMap = new Map(
+            activeStudents.map((u) => [u._id.toString(), u])
+          );
 
           if (studentIds.length === 0) {
             await session.abortTransaction();
@@ -2638,8 +2697,9 @@ class MessService {
             existingBookingsMap.set(b.studentId.toString(), b)
           );
 
-          // Prepare Bulk Operations
+          // Prepare Bulk Operations and collect students to notify
           const bulkOps: any[] = [];
+          const studentsToNotify: string[] = [];
 
           for (const studentIdObj of studentIds) {
             const studentId = studentIdObj.toString();
@@ -2681,6 +2741,7 @@ class MessService {
                   },
                 });
                 stats.recordsUpdated++;
+                studentsToNotify.push(studentId);
               } else {
                 stats.skippedExisting++;
               }
@@ -2725,7 +2786,6 @@ class MessService {
             }
 
             // Prepare Insert
-
             bulkOps.push({
               insertOne: {
                 document: {
@@ -2742,6 +2802,9 @@ class MessService {
               },
             });
             stats.recordsCreated++;
+            if (!hasLeave) {
+              studentsToNotify.push(studentId);
+            }
           }
 
           if (bulkOps.length > 0) {
@@ -2750,6 +2813,70 @@ class MessService {
 
           await session.commitTransaction();
           stats.hostelsProcessed++;
+
+          // Send notifications after transaction commit
+          if (studentsToNotify.length > 0) {
+            // Process notifications in a non-blocking way
+            // Using a separate try-catch to ensure one failure doesn't stop others
+            for (const studentId of studentsToNotify) {
+              try {
+                const {
+                  playedIds,
+                  template,
+                  student,
+                  isPlayedNoticeCreated,
+                  log,
+                } = await fetchPlayerNotificationConfig(
+                  studentId,
+                  TemplateTypes.MEAL_BOOKED
+                );
+
+                const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+                  await getStudentAllocatedHostelDetails(
+                    student?._id,
+                    student?.hostelId,
+                    TemplateTypes.MEAL_BOOKED
+                  );
+
+                const finalNoticeCreated =
+                  isPlayedNoticeCreated && isHostelNoticeCreated;
+                const notificationLog = [log, hostelLogs].filter(Boolean);
+
+                const description =
+                  template?.description ||
+                  "Your meal has been successfully booked.";
+
+                await Notice.create({
+                  userId: student?._id,
+                  hostelId: student?.hostelId,
+                  floorNumber: hostelDetail?.floorNumber,
+                  bedType: hostelDetail?.bedType,
+                  roomNumber: hostelDetail?.roomNumber,
+                  noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+                  pushNotificationTypes: PushNotificationTypes.AUTO,
+                  templateId: template?._id,
+                  templateSendMessage: description,
+                  isNoticeCreated: finalNoticeCreated,
+                  notificationLog,
+                  createdAt: getCurrentISTTime(),
+                });
+
+                if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+                  await sendPushNotificationToUser(
+                    playedIds,
+                    template?.title || "Meal Booking",
+                    description,
+                    TemplateTypes.MEAL_BOOKED
+                  );
+                }
+              } catch (notifyErr: any) {
+                // Silently log and continue to next student
+                console.error(
+                  `[AutoBooking Notification Failed] StudentId: ${studentId}, Error: ${notifyErr.message}`
+                );
+              }
+            }
+          }
         } catch (err: any) {
           await session.abortTransaction();
           console.error(
@@ -3274,7 +3401,10 @@ class MessService {
       const currentDayStart = dayjs().tz("Asia/Kolkata").startOf("day");
       const isPastDate = targetDateIST.isBefore(currentDayStart);
 
-      const deriveStatusExpression = (statusField: string, consumedField: string) => {
+      const deriveStatusExpression = (
+        statusField: string,
+        consumedField: string
+      ) => {
         return {
           $switch: {
             branches: [
@@ -3359,7 +3489,6 @@ class MessService {
           },
         });
       }
-
 
       // STAGE 6: Room/Floor & Meal Status Filtering
       if (filters?.floor !== undefined) {
