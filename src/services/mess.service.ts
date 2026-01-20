@@ -3264,7 +3264,7 @@ class MessService {
         filters = {},
         search = {},
         pagination = { page: 1, limit: 10 },
-        sort = { field: "name", order: "asc" },
+        sort = { field: "name", order: "desc" },
       } = params;
 
       const hostelId = new Types.ObjectId(hostelIdStr);
