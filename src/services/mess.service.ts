@@ -1169,8 +1169,8 @@ class MessService {
       const bookingStatus = isFullDay
         ? MealBookingStatusTypes.CANCELLED
         : allMealsCancelled
-        ? MealBookingStatusTypes.CANCELLED
-        : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+          ? MealBookingStatusTypes.CANCELLED
+          : MealBookingStatusTypes.PARTIALLY_CANCELLED;
       // Update the booking with new meal status and booking status
       booking.set({
         ...bookingUpdateData,
@@ -1285,14 +1285,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                  MealBookingStatusTypes.BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_BOOKED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ]
+                MealBookingStatusTypes.BOOKED,
+                MealBookingStatusTypes.PARTIALLY_BOOKED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ]
               : [
-                  MealBookingStatusTypes.CANCELLED,
-                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
-                ];
+                MealBookingStatusTypes.CANCELLED,
+                MealBookingStatusTypes.PARTIALLY_CANCELLED,
+              ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
@@ -2067,11 +2067,11 @@ class MessService {
         let currentMeals = existingBooking
           ? existingBooking.meals
           : {
-              breakfast: { status: MealBookingIntent.PENDING, locked: false },
-              lunch: { status: MealBookingIntent.PENDING, locked: false },
-              snacks: { status: MealBookingIntent.PENDING, locked: false },
-              dinner: { status: MealBookingIntent.PENDING, locked: false },
-            };
+            breakfast: { status: MealBookingIntent.PENDING, locked: false },
+            lunch: { status: MealBookingIntent.PENDING, locked: false },
+            snacks: { status: MealBookingIntent.PENDING, locked: false },
+            dinner: { status: MealBookingIntent.PENDING, locked: false },
+          };
 
         for (const meal of [
           "breakfast",
@@ -3499,20 +3499,50 @@ class MessService {
       }
 
       // STAGE 7: Text Search
+      let finalSort: any = { [sortField]: sortOrder };
+
       if (search?.text && search.text.trim()) {
+        const searchText = search.text.trim();
         const regex = new RegExp(
-          search.text.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
           "i"
         );
+
         pipeline.push({
           $match: {
             $or: [{ "student.uniqueId": regex }, { "student.name": regex }],
           },
         });
+
+        // Add relevance score: 1 if name starts with search text, 0 if not
+        pipeline.push({
+          $addFields: {
+            searchRelevance: {
+              $cond: [
+                {
+                  $eq: [
+                    {
+                      $indexOfCP: [
+                        { $toLower: "$student.name" },
+                        searchText.toLowerCase(),
+                      ],
+                    },
+                    0,
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        });
+
+        // Prioritize relevance score in sort
+        finalSort = { searchRelevance: -1, ...finalSort };
       }
 
       // STAGE 8: Sorting & Final Projection
-      pipeline.push({ $sort: { [sortField]: sortOrder } });
+      pipeline.push({ $sort: finalSort });
       pipeline.push({
         $project: {
           _id: 0,
@@ -3535,8 +3565,18 @@ class MessService {
         limit
       );
 
+      // Sign images for the current page
+      const studentsWithSignedUrls = await Promise.all(
+        data.map(async (student: any) => {
+          if (student.image) {
+            student.image = await getSignedUrl(student.image);
+          }
+          return student;
+        })
+      );
+
       return {
-        students: data,
+        students: studentsWithSignedUrls,
         pagination: {
           page,
           limit,
