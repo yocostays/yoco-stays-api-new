@@ -212,7 +212,7 @@ class MessService {
         },
         {
           $project: {
-            _id: 0,
+            _id: 1,
             uniqueId: 1,
             foodWastageNumber: {
               $ifNull: ["$wastage.foodWastageNumber", null],
@@ -3545,7 +3545,7 @@ class MessService {
       pipeline.push({ $sort: finalSort });
       pipeline.push({
         $project: {
-          _id: 0,
+          _id: 1,
           studentId: "$studentId",
           image: "$student.image",
           uniqueId: "$student.uniqueId",
