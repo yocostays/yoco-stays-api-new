@@ -42,11 +42,29 @@ export class ForbiddenError extends AppError {
 }
 
 /**
+ * 404 Not Found Error
+ */
+export class NotFoundError extends AppError {
+  constructor(message: string = "Not Found") {
+    super(message, 404);
+  }
+}
+
+/**
  * 409 Conflict Error
  */
 export class ConflictError extends AppError {
   constructor(message: string = "Conflict") {
     super(message, 409);
+  }
+}
+
+/**
+ * 429 Too Many Requests Error
+ */
+export class TooManyRequestsError extends AppError {
+  constructor(message: string = "Too Many Requests") {
+    super(message, 429);
   }
 }
 

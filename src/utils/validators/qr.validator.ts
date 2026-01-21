@@ -39,5 +39,5 @@ export const MealMapping: Record<string, string> = {
   breakfast: "breakfast",
   lunch: "lunch",
   dinner: "dinner",
-  "hi-tea": "snacks",
+  snacks: "snacks",
 };

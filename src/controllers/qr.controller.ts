@@ -4,7 +4,7 @@ import { sendSuccess } from "../utils/responseHelpers";
 import { SUCCESS_MESSAGES, VALIDATION_MESSAGES } from "../utils/messages";
 import { asyncHandler } from "../utils/asyncHandler";
 import User from "../models/user.model";
-import { BadRequestError } from "../utils/errors";
+import { BadRequestError, NotFoundError } from "../utils/errors";
 import { ERROR_MESSAGES } from "../utils/messages";
 
 const { QR_GENERATED_SUCCESSFULLY, FETCH_SUCCESS } = SUCCESS_MESSAGES;
@@ -63,7 +63,7 @@ class QRController {
     const student = await User.findById(studentId).select("hostelId");
 
     if (!student || !student.hostelId) {
-      throw new BadRequestError(RECORD_NOT_FOUND("Student or assigned hostel"));
+      throw new NotFoundError(RECORD_NOT_FOUND("Student or assigned hostel"));
     }
     const studentHostelId = student.hostelId.toString();
 

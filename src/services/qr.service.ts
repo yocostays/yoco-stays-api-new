@@ -13,8 +13,11 @@ import {
   ConflictError,
   UnauthorizedError,
   InternalServerError,
+  NotFoundError,
+  TooManyRequestsError,
 } from "../utils/errors";
 import { ERROR_MESSAGES } from "../utils/messages";
+import { sendError } from "../utils/responseHelpers";
 
 // Simple in-memory cache for timings: Map<hostelId, { timings: any, expiresAt: number }>
 // TTL: 10 minutes
@@ -68,7 +71,7 @@ class QRService {
     });
 
     if (generationCount >= 5) {
-      throw new BadRequestError(
+      throw new TooManyRequestsError(
         "Regeneration limit reached. Please wait before generating a new QR code."
       );
     }
@@ -255,7 +258,7 @@ class QRService {
         .lean();
 
       if (!booking) {
-        throw new BadRequestError(
+        throw new NotFoundError(
           `No booking record found for ${activeMeal} today`
         );
       }
