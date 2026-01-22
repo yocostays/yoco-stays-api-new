@@ -161,7 +161,7 @@ class QRService {
     // Hard cutoff: No scans allowed after 23:30
     if (currentMinutes > HARD_CUTOFF_MINUTES) {
       throw new ConflictError(
-        "Mess sessions are closed for today (Cutoff 23:30 reached)"
+        "Mess sessions are closed for today (Cutoff 11:30PM reached)"
       );
     }
 
@@ -265,6 +265,13 @@ class QRService {
 
       const mealState = (booking.meals as any)[bookMealField];
 
+      // Check if meal field exists in booking (defensive check for partial records)
+      if (!mealState) {
+        throw new BadRequestError(
+          `${activeMeal} is not available in your booking. Please book this meal first.`
+        );
+      }
+
       // If status is PENDING, explicitly reject
       if (mealState?.status === MealBookingIntent.PENDING) {
         throw new ForbiddenError(
@@ -273,11 +280,13 @@ class QRService {
       }
 
       if (mealState?.consumed) {
-        throw new ConflictError("Meal already consumed");
+        throw new ConflictError(
+          `Attendance Rejected: Your ${activeMeal} has already been marked as consumed.`
+        );
       }
 
       throw new ConflictError(
-        `Unable to process attendance. Ensure your ${activeMeal} is valid.`
+        `Attendance Rejected: Something went wrong while verifying your ${activeMeal}. Please contact the mess warden.`
       );
     }
 

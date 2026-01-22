@@ -696,9 +696,6 @@ class UserService {
       delete safeData.phone;
       delete safeData.image;
 
-      if (safeData.testPassword === undefined) {
-        safeData.testPassword = studentExists.testPassword ?? null;
-      }
       // Merge safe fields
       payload = { ...payload, ...safeData };
 
@@ -1970,7 +1967,6 @@ class UserService {
               },
               name: name.toUpperCase(),
               password: hashedPassword,
-              testPassword: plainPassword,
               phone,
               dob: dobExcel,
               gender,

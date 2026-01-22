@@ -79,7 +79,6 @@ export interface IUser extends Document {
   name: string;
   image: string;
   password: string;
-  testPassword?: string;
   phone: number;
   email: string | null;
   dob: Date | null;
@@ -317,11 +316,6 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
       default: null,
     },
     password: {
-      type: String,
-      required: false,
-      default: null,
-    },
-     testPassword: {
       type: String,
       required: false,
       default: null,
