@@ -2828,14 +2828,14 @@ class MessService {
                   log,
                 } = await fetchPlayerNotificationConfig(
                   studentId,
-                  TemplateTypes.MEAL_BOOKED
+                  TemplateTypes.MEAL_AUTO_BOOKED
                 );
 
                 const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
                   await getStudentAllocatedHostelDetails(
                     student?._id,
                     student?.hostelId,
-                    TemplateTypes.MEAL_BOOKED
+                    TemplateTypes.MEAL_AUTO_BOOKED
                   );
 
                 const finalNoticeCreated =
@@ -2844,7 +2844,7 @@ class MessService {
 
                 const description =
                   template?.description ||
-                  "Your meal has been successfully booked.";
+                  "Your meals for tomorrow have been booked successfully.";
 
                 await Notice.create({
                   userId: student?._id,
@@ -2864,9 +2864,9 @@ class MessService {
                 if (finalNoticeCreated && playedIds && playedIds.length > 0) {
                   await sendPushNotificationToUser(
                     playedIds,
-                    template?.title || "Meal Booking",
+                    template?.title || "Mess",
                     description,
-                    TemplateTypes.MEAL_BOOKED
+                    TemplateTypes.MEAL_AUTO_BOOKED
                   );
                 }
               } catch (notifyErr: any) {

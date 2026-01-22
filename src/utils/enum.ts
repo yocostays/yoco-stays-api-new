@@ -339,6 +339,7 @@ export enum TemplateTypes {
   //LINK: Meal
   MEAL_BOOKED = "meal booked",
   MEAL_CANCELLED = "meal cancelled",
+  MEAL_AUTO_BOOKED = "meals autobooked",
 
   //LINK: Complaint
   COMPLAINT_SUBMITTED = "complaint submitted",
