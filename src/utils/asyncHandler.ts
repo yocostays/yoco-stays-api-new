@@ -14,7 +14,8 @@ export const asyncHandler = (
             return await fn(req, res, next);
         } catch (error: any) {
             const errorMessage = error.message ?? SERVER_ERROR;
-            return sendError(res, errorMessage, 400);
+            const statusCode = error.statusCode ?? 500;
+            return sendError(res, errorMessage, statusCode);
         }
     };
 };

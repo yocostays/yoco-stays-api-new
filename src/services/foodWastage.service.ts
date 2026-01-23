@@ -1,9 +1,12 @@
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 dayjs.extend(utc);
+dayjs.extend(timezone);
 import FoodWastage from "../models/foodWastage.model";
 import Hostel from "../models/hostel.model";
 import MessMenu from "../models/messMenu.model";
+import HostelMealTiming from "../models/hostelMealTiming.model";
 import BulkUpload from "../models/bulkUpload.model";
 import { pushToS3Bucket } from "../utils/awsUploadService";
 import { FOOD_WASTAGE_BULK_UPLOAD_FILES } from "../utils/s3bucketFolder";
@@ -36,14 +39,32 @@ class FoodWastageService {
     createdById: string
   ): Promise<string> => {
     try {
-      const inputDate = dayjs(date).startOf("day");
-      const today = dayjs().startOf("day");
+      const inputDate = dayjs(date).tz("Asia/Kolkata").startOf("day");
+      const today = dayjs().tz("Asia/Kolkata").startOf("day");
 
       if (inputDate.isAfter(today)) {
         throw new Error("Cannot record food wastage for future dates");
       }
 
       const normalizedDate = dayjs.utc(date).startOf("day").toDate();
+
+      // Parallel Data Fetching
+      const [timings, hostelExists, existingRecord] = await Promise.all([
+        HostelMealTiming.findOne({ hostelId, status: true }).lean(),
+        Hostel.exists({ _id: hostelId }),
+        FoodWastage.findOne({
+          hostelId,
+          date: {
+            $gte: dayjs.utc(normalizedDate).subtract(6, "hours").toDate(),
+            $lte: dayjs.utc(normalizedDate).add(18, "hours").toDate(),
+          },
+        }).lean()
+      ]);
+
+      if (!hostelExists) throw new Error(RECORD_NOT_FOUND("Hostel"));
+
+      // Validate meal end times (Internal Method) using fetched timings
+      this.checkMealEndTimeInPlace(timings, date, { breakfast, lunch, snacks, dinner });
 
       // Validate mess menu using single date helper
       const mealIds = await this.validateMessMenuSingleDate(
@@ -57,38 +78,25 @@ class FoodWastageService {
         }
       );
 
-      // Ensure hostel exists
-      if (!(await Hostel.exists({ _id: hostelId })))
-        throw new Error(RECORD_NOT_FOUND("Hostel"));
-
-      // Check for existing record to perform Upsert (shifted range to catch IST-midnight stored as 18:30 UTC)
-      const existingRecord = await FoodWastage.findOne({
-        hostelId,
-        date: {
-          $gte: dayjs.utc(normalizedDate).subtract(6, "hours").toDate(),
-          $lte: dayjs.utc(normalizedDate).add(18, "hours").toDate(),
-        },
-      });
-
       const finalBreakfast = breakfast
         ? { ...breakfast, unit: UnitTypes.G }
         : existingRecord
-          ? existingRecord.breakfast
+          ? (existingRecord as any).breakfast
           : null;
       const finalLunch = lunch
         ? { ...lunch, unit: UnitTypes.G }
         : existingRecord
-          ? existingRecord.lunch
+          ? (existingRecord as any).lunch
           : null;
       const finalSnacks = snacks
         ? { ...snacks, unit: UnitTypes.G }
         : existingRecord
-          ? existingRecord.snacks
+          ? (existingRecord as any).snacks
           : null;
       const finalDinner = dinner
         ? { ...dinner, unit: UnitTypes.G }
         : existingRecord
-          ? existingRecord.dinner
+          ? (existingRecord as any).dinner
           : null;
 
       // Aggregate meal wastage strictly in grams from final state
@@ -262,17 +270,29 @@ class FoodWastageService {
     updatedById: string
   ): Promise<string> => {
     try {
-      // Check if FoodWastage entry exists
-      if (!(await FoodWastage.findById(id)))
-        throw new Error(RECORD_NOT_FOUND("FoodWastage"));
-
       const normalizedDate = dayjs(date).startOf("day").toDate();
+      const today = dayjs().tz("Asia/Kolkata").startOf("day");
 
-      // Strictly block future dates using Day.js
-      const today = dayjs().startOf("day");
       if (dayjs(normalizedDate).isAfter(today)) {
         throw new Error("Cannot record food wastage for future dates");
       }
+
+      // Parallel Data Fetching
+      const [timings, hostelExists, dateExists] = await Promise.all([
+        HostelMealTiming.findOne({ hostelId, status: true }).lean(),
+        Hostel.exists({ _id: hostelId }),
+        FoodWastage.exists({
+          _id: { $ne: id },
+          hostelId,
+          date: normalizedDate,
+        })
+      ]);
+
+      if (!hostelExists) throw new Error(RECORD_NOT_FOUND("Hostel"));
+      if (dateExists) throw new Error(SAME_DATE);
+
+      // Validate meal end times (Internal Method) using fetched timings
+      this.checkMealEndTimeInPlace(timings, date, { breakfast, lunch, snacks, dinner });
 
       // Validate mess menu using single date helper
       const mealIds = await this.validateMessMenuSingleDate(
@@ -285,18 +305,6 @@ class FoodWastageService {
           dinner,
         }
       );
-
-      // Check for overlapping date
-      const dateExists = await FoodWastage.exists({
-        _id: { $ne: id },
-        hostelId,
-        date: normalizedDate,
-      });
-      if (dateExists) throw new Error(SAME_DATE);
-
-      // Ensure hostel exists
-      if (!(await Hostel.exists({ _id: hostelId })))
-        throw new Error(RECORD_NOT_FOUND("Hostel"));
 
       // Aggregate meal wastage strictly in grams
       const totalAmount =
@@ -541,21 +549,29 @@ class FoodWastageService {
 
       if (!foodWastage) {
         return {
-          breakfast: { amount: 0, unit: UnitTypes.G },
-          lunch: { amount: 0, unit: UnitTypes.G },
-          snacks: { amount: 0, unit: UnitTypes.G },
-          dinner: { amount: 0, unit: UnitTypes.G },
-          totalWastage: 0,
+          breakfast: { amount: "", unit: UnitTypes.G },
+          lunch: { amount: "", unit: UnitTypes.G },
+          snacks: { amount: "", unit: UnitTypes.G },
+          dinner: { amount: "", unit: UnitTypes.G },
+          totalWastage: "",
           totalUnit: UnitTypes.G,
         };
       }
 
       return {
-        breakfast: foodWastage.breakfast || { amount: 0, unit: UnitTypes.G },
-        lunch: foodWastage.lunch || { amount: 0, unit: UnitTypes.G },
-        snacks: foodWastage.snacks || { amount: 0, unit: UnitTypes.G },
-        dinner: foodWastage.dinner || { amount: 0, unit: UnitTypes.G },
-        totalWastage: foodWastage.totalWastage,
+        breakfast: foodWastage.breakfast
+          ? { amount: foodWastage.breakfast.amount, unit: foodWastage.breakfast.unit }
+          : { amount: "", unit: UnitTypes.G },
+        lunch: foodWastage.lunch
+          ? { amount: foodWastage.lunch.amount, unit: foodWastage.lunch.unit }
+          : { amount: "", unit: UnitTypes.G },
+        snacks: foodWastage.snacks
+          ? { amount: foodWastage.snacks.amount, unit: foodWastage.snacks.unit }
+          : { amount: "", unit: UnitTypes.G },
+        dinner: foodWastage.dinner
+          ? { amount: foodWastage.dinner.amount, unit: foodWastage.dinner.unit }
+          : { amount: "", unit: UnitTypes.G },
+        totalWastage: foodWastage.totalWastage || "",
         totalUnit: foodWastage.totalUnit,
         foodWastageNumber: foodWastage.foodWastageNumber,
       };
@@ -687,6 +703,72 @@ class FoodWastageService {
     }
 
     return [checkMessMenu._id];
+  }
+
+  //SECTION - Validate Meal End Time
+  private async validateMealEndTime(
+    hostelId: string,
+    date: Date | string,
+    meals: {
+      breakfast?: any;
+      lunch?: any;
+      snacks?: any;
+      dinner?: any;
+    }
+  ): Promise<void> {
+    const timings = await HostelMealTiming.findOne({ hostelId, status: true }).lean();
+    this.checkMealEndTimeInPlace(timings, date, meals);
+  }
+
+  // Internal method to perform check using pre-fetched timings
+  private checkMealEndTimeInPlace(
+    timings: any,
+    date: Date | string,
+    meals: {
+      breakfast?: any;
+      lunch?: any;
+      snacks?: any;
+      dinner?: any;
+    }
+  ): void {
+    const inputDate = dayjs(date).tz("Asia/Kolkata").startOf("day");
+    const today = dayjs().tz("Asia/Kolkata").startOf("day");
+
+    // Only validate for "today"
+    if (!inputDate.isSame(today)) {
+      return;
+    }
+
+    const currentTime = dayjs().tz("Asia/Kolkata");
+
+    const mealConfigs = [
+      { key: "breakfast", label: "Breakfast", endTime: timings?.breakfastStartTime || "07:00", duration: 180 }, // Default 7am-10am
+      { key: "lunch", label: "Lunch", endTime: timings?.lunchStartTime || "12:00", duration: 210 }, // Default 12pm-3:30pm
+      { key: "snacks", label: "Snacks", endTime: timings?.snacksStartTime || "17:00", duration: 120 }, // Default 5pm-7pm
+      { key: "dinner", label: "Dinner", endTime: timings?.dinnerStartTime || "19:30", duration: 150 }, // Default 7:30pm-10pm
+    ];
+
+    // Correction: Use EndTime fields if available in the model
+    const mealEndConfigs = [
+      { key: "breakfast", label: "Breakfast", endTime: timings?.breakfastEndTime || "10:00" },
+      { key: "lunch", label: "Lunch", endTime: timings?.lunchEndTime || "15:30" },
+      { key: "snacks", label: "Hi-Tea", endTime: timings?.snacksEndTime || "19:00" },
+      { key: "dinner", label: "Dinner", endTime: timings?.dinnerEndTime || "22:00" },
+    ];
+
+    for (const config of mealEndConfigs) {
+      if (meals[config.key as keyof typeof meals]) {
+        const [hour, minute] = config.endTime.split(":").map(Number);
+        const mealEndMoment = today.clone().set("hour", hour).set("minute", minute).set("second", 0).set("millisecond", 0);
+
+        if (currentTime.isBefore(mealEndMoment)) {
+          const displayTime = dayjs(mealEndMoment).format("hh:mm A");
+          throw new Error(
+            `${config.label} wastage can only be recorded after the meal service ends at ${displayTime}.`
+          );
+        }
+      }
+    }
   }
 }
 

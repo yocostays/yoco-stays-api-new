@@ -18,6 +18,8 @@ import {
 } from "../utils/s3bucketFolder";
 import { OtpChannel, OtpPurpose } from "../utils/validators/otp.schema";
 import OtpLogicService from "../services/otp.service";
+import { asyncHandler } from "../utils/asyncHandler";
+import { sendSuccess, sendError } from "../utils/responseHelpers";
 
 const {
   staffLoginWithUserNameAndPwd,
@@ -34,7 +36,7 @@ const {
 } = AuthService;
 
 const { getStudentByUniqueId } = UserService;
-const { getStaffById, staffByEmailId } = StaffService;
+const { getStaffById, staffByEmailId, getStaffByIdentifier } = StaffService;
 const {
   FETCH_SUCCESS,
   GENERATE_OTP,
@@ -53,7 +55,7 @@ class AuthController {
   //SECTION Controller method to handle staff login
   async staffLoginWithUserNameAndPwd(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { userName, password } = req.body;
@@ -70,7 +72,7 @@ class AuthController {
       // Call the service to create a new user
       const { staff, token } = await staffLoginWithUserNameAndPwd(
         userName,
-        password
+        password,
       );
 
       const result = {
@@ -104,7 +106,7 @@ class AuthController {
   //SECTION: Controller method to handle student login
   async studentLoginWithIdAndPwd(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { uniqueId, password, rememberMe, loginType, subscriptionId } =
@@ -125,7 +127,7 @@ class AuthController {
         password,
         rememberMe,
         loginType,
-        subscriptionId
+        subscriptionId,
       );
 
       const result = {
@@ -157,7 +159,7 @@ class AuthController {
   //SECTION: Controller method to handle logout in complete project
   async logoutFromApplication(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const createdById = req.body._valid._id;
@@ -184,7 +186,7 @@ class AuthController {
 
   async generateOtpForApp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { identifier, channel, purpose } = req.body;
@@ -202,7 +204,7 @@ class AuthController {
           userByPhone._id?.toString() ?? null,
           identifier,
           OtpChannel.SMS,
-          purpose
+          purpose,
         );
 
         return res.status(200).json({
@@ -226,7 +228,7 @@ class AuthController {
           userByEmail._id?.toString() ?? null,
           identifier,
           OtpChannel.EMAIL,
-          purpose
+          purpose,
         );
 
         return res.status(200).json({
@@ -251,7 +253,7 @@ class AuthController {
   //SECTION: Controller method to handle reset paswwrod for user in app
   async resetStudentPasswordInApp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { identifier, otp, password, purpose } = req.body;
@@ -297,7 +299,7 @@ class AuthController {
   //SECTION: Controller method to handle upload file in aws
   async uploadImageOrAudio(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const file = req.file;
@@ -334,7 +336,7 @@ class AuthController {
   //SECTION: Controller method to handle refresh token on warden hostel change
   async generateWardenRefreshToken(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -371,68 +373,62 @@ class AuthController {
     }
   }
 
-  //SECTION: Controller method to handle generate code for password reset of staff
-  async generateOtpForwardenPanel(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const { email } = req.body;
+  //SECTION: Controller method to handle generate OTP for warden password reset
+  generateOtpForwardenPanel = asyncHandler(
+    async (req: Request, res: Response) => {
+      const { identifier, channel, purpose } = req.body;
 
-      //NOTE - get user by email
-      const { staff } = await staffByEmailId(email);
+      // Get staff by identifier (email or phone)
+      const { staff } = await getStaffByIdentifier(identifier);
 
-      // Call the service to generate otp
-      const { otp } = await generateOtp(staff._id, staff.phone, OtpChannel.SMS);
+      // Determine target for OTP based on channel
+      const otpTarget =
+        channel === OtpChannel.EMAIL ? staff.email : String(staff.phone);
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: GENERATE_OTP,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      // Generate OTP with specified channel
+      await generateOtp(
+        staff._id.toString(),
+        otpTarget,
+        channel,
+        purpose || OtpPurpose.RESET_PASSWORD,
+      );
 
-  //SECTION: Controller method to handle reset paswwrod for staff
-  async resetStaffPassword(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const { email, otp, password } = req.body;
+      return sendSuccess(
+        res,
+        `OTP sent successfully to ${channel === OtpChannel.EMAIL ? "email" : "phone"}`,
+      );
+    },
+  );
 
-      //NOTE - get staff by email
-      const { staff } = await staffByEmailId(email);
+  //SECTION: Controller method to handle reset password for staff/warden
+  resetStaffPassword = asyncHandler(async (req: Request, res: Response) => {
+    const { identifier, otp, password, purpose } = req.body;
 
-      // Call the service to reset User password
-      await resetStaffPassword(staff._id, password, otp);
+    // Get staff by identifier (email or phone)
+    const { staff, isEmail } = await getStaffByIdentifier(identifier);
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: PASSWORD_RESET_SUCCESS,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+    // Determine which field to verify OTP against
+    const otpIdentifier = isEmail
+      ? String(staff.email).trim()
+      : String(staff.phone);
+
+    // Verify OTP
+    await OtpLogicService.verifyOtp({
+      identifier: otpIdentifier,
+      purpose: purpose || OtpPurpose.RESET_PASSWORD,
+      otp: String(otp),
+    });
+
+    // Reset password
+    await resetStaffPassword(staff._id.toString(), password, otp);
+
+    return sendSuccess(res, PASSWORD_RESET_SUCCESS);
+  });
 
   //SECTION: Controller method to handle download Sample Bulk Upload File
   async downloadSampleBulkUploadFile(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const createdById = req.body._valid._id;
@@ -471,7 +467,7 @@ class AuthController {
   //SECTION: Controller method to generate Otp User Sign Up
   async generateOtpUserSignUp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid?._id;
@@ -508,7 +504,7 @@ class AuthController {
   //SECTION: Controller method to verify otp for user sign up
   async verifyOtpUserSignUp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid?._id;

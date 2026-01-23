@@ -339,6 +339,7 @@ export enum TemplateTypes {
   //LINK: Meal
   MEAL_BOOKED = "meal booked",
   MEAL_CANCELLED = "meal cancelled",
+  MEAL_AUTO_BOOKED = "meals autobooked",
 
   //LINK: Complaint
   COMPLAINT_SUBMITTED = "complaint submitted",
@@ -361,4 +362,10 @@ export enum NoticeTypes {
 export enum PushNotificationTypes {
   AUTO = "auto",
   MANUAL = "manual",
+}
+
+export enum QRPurpose {
+  MESS_ATTENDANCE = "MESS_ATTENDANCE",
+  LEAVE = "LEAVE",
+  HOSTEL_ATTENDANCE = "HOSTEL_ATTENDANCE",
 }

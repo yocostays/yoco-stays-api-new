@@ -37,7 +37,7 @@ class AuthService {
   //SECTION: Method to login a staff
   staffLoginWithUserNameAndPwd = async (
     userName: string,
-    password: string
+    password: string,
   ): Promise<{ staff: any; token: string }> => {
     try {
       // Step 1: Get staff based on the user name
@@ -64,7 +64,7 @@ class AuthService {
           hostelId: staff?.hostelIds[0] ?? null,
           accountType: AccountType.STAFF,
         },
-        { expiresIn: "48h" }
+        { expiresIn: "48h" },
       );
 
       // Step 4: Generate expiry time using the utility function
@@ -101,7 +101,7 @@ class AuthService {
     password: string,
     rememberMe: boolean,
     loginType: LoginType,
-    subscriptionId: string
+    subscriptionId: string,
   ): Promise<{ student: any; token: string }> => {
     try {
       // Step 1: Get student based on the user name
@@ -117,7 +117,7 @@ class AuthService {
       // Step 2: Compare the password with the hashed password
       const isPasswordValid = await comparePassword(
         password,
-        student?.password
+        student?.password,
       );
       if (!isPasswordValid) throw new Error(INVALID_PASSWORD);
 
@@ -132,7 +132,7 @@ class AuthService {
           role: student.roleId,
           accountType: AccountType.STUDENT,
         },
-        { expiresIn: tokenExpiry }
+        { expiresIn: tokenExpiry },
       );
 
       // Step 5: Generate expiry time using the utility function
@@ -186,13 +186,13 @@ class AuthService {
       const currentDate = new Date();
       currentDate.setHours(
         currentDate.getHours() + 5,
-        currentDate.getMinutes() + 30
+        currentDate.getMinutes() + 30,
       );
 
       //get token by userId
       const token = await Token.findOneAndUpdate(
         { userId: new mongoose.Types.ObjectId(userId) },
-        { $set: { expiryTime: currentDate } }
+        { $set: { expiryTime: currentDate } },
       );
 
       if (!token) {
@@ -244,7 +244,7 @@ class AuthService {
     userId: string | null | undefined,
     identifier: string | null | undefined,
     channel: OtpChannel,
-    purpose: OtpPurpose = OtpPurpose.LOGIN
+    purpose: OtpPurpose = OtpPurpose.LOGIN,
   ): Promise<{ otp: string }> => {
     try {
       if (!identifier || String(identifier).trim().length === 0) {
@@ -267,7 +267,7 @@ class AuthService {
   //SECTION: Method to reset student password
   resetStudentPassword = async (
     users: any,
-    newPassword: string
+    newPassword: string,
   ): Promise<string> => {
     try {
       const hashedPassword = await hashPassword(newPassword);
@@ -275,7 +275,7 @@ class AuthService {
       //reset user password
       const reset = await User.findOneAndUpdate(
         { _id: new mongoose.Types.ObjectId(users?._id) },
-        { $set: { password: hashedPassword, updatedAt: getCurrentISTTime() } }
+        { $set: { password: hashedPassword, updatedAt: getCurrentISTTime() } },
       );
 
       if (!reset) throw new Error(PASSWROD_RESET_ISSUES);
@@ -290,26 +290,20 @@ class AuthService {
   resetStaffPassword = async (
     userId: string,
     password: string,
-    otp: number // kept as number in signature but handled as string
+    otp: number, // kept as number in signature but handled as string
   ): Promise<string> => {
     try {
-      // Find staff to get phone/email
+      // Find staff to confirm exists
       const staff = await Staff.findById(userId);
       if (!staff) throw new Error("Staff not found");
 
-      await OtpLogicService.verifyOtp({
-        identifier: String(staff.phone), // Cast number to string
-        purpose: OtpPurpose.RESET_PASSWORD,
-        otp: String(otp),
-      });
-
-      // Step 2: Hash the password
+      // Hash the password
       const hashedPassword = await hashPassword(password);
 
-      //reset user password
+      // Reset user password
       const reset = await Staff.findOneAndUpdate(
         { _id: new mongoose.Types.ObjectId(userId) },
-        { $set: { password: hashedPassword, updatedAt: getCurrentISTTime() } }
+        { $set: { password: hashedPassword, updatedAt: getCurrentISTTime() } },
       );
 
       if (!reset) throw new Error(PASSWROD_RESET_ISSUES);
@@ -339,7 +333,7 @@ class AuthService {
   //SECTION: Method to generate warden Refresh Token
   wardenRefreshToken = async (
     staff: any,
-    hostelId: string
+    hostelId: string,
   ): Promise<{ token: string }> => {
     try {
       const tokenString = generateToken(
@@ -350,7 +344,7 @@ class AuthService {
           hostelId: hostelId,
           accountType: AccountType.STAFF,
         },
-        { expiresIn: "48h" }
+        { expiresIn: "48h" },
       );
 
       // Step 4: Generate expiry time using the utility function
@@ -383,17 +377,17 @@ class AuthService {
 
   //SECTION: Method to download Sample Bulk Upload File
   downloadSampleBulkUploadFile = async (
-    type: BulkUploadTypes
+    type: BulkUploadTypes,
   ): Promise<{ url: string }> => {
     try {
       const originalFile =
         type === BulkUploadTypes.MEAL
           ? process.env.MESS_BULK_UPLOAD_SAMPLE_FILE
           : type === BulkUploadTypes.FOOD_WASTAGE
-          ? process.env.FOOD_WASTAGE_BULK_UPLOAD_SAMPLE_FILE
-          : type === BulkUploadTypes.HOSTEL_ROOM_MAP
-          ? process.env.HOSTEL_ROOM_MAP_BULK_UPLOAD_SAMPLE_FILES
-          : process.env.STUDENT_BULK_UPLOAD_SAMPLE_FILE;
+            ? process.env.FOOD_WASTAGE_BULK_UPLOAD_SAMPLE_FILE
+            : type === BulkUploadTypes.HOSTEL_ROOM_MAP
+              ? process.env.HOSTEL_ROOM_MAP_BULK_UPLOAD_SAMPLE_FILES
+              : process.env.STUDENT_BULK_UPLOAD_SAMPLE_FILE;
 
       const url = await getSignedUrl(originalFile as string);
 
@@ -424,7 +418,7 @@ class AuthService {
   //SECTION -  verify Otp on User SignUp
   verifyOtpUserSignUp = async (
     phone: string,
-    otp: number
+    otp: number,
   ): Promise<{ isVerified: boolean }> => {
     try {
       await OtpLogicService.verifyOtp({

@@ -92,7 +92,6 @@ class MessService {
         throw new Error(START_DATE_ERROR);
       }
 
-
       const existingHostel = await Hostel.exists({ _id: hostelId });
       if (!existingHostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
 
@@ -163,7 +162,10 @@ class MessService {
 
       //  Date Range Handling (Shifted by -6h to capture IST-Midnight stored as 18:30 UTC)
       if (startDate && endDate) {
-        const start = dayjs(startDate).startOf("day").subtract(6, "hours").toDate();
+        const start = dayjs(startDate)
+          .startOf("day")
+          .subtract(6, "hours")
+          .toDate();
         const end = dayjs(endDate).endOf("day").subtract(6, "hours").toDate();
 
         if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
@@ -210,9 +212,11 @@ class MessService {
         },
         {
           $project: {
-            _id: 0,
+            _id: 1,
             uniqueId: 1,
-            foodWastageNumber: { $ifNull: ["$wastage.foodWastageNumber", null] },
+            foodWastageNumber: {
+              $ifNull: ["$wastage.foodWastageNumber", null],
+            },
             date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
             wastage: {
               $cond: {
@@ -2203,6 +2207,61 @@ class MessService {
       }
 
       await session.commitTransaction();
+
+      // Send summary notification if any meals were confirmed
+      if (confirmed > 0) {
+        try {
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await fetchPlayerNotificationConfig(
+              studentId,
+              TemplateTypes.MEAL_BOOKED
+            );
+
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              TemplateTypes.MEAL_BOOKED
+            );
+
+          const finalNoticeCreated =
+            isPlayedNoticeCreated && isHostelNoticeCreated;
+          const notificationLog = [log, hostelLogs].filter(Boolean);
+
+          // Simplified message: No dates as per user request
+          const description =
+            template?.description || "Your meal booking has been confirmed.";
+
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+
+          if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title || "Meal Booking",
+              description,
+              TemplateTypes.MEAL_BOOKED
+            );
+          }
+        } catch (notificationError: any) {
+          console.error(
+            `[Bulk Meal Notification Failed] StudentId: ${studentId}, Error: ${notificationError.message}`
+          );
+        }
+      }
+
       return { results, summary: { confirmed, rejected, cancelled } };
     } catch (error) {
       await session.abortTransaction();
@@ -2248,6 +2307,7 @@ class MessService {
           consumed: boolean;
         };
       };
+      createdAt?: Date | string;
     }>;
     mealTimings?: {
       breakfast?: { start: string; end: string };
@@ -2326,63 +2386,44 @@ class MessService {
         : `${displayHour}${period}`;
     };
 
-    // Format meal timings for response with production defaults
-    // const timings = (hostelMealTiming || {}) as any;
-    // const mealTimings: any = {
-    //   breakfast: {
-    //     start: formatTime(timings.breakfastStartTime || "07:00"),
-    //     end: formatTime(timings.breakfastEndTime || "10:00"),
-    //   },
-    //   lunch: {
-    //     start: formatTime(timings.lunchStartTime || "12:00"),
-    //     end: formatTime(timings.lunchEndTime || "15:30"),
-    //   },
-    //   snacks: {
-    //     start: formatTime(timings.snacksStartTime || "17:00"),
-    //     end: formatTime(timings.snacksEndTime || "19:00"),
-    //   },
-    //   dinner: {
-    //     start: formatTime(timings.dinnerStartTime || "19:30"),
-    //     end: formatTime(timings.dinnerEndTime || "22:00"),
-    //   },
-    // };
+    const mealTimings: {
+      breakfast?: { start: string; end: string };
+      lunch?: { start: string; end: string };
+      snacks?: { start: string; end: string };
+      dinner?: { start: string; end: string };
+    } = {};
 
+    // Raw timings for logic (24h format)
+    const timings = (hostelMealTiming || {}) as any;
+    const rawMealTimings: Record<string, string> = {
+      breakfast: timings.breakfastStartTime || "07:00",
+      lunch: timings.lunchStartTime || "12:00",
+      snacks: timings.snacksStartTime || "17:00",
+      dinner: timings.dinnerStartTime || "19:30",
+    };
 
-    const mealTimings: any = {};
-    if (hostelMealTiming) {
-      if (
-        hostelMealTiming.breakfastStartTime &&
-        hostelMealTiming.breakfastEndTime
-      ) {
-        mealTimings.breakfast = {
-          start: formatTime(hostelMealTiming.breakfastStartTime),
-          end: formatTime(hostelMealTiming.breakfastEndTime),
-        };
-      }
-      if (hostelMealTiming.lunchStartTime && hostelMealTiming.lunchEndTime) {
-        mealTimings.lunch = {
-          start: formatTime(hostelMealTiming.lunchStartTime),
-          end: formatTime(hostelMealTiming.lunchEndTime),
-        };
-      }
-      if (hostelMealTiming.snacksStartTime && hostelMealTiming.snacksEndTime) {
-        mealTimings.snacks = {
-          start: formatTime(hostelMealTiming.snacksStartTime),
-          end: formatTime(hostelMealTiming.snacksEndTime),
-        };
-      }
-      if (hostelMealTiming.dinnerStartTime && hostelMealTiming.dinnerEndTime) {
-        mealTimings.dinner = {
-          start: formatTime(hostelMealTiming.dinnerStartTime),
-          end: formatTime(hostelMealTiming.dinnerEndTime),
-        };
-      }
-    }
+    // Format meal timings for response
+    mealTimings.breakfast = {
+      start: formatTime(rawMealTimings.breakfast),
+      end: formatTime(timings.breakfastEndTime || "10:00"),
+    };
+    mealTimings.lunch = {
+      start: formatTime(rawMealTimings.lunch),
+      end: formatTime(timings.lunchEndTime || "15:30"),
+    };
+    mealTimings.snacks = {
+      start: formatTime(rawMealTimings.snacks),
+      end: formatTime(timings.snacksEndTime || "19:00"),
+    };
+    mealTimings.dinner = {
+      start: formatTime(rawMealTimings.dinner),
+      end: formatTime(timings.dinnerEndTime || "22:00"),
+    };
 
     // Precompute leave date ranges to avoid repeated timezone conversions
     const leaveRanges = leaves.map((leave) => ({
-      start: dayjs(leave.startDate).tz("Asia/Kolkata").startOf("day"),
-      end: dayjs(leave.endDate).tz("Asia/Kolkata").startOf("day"),
+      start: dayjs(leave.startDate).tz("Asia/Kolkata"),
+      end: dayjs(leave.endDate).tz("Asia/Kolkata"),
     }));
 
     const bookingMap = new Map<string, any>();
@@ -2397,7 +2438,36 @@ class MessService {
       menuMap.set(key, m);
     }
 
-    const results: any[] = [];
+    const results: Array<{
+      date: string;
+      meals: {
+        breakfast: {
+          state: string;
+          locked: boolean;
+          food: string | null;
+          consumed: boolean;
+        };
+        lunch: {
+          state: string;
+          locked: boolean;
+          food: string | null;
+          consumed: boolean;
+        };
+        snacks: {
+          state: string;
+          locked: boolean;
+          food: string | null;
+          consumed: boolean;
+        };
+        dinner: {
+          state: string;
+          locked: boolean;
+          food: string | null;
+          consumed: boolean;
+        };
+      };
+      createdAt?: Date | string;
+    }> = [];
     const startMoment = dayjs(startDateKey).tz("Asia/Kolkata");
 
     // Pre-compute cutoff checks for all dates and meals
@@ -2447,27 +2517,17 @@ class MessService {
       const currentDate = startMoment.clone().add(i, "days");
       const dateKey = currentDate.format("YYYY-MM-DD");
 
-      const hasLeave = leaveRanges.some(({ start, end }) => {
-        const d = dayjs(dateKey).tz("Asia/Kolkata").startOf("day");
-        const isMatch = (
-          (d.isAfter(start) || d.isSame(start, "day")) &&
-          (d.isBefore(end) || d.isSame(end, "day"))
-        );
-        if (dateKey === "2026-01-04") {
-          console.log(`[MonthlyView] Date=2026-01-04, Start=${start.format()}, End=${end.format()}, isMatch=${isMatch}`);
-        }
-        return isMatch;
-      });
-      if (dateKey === "2026-01-04") {
-        console.log(`[MonthlyView] Date=2026-01-04 Final hasLeave=${hasLeave}`);
-      }
-
       const booking = bookingMap.get(dateKey);
       const menu = menuMap.get(dateKey);
 
-      const dayResult: any = {
+      const dayResult: (typeof results)[number] = {
         date: dateKey,
-        meals: {},
+        meals: {
+          breakfast: { state: "", locked: false, food: null, consumed: false },
+          lunch: { state: "", locked: false, food: null, consumed: false },
+          snacks: { state: "", locked: false, food: null, consumed: false },
+          dinner: { state: "", locked: false, food: null, consumed: false },
+        },
       };
 
       for (const meal of ["breakfast", "lunch", "snacks", "dinner"] as const) {
@@ -2483,9 +2543,32 @@ class MessService {
         const foodExists = menu && menu[meal] && menu[meal].trim() !== "";
         let displayStatus = currentStatus;
 
+        // Granular Leave Check (Meal Start Time)
+        let isMealOnLeave = false;
+        const rawStartTime = rawMealTimings[meal];
+        if (rawStartTime && leaveRanges.length > 0) {
+          const [h, m] = rawStartTime.split(":").map(Number);
+          const mealStartMoment = currentDate
+            .clone()
+            .set("hour", h)
+            .set("minute", m)
+            .set("second", 0)
+            .set("millisecond", 0);
+
+          isMealOnLeave = leaveRanges.some(({ start, end }) => {
+            return (
+              mealStartMoment.isAfter(start) && mealStartMoment.isBefore(end)
+            );
+          });
+        }
+
         if (!foodExists) {
           displayStatus = MealBookingIntent.NOT_APPLICABLE;
-        } else if (hasLeave && (displayStatus === MealBookingIntent.PENDING || displayStatus === MealBookingIntent.CONFIRMED)) {
+        } else if (
+          isMealOnLeave &&
+          (displayStatus === MealBookingIntent.PENDING ||
+            displayStatus === MealBookingIntent.CONFIRMED)
+        ) {
           displayStatus = MealBookingIntent.SKIPPED;
         }
 
@@ -2496,6 +2579,12 @@ class MessService {
           consumed: isConsumed,
         };
       }
+
+      // Attach creation timestamp if booking exists
+      if (booking && booking.createdAt) {
+        dayResult.createdAt = booking.createdAt;
+      }
+
       results.push(dayResult);
     }
     return { results, mealTimings };
@@ -2562,14 +2651,17 @@ class MessService {
           }
 
           // Fetch Active Students
-          const activeStudents = await User.find({
+          const activeStudents: any[] = await User.find({
             hostelId,
             status: true,
-            isLeft: false,
           })
             .select("_id")
             .lean();
+
           const studentIds = activeStudents.map((u) => u._id);
+          const studentsMap = new Map(
+            activeStudents.map((u) => [u._id.toString(), u])
+          );
 
           if (studentIds.length === 0) {
             await session.abortTransaction();
@@ -2605,8 +2697,9 @@ class MessService {
             existingBookingsMap.set(b.studentId.toString(), b)
           );
 
-          // Prepare Bulk Operations
+          // Prepare Bulk Operations and collect students to notify
           const bulkOps: any[] = [];
+          const studentsToNotify: string[] = [];
 
           for (const studentIdObj of studentIds) {
             const studentId = studentIdObj.toString();
@@ -2615,11 +2708,6 @@ class MessService {
             const existing = existingBookingsMap.get(studentId);
 
             if (existing) {
-              if (existing.isManualBooking) {
-                stats.skippedManual++;
-                continue;
-              }
-
               // Check if we can confirm any PENDING meals?
               let hasUpdates = false;
               const updatedMeals = existing.meals ? { ...existing.meals } : {};
@@ -2653,6 +2741,7 @@ class MessService {
                   },
                 });
                 stats.recordsUpdated++;
+                studentsToNotify.push(studentId);
               } else {
                 stats.skippedExisting++;
               }
@@ -2697,7 +2786,6 @@ class MessService {
             }
 
             // Prepare Insert
-
             bulkOps.push({
               insertOne: {
                 document: {
@@ -2714,6 +2802,9 @@ class MessService {
               },
             });
             stats.recordsCreated++;
+            if (!hasLeave) {
+              studentsToNotify.push(studentId);
+            }
           }
 
           if (bulkOps.length > 0) {
@@ -2722,6 +2813,70 @@ class MessService {
 
           await session.commitTransaction();
           stats.hostelsProcessed++;
+
+          // Send notifications after transaction commit
+          if (studentsToNotify.length > 0) {
+            // Process notifications in a non-blocking way
+            // Using a separate try-catch to ensure one failure doesn't stop others
+            for (const studentId of studentsToNotify) {
+              try {
+                const {
+                  playedIds,
+                  template,
+                  student,
+                  isPlayedNoticeCreated,
+                  log,
+                } = await fetchPlayerNotificationConfig(
+                  studentId,
+                  TemplateTypes.MEAL_AUTO_BOOKED
+                );
+
+                const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+                  await getStudentAllocatedHostelDetails(
+                    student?._id,
+                    student?.hostelId,
+                    TemplateTypes.MEAL_AUTO_BOOKED
+                  );
+
+                const finalNoticeCreated =
+                  isPlayedNoticeCreated && isHostelNoticeCreated;
+                const notificationLog = [log, hostelLogs].filter(Boolean);
+
+                const description =
+                  template?.description ||
+                  "Your meals for tomorrow have been booked successfully.";
+
+                await Notice.create({
+                  userId: student?._id,
+                  hostelId: student?.hostelId,
+                  floorNumber: hostelDetail?.floorNumber,
+                  bedType: hostelDetail?.bedType,
+                  roomNumber: hostelDetail?.roomNumber,
+                  noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+                  pushNotificationTypes: PushNotificationTypes.AUTO,
+                  templateId: template?._id,
+                  templateSendMessage: description,
+                  isNoticeCreated: finalNoticeCreated,
+                  notificationLog,
+                  createdAt: getCurrentISTTime(),
+                });
+
+                if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+                  await sendPushNotificationToUser(
+                    playedIds,
+                    template?.title || "Mess",
+                    description,
+                    TemplateTypes.MEAL_AUTO_BOOKED
+                  );
+                }
+              } catch (notifyErr: any) {
+                // Silently log and continue to next student
+                console.error(
+                  `[AutoBooking Notification Failed] StudentId: ${studentId}, Error: ${notifyErr.message}`
+                );
+              }
+            }
+          }
         } catch (err: any) {
           await session.abortTransaction();
           console.error(
@@ -2963,7 +3118,6 @@ class MessService {
     }
   };
 
-
   // SECTION: Method to get hostel meal timings
   getHostelMealTiming = async (hostelId: string) => {
     try {
@@ -2992,13 +3146,51 @@ class MessService {
     }
   };
 
-
-
   // SECTION: Method to set hostel meal cutoff policies
   setHostelMealCutoff = async (data: any, userId: string) => {
     try {
       const { hostelId, ...bookingCutoffs } = data;
       const userObjectId = new Types.ObjectId(userId);
+
+      // Verify 2-hour gap rule for Lunch, Snacks, Dinner
+      // Fetch meal timings for the hostel
+      const timings = await HostelMealTiming.findOne({
+        hostelId,
+        status: true,
+      }).lean();
+      if (!timings) {
+        throw new Error(
+          "Meal timings for this hostel must be set before configuring cutoffs."
+        );
+      }
+
+      const timeToMinutes = (time: string) => {
+        const [h, m] = time.split(":").map(Number);
+        return h * 60 + m;
+      };
+
+      const validateGap = (
+        mealName: string,
+        startTimeStr: string,
+        cutoff: { dayOffset: number; time: string }
+      ) => {
+        const startMins = timeToMinutes(startTimeStr);
+        const cutoffMins = cutoff.dayOffset * 1440 + timeToMinutes(cutoff.time);
+
+        // Gap = startMins - cutoffMins
+        if (startMins - cutoffMins < 120) {
+          throw new Error(
+            `${mealName} cutoff must be at least 2 hours before its start time (${startTimeStr}).`
+          );
+        }
+      };
+
+      if (bookingCutoffs.lunch)
+        validateGap("Lunch", timings.lunchStartTime, bookingCutoffs.lunch);
+      if (bookingCutoffs.snacks)
+        validateGap("Snacks", timings.snacksStartTime, bookingCutoffs.snacks);
+      if (bookingCutoffs.dinner)
+        validateGap("Dinner", timings.dinnerStartTime, bookingCutoffs.dinner);
 
       const result = await HostelPolicy.findOneAndUpdate(
         { hostelId },
@@ -3022,7 +3214,6 @@ class MessService {
       throw new Error(`[setHostelMealCutoff] Failed: ${error.message}`);
     }
   };
-
 
   // SECTION: Method to get hostel meal cutoff policies
   getHostelMealCutoff = async (hostelId: string) => {
@@ -3051,11 +3242,13 @@ class MessService {
   };
 
   /**
-     * SECTION: Warden Meal Reporting - Get student-wise meal status by date
-     * Returns paginated list of students with their meal bookings for a specific hostel and date
-     * Supports filtering by student status, meal status, floor, room, and text search
-     */
-  fetchStudentsMealStatusByDate = async (params: WardenMealReportingInput): Promise<{
+   * SECTION: Warden Meal Reporting - Get student-wise meal status by date
+   * Returns paginated list of students with their meal bookings for a specific hostel and date
+   * Supports filtering by student status, meal status, floor, room, and text search
+   */
+  fetchStudentsMealStatusByDate = async (
+    params: WardenMealReportingInput
+  ): Promise<{
     students: any[];
     pagination: {
       page: number;
@@ -3071,7 +3264,7 @@ class MessService {
         filters = {},
         search = {},
         pagination = { page: 1, limit: 10 },
-        sort = { field: "uniqueId", order: "asc" },
+        sort = { field: "name", order: "desc" },
       } = params;
 
       const hostelId = new Types.ObjectId(hostelIdStr);
@@ -3085,9 +3278,15 @@ class MessService {
       const page = pagination?.page || 1;
       const limit = Math.min(pagination?.limit || 10, 50);
 
-      const allowedSortFields = ["uniqueId", "name", "floorNumber", "roomNumber"];
-      const sortField = allowedSortFields.includes(sort?.field) ? sort.field : "uniqueId";
-      const sortOrder = sort?.order === "desc" ? -1 : 1;
+      const sortFieldMapping: Record<string, string> = {
+        uniqueId: "student.uniqueId",
+        name: "student.name",
+        floorNumber: "floorNumber",
+        roomNumber: "roomNumber",
+      };
+
+      const sortField = sortFieldMapping[sort?.field] || "student.name";
+      const sortOrder = sort?.order === "asc" ? -1 : 1;
 
       const pipeline: PipelineStage[] = [];
 
@@ -3113,7 +3312,7 @@ class MessService {
       pipeline.push({ $unwind: "$student" });
 
       // STAGE 3: Student Status Filtering
-      const targetStatus = filters?.studentStatus || "ACTIVE";
+      const targetStatus = filters?.studentStatus;
       if (targetStatus === "ACTIVE") {
         pipeline.push({
           $match: {
@@ -3154,41 +3353,142 @@ class MessService {
         $unwind: { path: "$booking", preserveNullAndEmptyArrays: true },
       });
 
-      // STAGE 5: Centralized Derived Meal Status Logic (State Machine)
-      // -------------------------------------------------------------------------
-      // Business Rules for Derived Status:
-      // CONFIRMED + consumed: true  => CONSUMED
-      // CONFIRMED + consumed: false => MISSED
-      // SKIPPED   + consumed: false => SKIPPED
-      // SKIPPED   + consumed: true  => SKIPPED_CONSUMED
-      // No booking record found     => NOT_BOOKED
-      // -------------------------------------------------------------------------
-      const deriveMealObject = (mealKey: string) => ({
-        derivedStatus: {
-          $switch: {
-            branches: [
-              {
-                case: { $eq: [`$booking.meals.${mealKey}.status`, MealBookingIntent.CONFIRMED] },
-                then: { $cond: [`$booking.meals.${mealKey}.consumed`, MealDerivedStatus.CONSUMED, MealDerivedStatus.MISSED] },
-              },
-              {
-                case: { $eq: [`$booking.meals.${mealKey}.status`, MealBookingIntent.SKIPPED] },
-                then: { $cond: [`$booking.meals.${mealKey}.consumed`, MealDerivedStatus.SKIPPED_CONSUMED, MealDerivedStatus.SKIPPED] },
-              },
-            ],
-            default: MealDerivedStatus.NOT_BOOKED,
+      // STAGE 5: Construct Meal Objects with Raw Status & Consumed
+      // We directly project the status and consumed fields from the booking.
+      pipeline.push({
+        $addFields: {
+          "meals.breakfast": {
+            status: {
+              $ifNull: [
+                `$booking.meals.breakfast.status`,
+                MealBookingIntent.PENDING,
+              ],
+            },
+            consumed: { $ifNull: [`$booking.meals.breakfast.consumed`, false] },
+          },
+          "meals.lunch": {
+            status: {
+              $ifNull: [
+                `$booking.meals.lunch.status`,
+                MealBookingIntent.PENDING,
+              ],
+            },
+            consumed: { $ifNull: [`$booking.meals.lunch.consumed`, false] },
+          },
+          "meals.snacks": {
+            status: {
+              $ifNull: [
+                `$booking.meals.snacks.status`,
+                MealBookingIntent.PENDING,
+              ],
+            },
+            consumed: { $ifNull: [`$booking.meals.snacks.consumed`, false] },
+          },
+          "meals.dinner": {
+            status: {
+              $ifNull: [
+                `$booking.meals.dinner.status`,
+                MealBookingIntent.PENDING,
+              ],
+            },
+            consumed: { $ifNull: [`$booking.meals.dinner.consumed`, false] },
           },
         },
       });
 
+      // STAGE 5.1: Calculate Derived Status for Filtering
+      // We calculate a status that matches the filter options: "Confirmed", "Cancelled", "Missed", "Cancelled-Consumed"
+      const currentDayStart = dayjs().tz("Asia/Kolkata").startOf("day");
+      const isPastDate = targetDateIST.isBefore(currentDayStart);
+
+      const deriveStatusExpression = (
+        statusField: string,
+        consumedField: string
+      ) => {
+        return {
+          $switch: {
+            branches: [
+              // Case 1: Cancelled/Skipped & Consumed
+              {
+                case: {
+                  $and: [
+                    {
+                      $or: [
+                        { $eq: [statusField, MealBookingIntent.CANCELLED] },
+                        { $eq: [statusField, MealBookingIntent.SKIPPED] },
+                      ],
+                    },
+                    { $eq: [consumedField, true] },
+                  ],
+                },
+                then: "Cancelled-Consumed",
+              },
+              // Case 2: Cancelled/Skipped
+              {
+                case: {
+                  $or: [
+                    { $eq: [statusField, MealBookingIntent.CANCELLED] },
+                    { $eq: [statusField, MealBookingIntent.SKIPPED] },
+                  ],
+                },
+                then: "Cancelled",
+              },
+              // Case 3: Missed (Confirmed + Not Consumed) - User requested strict definition
+              {
+                case: {
+                  $and: [
+                    { $eq: [statusField, MealBookingIntent.CONFIRMED] },
+                    { $eq: [consumedField, false] },
+                    isPastDate,
+                  ],
+                },
+                then: "Missed",
+              },
+              // Case 4: Confirmed (Everything else Confirmed)
+              {
+                case: { $eq: [statusField, MealBookingIntent.CONFIRMED] },
+                then: "Confirmed",
+              },
+            ],
+            default: "Other", // PENDING, SKIPPED, or N/A
+          },
+        };
+      };
+
       pipeline.push({
         $addFields: {
-          "meals.breakfast": deriveMealObject("breakfast"),
-          "meals.lunch": deriveMealObject("lunch"),
-          "meals.snacks": deriveMealObject("snacks"),
-          "meals.dinner": deriveMealObject("dinner"),
+          "meals.breakfast.derivedStatus": deriveStatusExpression(
+            "$meals.breakfast.status",
+            "$meals.breakfast.consumed"
+          ),
+          "meals.lunch.derivedStatus": deriveStatusExpression(
+            "$meals.lunch.status",
+            "$meals.lunch.consumed"
+          ),
+          "meals.snacks.derivedStatus": deriveStatusExpression(
+            "$meals.snacks.status",
+            "$meals.snacks.consumed"
+          ),
+          "meals.dinner.derivedStatus": deriveStatusExpression(
+            "$meals.dinner.status",
+            "$meals.dinner.consumed"
+          ),
         },
       });
+
+      // Meal Status Filtering
+      if (filters?.mealStatus && filters.mealStatus.length > 0) {
+        pipeline.push({
+          $match: {
+            $or: [
+              { "meals.breakfast.derivedStatus": { $in: filters.mealStatus } },
+              { "meals.lunch.derivedStatus": { $in: filters.mealStatus } },
+              { "meals.snacks.derivedStatus": { $in: filters.mealStatus } },
+              { "meals.dinner.derivedStatus": { $in: filters.mealStatus } },
+            ],
+          },
+        });
+      }
 
       // STAGE 6: Room/Floor & Meal Status Filtering
       if (filters?.floor !== undefined) {
@@ -3198,47 +3498,56 @@ class MessService {
         pipeline.push({ $match: { roomNumber: filters.room } });
       }
 
-      if (filters?.mealStatus && filters.mealStatus.length > 0) {
-        // Map legacy UI filter types to new derived statuses
-        const statusMap: Record<string, MealDerivedStatus> = {
-          "Confirmed": MealDerivedStatus.CONSUMED,
-          "Cancelled": MealDerivedStatus.SKIPPED,
-          "Missed": MealDerivedStatus.MISSED,
-          "Cancelled-Consumed": MealDerivedStatus.SKIPPED_CONSUMED,
-        };
-        const mappedStatuses = filters.mealStatus.map(s => statusMap[s] || s);
-
-        pipeline.push({
-          $match: {
-            $or: [
-              { "meals.breakfast.derivedStatus": { $in: mappedStatuses } },
-              { "meals.lunch.derivedStatus": { $in: mappedStatuses } },
-              { "meals.snacks.derivedStatus": { $in: mappedStatuses } },
-              { "meals.dinner.derivedStatus": { $in: mappedStatuses } },
-            ],
-          },
-        });
-      }
-
       // STAGE 7: Text Search
+      let finalSort: any = { [sortField]: sortOrder };
+
       if (search?.text && search.text.trim()) {
-        const regex = new RegExp(search.text.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        const searchText = search.text.trim();
+        const regex = new RegExp(
+          searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          "i"
+        );
+
         pipeline.push({
           $match: {
-            $or: [
-              { "student.uniqueId": regex },
-              { "student.name": regex },
-            ],
+            $or: [{ "student.uniqueId": regex }, { "student.name": regex }],
           },
         });
+
+        // Add relevance score: 1 if name starts with search text, 0 if not
+        pipeline.push({
+          $addFields: {
+            searchRelevance: {
+              $cond: [
+                {
+                  $eq: [
+                    {
+                      $indexOfCP: [
+                        { $toLower: "$student.name" },
+                        searchText.toLowerCase(),
+                      ],
+                    },
+                    0,
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        });
+
+        // Prioritize relevance score in sort
+        finalSort = { searchRelevance: -1, ...finalSort };
       }
 
       // STAGE 8: Sorting & Final Projection
-      pipeline.push({ $sort: { [sortField]: sortOrder } });
+      pipeline.push({ $sort: finalSort });
       pipeline.push({
         $project: {
-          _id: 0,
+          _id: 1,
           studentId: "$studentId",
+          image: "$student.image",
           uniqueId: "$student.uniqueId",
           name: "$student.name",
           phone: { $toString: "$student.phone" },
@@ -3256,8 +3565,18 @@ class MessService {
         limit
       );
 
+      // Sign images for the current page
+      const studentsWithSignedUrls = await Promise.all(
+        data.map(async (student: any) => {
+          if (student.image) {
+            student.image = await getSignedUrl(student.image);
+          }
+          return student;
+        })
+      );
+
       return {
-        students: data,
+        students: studentsWithSignedUrls,
         pagination: {
           page,
           limit,
@@ -3266,7 +3585,9 @@ class MessService {
         },
       };
     } catch (error: any) {
-      throw new Error(`MealReportingService: Failed to fetch student meal status. Detail: ${error.message}`);
+      throw new Error(
+        `MealReportingService: Failed to fetch student meal status. Detail: ${error.message}`
+      );
     }
   };
 }

@@ -11,6 +11,10 @@ import {
   requestOtpSchema,
   resetPasswordSchema,
 } from "../utils/validators/otp.schema";
+import {
+  generateWardenOtpSchema,
+  resetWardenPasswordSchema,
+} from "../utils/validators/warden.schema";
 const {
   staffLoginWithUserNameAndPwd,
   studentLoginWithIdAndPwd,
@@ -44,29 +48,34 @@ authRouter.post(
   "/upload-media",
   uploadFileWithMulter.single("file"),
   validateToken,
-  uploadImageOrAudio
+  uploadImageOrAudio,
 );
 
 // ========== Web App Routes (Warden / Admin / Warden Panel) ==========
 // Warden: refresh token (warden panel)
 authRouter.post("/refresh-token", validateToken, generateWardenRefreshToken);
 
-// Warden panel: generate OTP for staff via web
 // Warden panel: generate OTP for staff (dual-layer protection)
 authRouter.post(
   "/staff/generate-otp",
   otpGenerationRateLimiter,
-  generateOtpForwardenPanel
+  validateZod(generateWardenOtpSchema),
+  generateOtpForwardenPanel,
 );
 
 // Web: staff password reset (via admin/warden panel)
-authRouter.post("/staff/reset-password", resetStaffPassword);
+authRouter.post(
+  "/staff/reset-password",
+  otpVerificationRateLimiter,
+  validateZod(resetWardenPasswordSchema),
+  resetStaffPassword,
+);
 
 // Web: download sample bulk-upload files (requires auth)
 authRouter.post(
   "/sample-files/download",
   validateToken,
-  downloadSampleBulkUploadFile
+  downloadSampleBulkUploadFile,
 );
 
 // Web: generate/verify OTP for user signup in warden/admin panel
@@ -75,13 +84,13 @@ authRouter.post(
   "/generate-otp",
   validateToken,
   otpGenerationRateLimiter,
-  generateOtpUserSignUp
+  generateOtpUserSignUp,
 );
 authRouter.post(
   "/verify-otp",
   validateToken,
   otpVerificationRateLimiter,
-  verifyOtpUserSignUp
+  verifyOtpUserSignUp,
 );
 
 //------------------------------- Mobile app side APIs----------------------------------------------
@@ -91,7 +100,7 @@ authRouter.post(
   "/request-otp",
   otpGenerationRateLimiter,
   validateZod(requestOtpSchema),
-  generateOtpForApp
+  generateOtpForApp,
 );
 
 // Student reset password - verification protected
@@ -99,7 +108,7 @@ authRouter.post(
   "/student-reset-password",
   otpVerificationRateLimiter,
   validateZod(resetPasswordSchema),
-  resetStudentPasswordInApp
+  resetStudentPasswordInApp,
 );
 
 export default authRouter;

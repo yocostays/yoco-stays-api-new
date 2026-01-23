@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import dayjs from "dayjs";
 import { Request, Response } from "express";
 import MessService from "../services/mess.service";
 import StaffService from "../services/staff.service";
@@ -14,6 +15,7 @@ import { uploadFileToCloudStorage } from "../utils/awsUploadService";
 import { MESS_BULK_UPLOAD_FILES } from "../utils/s3bucketFolder";
 import {
   MealBookingStatusTypes,
+  MealBookingIntent,
   MealCountReportType,
   ReportDropDownTypes,
   SortingTypes,
@@ -36,6 +38,14 @@ import {
   SetMealTimingSchema,
   GetMealTimingSchema,
 } from "../utils/validators/mealTiming.validator";
+
+type WardenMealStatus =
+  | "Confirmed"
+  | "Cancelled"
+  | "Missed"
+  | "Cancelled-Consumed"
+  | "PENDING"
+  | "NOT_BOOKED";
 import { studentMealBookingRateLimiter } from "../middlewares/studentRateLimiter";
 import { sendSuccess, sendError, sendZodError } from "../utils/responseHelpers";
 import { getValidatedStudent } from "../utils/entityHelpers";
@@ -1084,7 +1094,11 @@ class MessMenuController {
     const isWarden = roleName === "warden";
 
     if (!isAdmin && !isWarden) {
-      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+      return sendError(
+        res,
+        "Access forbidden: Requester is not a Warden or Admin",
+        403
+      );
     }
 
     // Input Validation
@@ -1100,7 +1114,11 @@ class MessMenuController {
         (id: any) => id._id.toString() === dto.hostelId
       );
       if (!isAssigned) {
-        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+        return sendError(
+          res,
+          "Access forbidden: Warden not assigned to this hostel",
+          403
+        );
       }
     }
 
@@ -1123,7 +1141,11 @@ class MessMenuController {
     const isWarden = roleName === "warden";
 
     if (!isAdmin && !isWarden) {
-      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+      return sendError(
+        res,
+        "Access forbidden: Requester is not a Warden or Admin",
+        403
+      );
     }
 
     const parseResult = GetMealTimingSchema.safeParse(req.body);
@@ -1137,7 +1159,11 @@ class MessMenuController {
         (id: any) => id._id.toString() === hostelId
       );
       if (!isAssigned) {
-        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+        return sendError(
+          res,
+          "Access forbidden: Warden not assigned to this hostel",
+          403
+        );
       }
     }
 
@@ -1160,7 +1186,11 @@ class MessMenuController {
     const isWarden = roleName === "warden";
 
     if (!isAdmin && !isWarden) {
-      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+      return sendError(
+        res,
+        "Access forbidden: Requester is not a Warden or Admin",
+        403
+      );
     }
 
     const parseResult = SetMealCutoffSchema.safeParse(req.body);
@@ -1174,7 +1204,11 @@ class MessMenuController {
         (id: any) => id._id.toString() === dto.hostelId
       );
       if (!isAssigned) {
-        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+        return sendError(
+          res,
+          "Access forbidden: Warden not assigned to this hostel",
+          403
+        );
       }
     }
 
@@ -1183,8 +1217,6 @@ class MessMenuController {
     return sendSuccess(res, UPDATE_DATA);
   });
 
-
-  
   //SECTION Controller method to get hostel meal cutoffs
   getHostelMealCutoff = asyncHandler(async (req: Request, res: Response) => {
     const requesterId = (req as any).user.id;
@@ -1201,7 +1233,11 @@ class MessMenuController {
     const isWarden = roleName === "warden";
 
     if (!isAdmin && !isWarden) {
-      return sendError(res, "Access forbidden: Requester is not a Warden or Admin", 403);
+      return sendError(
+        res,
+        "Access forbidden: Requester is not a Warden or Admin",
+        403
+      );
     }
 
     // Input Validation
@@ -1217,7 +1253,11 @@ class MessMenuController {
         (id: any) => id._id.toString() === hostelId
       );
       if (!isAssigned) {
-        return sendError(res, "Access forbidden: Warden not assigned to this hostel", 403);
+        return sendError(
+          res,
+          "Access forbidden: Warden not assigned to this hostel",
+          403
+        );
       }
     }
 
@@ -1225,8 +1265,6 @@ class MessMenuController {
 
     return sendSuccess(res, FETCH_SUCCESS, result);
   });
-
-
 
   // SECTION: Controller method to get students meal status by date (Warden)
   getStudentsMealStatusByDate = asyncHandler(
@@ -1281,6 +1319,213 @@ class MessMenuController {
       return sendSuccess(res, FETCH_SUCCESS, result);
     }
   );
+
+  // SECTION: Controller method to get monthly meal data for a specific student (Warden)
+  getStudentMonthlyMealDataForWarden = asyncHandler(
+    async (req: Request, res: Response) => {
+      const requesterId = (req as any).user.id;
+      const { WardenStudentMonthlyViewSchema } = await import(
+        "../utils/validators/wardenMealReporting.validator"
+      );
+
+      // Fetch requester details for authorization
+      const { staff } = await getStaffById(requesterId);
+      if (!staff) {
+        return sendError(res, UNAUTHORIZED_ACCESS, 401);
+      }
+
+      // Role Authorization
+      const roleName = staff.roleId?.name?.toLowerCase() || "";
+      const isAdmin = roleName === "admin";
+      const isWarden = roleName === "warden";
+
+      if (!isAdmin && !isWarden) {
+        return sendError(
+          res,
+          "Access forbidden: Requester is not a Warden or Admin",
+          403
+        );
+      }
+
+      // Input Validation
+      const parseResult = WardenStudentMonthlyViewSchema.safeParse(req.body);
+      const validationError = sendZodError(res, parseResult);
+      if (validationError) return validationError;
+
+      const { studentId, year, month, filters, pagination } = parseResult.data!;
+      const { page, limit } = pagination;
+
+      // Fetch Student to get Hostel ID
+      const { student } = await getStudentById(studentId);
+      if (!student) {
+        return sendError(res, RECORD_NOT_FOUND("Student"));
+      }
+
+      // Warden Scoping: Check if student belongs to a hostel assigned to the Warden
+      if (isWarden) {
+        const isAssigned = staff.hostelIds?.some(
+          (id: any) => id._id.toString() === student.hostelId?._id?.toString()
+        );
+
+        if (!isAssigned) {
+          return sendError(
+            res,
+            "Access forbidden: Student belongs to a hostel not assigned to this Warden",
+            403
+          );
+        }
+      }
+
+      // Call the service method
+      const { results } = await getStudentMealBookingMonthlyView(
+        student.hostelId?._id?.toString() || student.hostelId?.toString(),
+        student._id,
+        undefined, // Date undefined as we drive by Month/Year
+        year,
+        month
+      );
+
+      interface IMealWardenView {
+        state: string;
+        consumed: boolean;
+        _status?: WardenMealStatus;
+      }
+
+      interface IDailyMealHistory {
+        date: string;
+        createdDate: string | null;
+        createdTime: string | null;
+        meals: {
+          breakfast: IMealWardenView;
+          lunch: IMealWardenView;
+          snacks: IMealWardenView;
+          dinner: IMealWardenView;
+        };
+      }
+
+      // Status Transformation for Warden View
+      let transformedResults: IDailyMealHistory[] = results.map((dayParams) => {
+        const dateObj = new Date(dayParams.date);
+
+        // Format Created At if available
+        let createdDate: string | null = null;
+        let createdTime: string | null = null;
+
+        if (dayParams.createdAt) {
+          const createdAtIST = dayjs(dayParams.createdAt).tz("Asia/Kolkata");
+          createdDate = createdAtIST.format("YYYY-MM-DD");
+          createdTime = createdAtIST.format("hh:mm A");
+        }
+
+        const buildMealResponse = (
+          mealData: { state: string; consumed: boolean } | undefined
+        ): IMealWardenView => {
+          return {
+            state: mealData?.state || "NOT_BOOKED",
+            consumed: mealData?.consumed || false,
+            _status: this.getDerivedStatus(mealData, dayParams.date),
+          };
+        };
+
+        return {
+          date: dayParams.date,
+          createdDate,
+          createdTime,
+          meals: {
+            breakfast: buildMealResponse(dayParams.meals.breakfast),
+            lunch: buildMealResponse(dayParams.meals.lunch),
+            snacks: buildMealResponse(dayParams.meals.snacks),
+            dinner: buildMealResponse(dayParams.meals.dinner),
+          },
+        };
+      });
+
+      // Apply Filters if provided
+      if (filters?.mealStatus && filters.mealStatus.length > 0) {
+        const validStatuses = new Set(filters.mealStatus);
+
+        transformedResults = transformedResults.filter((day) => {
+          const meals = day.meals;
+          const hasMatch = Object.values(meals).some(
+            (m) => m._status && validStatuses.has(m._status as any)
+          );
+          return hasMatch;
+        });
+      }
+
+      const totalCount = transformedResults.length;
+
+      // Apply Pagination
+      const skip = (page - 1) * limit;
+      const paginatedResults = transformedResults.slice(skip, skip + limit);
+
+      // Cleanup temporary _status field before sending
+      const finalResults = paginatedResults.map((day) => {
+        const cleanedMeals: any = {};
+        (Object.keys(day.meals) as Array<keyof typeof day.meals>).forEach(
+          (key) => {
+            const { _status, ...rest } = day.meals[key];
+            cleanedMeals[key] = rest;
+          }
+        );
+
+        return {
+          ...day,
+          meals: cleanedMeals as IDailyMealHistory["meals"],
+        };
+      });
+
+      return sendSuccess(
+        res,
+        FETCH_SUCCESS,
+        {
+          results: finalResults,
+          totalCount,
+          student: {
+            _id: student._id,
+            name: student.name,
+            uniqueId: student.uniqueId,
+            hostelId: student.hostelId,
+          },
+        },
+        200
+      );
+    }
+  );
+
+  // Helper to determine derived status for filtering
+  private getDerivedStatus(
+    mealData: { state: string; consumed: boolean } | undefined,
+    date: string
+  ): WardenMealStatus {
+    if (!mealData) return "NOT_BOOKED";
+    const { state, consumed } = mealData;
+    if (state === MealBookingIntent.NOT_APPLICABLE) return "NOT_BOOKED";
+
+    // 1. Cancelled or Skipped
+    if (
+      state === MealBookingIntent.CANCELLED ||
+      state === MealBookingIntent.SKIPPED
+    ) {
+      if (consumed) return "Cancelled-Consumed";
+      return "Cancelled";
+    }
+
+    // 2. Confirmed
+    if (state === MealBookingIntent.CONFIRMED) {
+      if (!consumed) {
+        const bookingDate = dayjs(date).tz("Asia/Kolkata").startOf("day");
+        const today = dayjs().tz("Asia/Kolkata").startOf("day"); // Past date check for Missed
+        if (bookingDate.isBefore(today)) return "Missed";
+      }
+      return "Confirmed";
+    }
+
+    // 3. Pending
+    if (state === MealBookingIntent.PENDING) return "PENDING";
+
+    return "NOT_BOOKED";
+  }
 }
 
 export default new MessMenuController();

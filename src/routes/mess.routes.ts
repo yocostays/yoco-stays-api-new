@@ -28,6 +28,7 @@ const {
   getHostelMealTiming,
   setHostelMealCutoff,
   getHostelMealCutoff,
+  getStudentMonthlyMealDataForWarden,
 } = MessMenuController;
 import validateToken from "../middlewares/validateToken";
 import { validateZod } from "../middlewares/validateZod";
@@ -49,6 +50,7 @@ import {
 import { WardenMealReportingSchema } from "../utils/validators/wardenMealReporting.validator";
 import { studentMealBookingRateLimiter } from "../middlewares/studentRateLimiter";
 import { uploadFileWithMulter } from "../utils/configureMulterStorage";
+import { checkActiveStudent } from "../middlewares/checkActiveStudent";
 
 const messMenuRouter = Router();
 
@@ -94,6 +96,7 @@ messMenuRouter.post("/booked/manual", validateToken, manuallyBookMeal);
 messMenuRouter.post(
   "/v1/book-meals",
   validateToken,
+  checkActiveStudent,
   studentMealBookingRateLimiter,
   bookMealByStudent
 );
@@ -159,6 +162,13 @@ messMenuRouter.post(
   validateToken,
   validateZod(WardenMealReportingSchema),
   getStudentsMealStatusByDate
+);
+
+// get specific student monthly meal data for warden
+messMenuRouter.post(
+  "/warden/student/monthly-meal",
+  validateToken,
+  getStudentMonthlyMealDataForWarden
 );
 
 

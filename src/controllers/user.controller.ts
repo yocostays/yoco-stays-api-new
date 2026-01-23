@@ -2567,7 +2567,6 @@ class UserController {
       const tempPassword = generateRandomPassword(8);
       const hashedPassword = await hashPassword(tempPassword);
       user.password = hashedPassword;
-      user.testPassword = tempPassword;
 
       await user.save();
 

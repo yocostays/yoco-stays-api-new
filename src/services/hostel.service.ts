@@ -1410,7 +1410,7 @@ class HostelService {
         { $unwind: "$roomMapping" },
 
         // Only rooms with vacant beds
-        { $match: { "roomMapping.vacant": { $gt: 0 } } },
+        // { $match: { "roomMapping.vacant": { $gt: 0 } } },
 
         // Filter only vacant bedNumbers
         {

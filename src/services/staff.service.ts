@@ -53,7 +53,7 @@ class StaffService {
     assignedHostelIds?: mongoose.Types.ObjectId[],
     hostelDetails?: any[],
     categoryId?: mongoose.Types.ObjectId,
-    createdBy?: mongoose.Types.ObjectId
+    createdBy?: mongoose.Types.ObjectId,
   ): Promise<string> => {
     try {
       const currentDate = new Date();
@@ -122,7 +122,7 @@ class StaffService {
     search?: string,
     roles?: string,
     hostelId?: string,
-    dateRange?: ReportDropDownTypes
+    dateRange?: ReportDropDownTypes,
   ): Promise<{
     staffs: any[];
     counts: {
@@ -139,12 +139,12 @@ class StaffService {
       // Build search parameters
       const searchParams = search
         ? {
-          $or: [
-            { name: { $regex: `^${search}`, $options: "i" } },
-            { email: { $regex: `^${search}`, $options: "i" } },
-            ...(searchAsNumber ? [{ phone: searchAsNumber }] : []),
-          ],
-        }
+            $or: [
+              { name: { $regex: `^${search}`, $options: "i" } },
+              { email: { $regex: `^${search}`, $options: "i" } },
+              ...(searchAsNumber ? [{ phone: searchAsNumber }] : []),
+            ],
+          }
         : {};
 
       const statusParams: any = {};
@@ -170,17 +170,19 @@ class StaffService {
       // Build role query
       const searchRoleQuery = roles
         ? {
-          roleId: {
-            $in: roles.includes(",")
-              ? roles
-                .split(",")
-                .map((role) =>
-                  mongoose.isValidObjectId(role.trim()) ? role.trim() : null
-                )
-                .filter(Boolean)
-              : [mongoose.isValidObjectId(roles) ? roles.trim() : null],
-          },
-        }
+            roleId: {
+              $in: roles.includes(",")
+                ? roles
+                    .split(",")
+                    .map((role) =>
+                      mongoose.isValidObjectId(role.trim())
+                        ? role.trim()
+                        : null,
+                    )
+                    .filter(Boolean)
+                : [mongoose.isValidObjectId(roles) ? roles.trim() : null],
+            },
+          }
         : {};
 
       // Build hostel filter
@@ -238,7 +240,7 @@ class StaffService {
           .populate([
             { path: "roleId", select: "name" },
             { path: "createdBy", select: "name" },
-            { path: "categoryId",select:"name" },
+            { path: "categoryId", select: "name" },
           ])
           .sort({ createdAt: -1 })
           .skip(skip)
@@ -250,7 +252,7 @@ class StaffService {
         staffs.map(async (ele) => {
           return {
             _id: ele._id,
-            category:ele?.categoryId ?? null,
+            category: ele?.categoryId ?? null,
             name: ele?.name ?? null,
             image: ele?.image ?? null,
             email: ele?.email ?? null,
@@ -265,7 +267,7 @@ class StaffService {
             createdBy: (ele?.createdBy as any)?.name ?? null,
             createdAt: ele?.createdAt ?? null,
           };
-        })
+        }),
       );
 
       return {
@@ -332,7 +334,7 @@ class StaffService {
   //SECTION: Method to assign hostel to warden
   async assignHostelToWarden(
     hostelIds: string[],
-    staffId: string
+    staffId: string,
   ): Promise<string> {
     try {
       const userId = new mongoose.Types.ObjectId(staffId);
@@ -356,7 +358,7 @@ class StaffService {
               $push: { wardenIds: userId },
             });
           }
-        })
+        }),
       );
 
       return UPDATE_DATA;
@@ -368,7 +370,7 @@ class StaffService {
   //SECTION: Method to get assigned hostel of warden
   hostelForWarden = async (
     staffId: mongoose.Types.ObjectId,
-    hostelId?: string
+    hostelId?: string,
   ): Promise<{ hostels: any[] }> => {
     try {
       const [staffWithHostels] = await Staff.aggregate([
@@ -389,11 +391,11 @@ class StaffService {
                     $cond: {
                       if: hostelId
                         ? {
-                          $eq: [
-                            "$_id",
-                            new mongoose.Types.ObjectId(hostelId),
-                          ],
-                        }
+                            $eq: [
+                              "$_id",
+                              new mongoose.Types.ObjectId(hostelId),
+                            ],
+                          }
                         : false,
                       then: true,
                       else: false,
@@ -429,7 +431,7 @@ class StaffService {
   //SECTION: Method to inactive staff by id
   inactiveStaffById = async (
     staffId: string,
-    updatedById: string
+    updatedById: string,
   ): Promise<string> => {
     try {
       // NOTE - Find the staff by ID
@@ -475,7 +477,7 @@ class StaffService {
     assignedHostelIds?: mongoose.Types.ObjectId[],
     hostelDetails?: any[],
     categoryId?: mongoose.Types.ObjectId,
-    updatedById?: mongoose.Types.ObjectId
+    updatedById?: mongoose.Types.ObjectId,
   ): Promise<string> => {
     try {
       const currentDate = new Date();
@@ -561,7 +563,7 @@ class StaffService {
           const existingImageKey = existingStaff.image;
           await deleteFromS3(
             process.env.S3_BUCKET_NAME ?? "yoco-staging",
-            existingImageKey
+            existingImageKey,
           );
         }
         payload.image = image;
@@ -581,7 +583,7 @@ class StaffService {
             ) {
               await deleteFromS3(
                 process.env.S3_BUCKET_NAME ?? "yoco-staging",
-                existingStaff.kycDocuments[docType]
+                existingStaff.kycDocuments[docType],
               );
             }
             // Assign new document URL to payload
@@ -589,7 +591,7 @@ class StaffService {
           }
         } else {
           console.warn(
-            `Invalid document URL type for ${docType}, expected string.`
+            `Invalid document URL type for ${docType}, expected string.`,
           );
         }
       }
@@ -608,7 +610,7 @@ class StaffService {
   async maintanceStaffs(
     compaintId: string,
     categoryType: ComplaintTypes,
-    hostelId: string
+    hostelId: string,
   ): Promise<{ staffs: any[] }> {
     try {
       //NOTE - get complain details by id
@@ -624,7 +626,7 @@ class StaffService {
       const roleIds = roles.map((role) => role._id);
 
       const hostelObjectId = new mongoose.Types.ObjectId(hostelId);
-      
+
       // Find staff matching the role and category
       const staffs = await Staff.find({
         roleId: { $in: roleIds },
@@ -643,7 +645,7 @@ class StaffService {
           userName: staff.userName,
           phone: staff.phone,
           image: staff.image ? await getSignedUrl(staff.image) : null,
-        }))
+        })),
       );
 
       return { staffs: formattedStaffs ?? [] };
@@ -685,10 +687,39 @@ class StaffService {
     }
   }
 
+  //SECTION: Method to get staff by email or phone (identifier)
+  async getStaffByIdentifier(
+    identifier: string,
+  ): Promise<{ staff: any; isEmail: boolean }> {
+    try {
+      // Determine if identifier is email or phone
+      const isEmail = String(identifier).includes("@");
+
+      // Build query based on identifier type
+      const query = isEmail
+        ? { email: String(identifier).trim() }
+        : { phone: Number(identifier) };
+
+      const staff = await Staff.findOne(query).select("name phone email _id");
+
+      if (!staff) {
+        throw new Error(
+          RECORD_NOT_FOUND(
+            isEmail ? "Staff with this email" : "Staff with this phone",
+          ),
+        );
+      }
+
+      return { staff, isEmail };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
   //SECTION: Method to get staff in warden or admin panel
   staffDetailsByType = async (
     staffId: mongoose.Types.ObjectId,
-    type: FetchUserTypes
+    type: FetchUserTypes,
   ): Promise<{ details: any }> => {
     try {
       // Check if the staff exists
@@ -744,7 +775,7 @@ class StaffService {
           const roomMatesData = await Promise.all(
             roomMates.map(async (mate: any) => {
               const user = users.find(
-                (u: any) => u._id.toString() === mate.studentId.toString()
+                (u: any) => u._id.toString() === mate.studentId.toString(),
               );
 
               if (user) {
@@ -755,13 +786,14 @@ class StaffService {
                   phone: user.phone ?? null,
                   userName: user.userName ?? null,
                   image: user.image ? await getSignedUrl(user.image) : null,
-                  roomDetails: `${mate.roomNumber ?? null}/${mate.bedNumber ?? null
-                    }`,
+                  roomDetails: `${mate.roomNumber ?? null}/${
+                    mate.bedNumber ?? null
+                  }`,
                 };
               }
 
               return null;
-            })
+            }),
           );
 
           // Remove null values from roomMatesData
@@ -845,7 +877,7 @@ class StaffService {
     remark: string,
     isFine: boolean,
     fineAmount: number,
-    userId?: string
+    userId?: string,
   ): Promise<string> => {
     try {
       //NOTE - Check staff
@@ -882,7 +914,7 @@ class StaffService {
     hostelId: string,
     filterStatus: UserGetByTypes,
     role: string,
-    search?: string
+    search?: string,
   ): Promise<{
     staffs: any[];
     count: number;
@@ -894,12 +926,12 @@ class StaffService {
       // Build search parameters
       const searchParams = search
         ? {
-          $or: [
-            { name: { $regex: `^${search}`, $options: "i" } },
-            { email: { $regex: `^${search}`, $options: "i" } },
-            ...(searchAsNumber ? [{ phone: searchAsNumber }] : []),
-          ],
-        }
+            $or: [
+              { name: { $regex: `^${search}`, $options: "i" } },
+              { email: { $regex: `^${search}`, $options: "i" } },
+              ...(searchAsNumber ? [{ phone: searchAsNumber }] : []),
+            ],
+          }
         : {};
 
       // Build hostel filter
@@ -986,7 +1018,7 @@ class StaffService {
             role: (ele.roleId as any)?.name ?? null,
             status: ele?.status ?? null,
           };
-        })
+        }),
       );
 
       return { staffs: result, count };
@@ -997,7 +1029,7 @@ class StaffService {
 
   //SECTION: Method to fetch Payment Options By Hostel
   fetchStaffActiveHostelDetails = async (
-    hostelId: string
+    hostelId: string,
   ): Promise<{ details: any }> => {
     try {
       const result = await Hostel.aggregate([
@@ -1043,7 +1075,7 @@ class StaffService {
 
   //SECTION - Method to check username exists or not in staff
   async checkUsernameExists(
-    userName: string
+    userName: string,
   ): Promise<{ isUserNameExist: boolean }> {
     const staff: any = await Staff.exists({
       userName: { $regex: new RegExp(`^${userName}$`, "i") },
@@ -1053,7 +1085,7 @@ class StaffService {
 
   // SECTION: Method to check if staff exists and return _id and name if found
   async getStaffExistById(
-    staffId: string
+    staffId: string,
   ): Promise<{ exists: boolean; staff: any }> {
     try {
       // Query for staff with only _id and name fields
