@@ -110,7 +110,8 @@ export const deleteFromS3 = async (
   fileKey: string
 ): Promise<any> => {
   try {
-    const filePath = path.join(__dirname, "..", "uploads", fileKey);
+    const baseUploadsPath = path.resolve(process.cwd(), "./uploads");
+    const filePath = path.join(baseUploadsPath, fileKey);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }

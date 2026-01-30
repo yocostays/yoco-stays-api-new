@@ -46,5 +46,5 @@ export const sendZodError = (
     .map((e: { message: string }) => e.message)
     .join(", ");
 
-  return sendError(res, `Validation error: ${errors}`, 400);
+  return sendError(res, `Zod validation error: ${errors}`, 400);
 };

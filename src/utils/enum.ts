@@ -369,3 +369,19 @@ export enum QRPurpose {
   LEAVE = "LEAVE",
   HOSTEL_ATTENDANCE = "HOSTEL_ATTENDANCE",
 }
+
+export enum AnnouncementStatus {
+  UPCOMING = "UPCOMING",
+  CURRENT = "CURRENT",
+  PAST = "PAST",
+}
+
+export enum EventStatus {
+  ACTIVE = "ACTIVE",
+  CANCELLED = "CANCELLED",
+}
+
+export enum AttachmentType {
+  FILE = "FILE",
+  LINK = "LINK",
+}

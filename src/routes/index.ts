@@ -28,6 +28,7 @@ import foodWastageReportRouters from "./foodWastageReport.routes";
 import templateRouters from "./template.routes";
 import noticeRouter from "./notice.routes";
 import qrRouter from "./qr.routes";
+import announcementRouter from "./announcement.routes";
 
 router.use("/role", roleRouter);
 router.use("/staff", staffRouter);
@@ -56,5 +57,6 @@ router.use("/food-wastage-report", foodWastageReportRouters);
 router.use("/template", templateRouters);
 router.use("/notice", noticeRouter);
 router.use("/qr", qrRouter);
+router.use("/announcements", announcementRouter);
 
 export default router;
