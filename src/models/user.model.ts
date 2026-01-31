@@ -79,7 +79,6 @@ export interface IUser extends Document {
   name: string;
   image: string;
   password: string;
-  testPassword?: string;
   phone: number;
   email: string | null;
   dob: Date | null;
@@ -321,11 +320,6 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
       required: false,
       default: null,
     },
-     testPassword: {
-      type: String,
-      required: false,
-      default: null,
-    },
     phone: {
       type: Number,
       required: true,
@@ -541,6 +535,8 @@ UserSchema.index(
   }
 );
 
+UserSchema.index({ name: 1, uniqueId: 1, status: 1, isLeft: 1 });
+UserSchema.index({ status: 1, isLeft: 1 });
 
 const User = mongoose.model<IUser>("User", UserSchema);
 export default User;

@@ -2,13 +2,28 @@ import mongoose from "mongoose";
 import StudentLeave, { IStudentLeave } from "../models/student-leave.model";
 import User from "../models/user.model";
 import Notice from "../models/notice.model";
-import moment from "moment";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(isSameOrBefore);
+dayjs.extend(isSameOrAfter);
 import StudentHostelAllocation from "../models/studentHostelAllocation.model";
+import BookMeals from "../models/bookMeal.model";
+import HostelMealTiming from "../models/hostelMealTiming.model";
+import MessMenu from "../models/messMenu.model";
 import UserService from "./user.service";
 import {
   LeaveApproveStatusTypes,
   LeaveStatusTypes,
   LeaveTypes,
+  MealBookingIntent,
+  MealCancelSource,
+  MealBookingStatusTypes,
   NoticeTypes,
   PushNotificationTypes,
   ReportDropDownTypes,
@@ -114,62 +129,69 @@ class StudentLeaveService {
 
       //NOTE: Check user leave applied or not.
       if (newLeave) {
-        const { playedIds, template, student, isPlayedNoticeCreated, log } =
-          await fetchPlayerNotificationConfig(
-            userId,
-            TemplateTypes.LEAVE_REQUEST_SUBMITTED
-          );
-        //NOTE: Get student and hostelDetails
-        const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-          await getStudentAllocatedHostelDetails(
-            student?._id,
-            student?.hostelId,
-            TemplateTypes.LEAVE_REQUEST_SUBMITTED
-          );
+        try {
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await fetchPlayerNotificationConfig(
+              userId,
+              TemplateTypes.LEAVE_REQUEST_SUBMITTED
+            );
+          //NOTE: Get student and hostelDetails
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              TemplateTypes.LEAVE_REQUEST_SUBMITTED
+            );
 
-        //NOTE: Final notice created check.
-        const finalNoticeCreated =
-          isPlayedNoticeCreated && isHostelNoticeCreated;
+          //NOTE: Final notice created check.
+          const finalNoticeCreated =
+            isPlayedNoticeCreated && isHostelNoticeCreated;
 
-        // NOTE: Combine available logs into an array
-        const notificationLog = [log, hostelLogs].filter(Boolean);
+          // NOTE: Combine available logs into an array
+          const notificationLog = [log, hostelLogs].filter(Boolean);
 
-        //NOTE: Retrieve only the date section from date & time.
-        const fromDate = formatDateOnly(startDate);
-        const toDate = formatDateOnly(endDate);
+          //NOTE: Retrieve only the date section from date & time.
+          const fromDate = formatDateOnly(startDate);
+          const toDate = formatDateOnly(endDate);
 
-        const dynamicData = {
-          fromDate,
-          toDate,
-        };
-        //NOTE: Add details for dynamic message using the populateTemplate.
-        const description = template?.description
-          ? populateTemplate(template.description, dynamicData)
-          : "Your leave request has been submitted successfully.";
+          const dynamicData = {
+            fromDate,
+            toDate,
+          };
+          //NOTE: Add details for dynamic message using the populateTemplate.
+          const description = template?.description
+            ? populateTemplate(template.description, dynamicData)
+            : "Your leave request has been submitted successfully.";
 
-        //NOTE: Create entry in notice
-        await Notice.create({
-          userId: student?._id,
-          hostelId: student?.hostelId,
-          floorNumber: hostelDetail?.floorNumber,
-          bedType: hostelDetail?.bedType,
-          roomNumber: hostelDetail?.roomNumber,
-          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-          pushNotificationTypes: PushNotificationTypes.AUTO,
-          templateId: template?._id,
-          templateSendMessage: description,
-          isNoticeCreated: finalNoticeCreated,
-          notificationLog,
-          createdAt: getCurrentISTTime(),
-        });
-        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-        if (finalNoticeCreated) {
-          //NOTE: Use the send push notification function.
-          await sendPushNotificationToUser(
-            playedIds,
-            template?.title,
-            description,
-            TemplateTypes.LEAVE_REQUEST_SUBMITTED
+          //NOTE: Create entry in notice
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+          //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+          if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+            //NOTE: Use the send push notification function.
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title,
+              description,
+              TemplateTypes.LEAVE_REQUEST_SUBMITTED
+            );
+          }
+        } catch (notificationError: any) {
+          // Log notification error but don't fail the request since leave is created
+          console.error(
+            `[Leave Notification Failed] UserId: ${userId}, Error: ${notificationError.message}`
           );
         }
       }
@@ -867,71 +889,84 @@ class StudentLeaveService {
 
       //NOTE: Send notification when leave is approved or rejected
       if (studentLeave) {
-        //NOTE: Dynamically select the appropriate template type based on leave status.
-        const templateType =
-          status === LeaveStatusTypes.APPROVED
-            ? TemplateTypes.LEAVE_APPROVED
-            : TemplateTypes.LEAVE_REJECTED;
+        try {
+          //NOTE: Dynamically select the appropriate template type based on leave status.
+          const templateType =
+            status === LeaveStatusTypes.APPROVED
+              ? TemplateTypes.LEAVE_APPROVED
+              : TemplateTypes.LEAVE_REJECTED;
 
-        const { playedIds, template, student, isPlayedNoticeCreated, log } =
-          await fetchPlayerNotificationConfig(
-            studentLeave?.createdBy,
-            templateType
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await fetchPlayerNotificationConfig(
+              studentLeave?.createdBy,
+              templateType
+            );
+
+          //NOTE: Get student and hostelDetails
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              templateType
+            );
+
+          //NOTE: Final notice created check.
+          const finalNoticeCreated =
+            isPlayedNoticeCreated && isHostelNoticeCreated;
+
+          // NOTE: Combine available logs into an array
+          const notificationLog = [log, hostelLogs].filter(Boolean);
+
+          //NOTE: Retrieve only the date section from date & time.
+          const fromDate = formatDateOnly(studentLeave?.startDate);
+          const toDate = formatDateOnly(studentLeave?.endDate);
+
+          const dynamicData = {
+            fromDate,
+            toDate,
+          };
+          //NOTE: Add details for dynamic message using the populateTemplate.
+          const description = populateTemplate(
+            template?.description,
+            dynamicData
           );
 
-        //NOTE: Get student and hostelDetails
-        const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-          await getStudentAllocatedHostelDetails(
-            student?._id,
-            student?.hostelId,
-            templateType
+          //NOTE: Create entry in notice
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+
+          //NOTE: Proceed to send push notification only when isNoticeCreated is true.
+          if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+            //NOTE: Use the send push notification function.
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title,
+              description,
+              templateType
+            );
+          }
+        } catch (notificationError: any) {
+          console.error(
+            `[Leave Approval Notification Failed] LeaveId: ${leaveId}, Error: ${notificationError.message}`
           );
+        }
 
-        //NOTE: Final notice created check.
-        const finalNoticeCreated =
-          isPlayedNoticeCreated && isHostelNoticeCreated;
-
-        // NOTE: Combine available logs into an array
-        const notificationLog = [log, hostelLogs].filter(Boolean);
-
-        //NOTE: Retrieve only the date section from date & time.
-        const fromDate = formatDateOnly(studentLeave?.startDate);
-        const toDate = formatDateOnly(studentLeave?.endDate);
-
-        const dynamicData = {
-          fromDate,
-          toDate,
-        };
-        //NOTE: Add details for dynamic message using the populateTemplate.
-        const description = populateTemplate(
-          template?.description,
-          dynamicData
-        );
-
-        //NOTE: Create entry in notice
-        await Notice.create({
-          userId: student?._id,
-          hostelId: student?.hostelId,
-          floorNumber: hostelDetail?.floorNumber,
-          bedType: hostelDetail?.bedType,
-          roomNumber: hostelDetail?.roomNumber,
-          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-          pushNotificationTypes: PushNotificationTypes.AUTO,
-          templateId: template?._id,
-          templateSendMessage: description,
-          isNoticeCreated: finalNoticeCreated,
-          notificationLog,
-          createdAt: getCurrentISTTime(),
-        });
-
-        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-        if (finalNoticeCreated) {
-          //NOTE: Use the send push notification function.
-          await sendPushNotificationToUser(
-            playedIds,
-            template?.title,
-            description,
-            templateType
+        // Trigger Meal Cancellation Flow
+        if (status === LeaveStatusTypes.APPROVED) {
+          this.cancelMealsForLeavePeriod(leave).catch((err) =>
+            console.error(`[LeaveCancellation] Hook Error: ${err.message}`)
           );
         }
       }
@@ -1122,9 +1157,9 @@ class StudentLeaveService {
         // Else get the date range based on the durationType
         const range = durationType
           ? getDateRange(durationType as ReportDropDownTypes) || {
-            start: null,
-            end: null,
-          }
+              start: null,
+              end: null,
+            }
           : { start: null, end: null };
 
         start = range.start ? new Date(range.start) : null;
@@ -1167,8 +1202,8 @@ class StudentLeaveService {
       // Map leave data to the desired structure with `isCanEdit`
       const response = await Promise.all(
         leaves.map(async (leave: any) => {
-          // Convert startDate to UTC moment
-          const startDate = moment.utc(leave.startDate);
+          // Convert startDate to UTC dayjs
+          const startDate = dayjs.utc(leave.startDate);
 
           const canEdit =
             leave.leaveStatus === LeaveStatusTypes.APPROVED &&
@@ -1270,10 +1305,21 @@ class StudentLeaveService {
         ordered: false,
       });
 
-      if (result.modifiedCount === 0) {
-        throw new Error(
-          "No leave statuses were updated. Check if all leave IDs are valid and in pending state."
+      if (result.modifiedCount > 0) {
+        // Trigger Meal Cancellation for all approved leaves
+        const approvedLeaves = leaves.filter(
+          (l) => l.status === LeaveStatusTypes.APPROVED
         );
+        for (const item of approvedLeaves) {
+          const leave = await StudentLeave.findById(item.leaveId).lean();
+          if (leave) {
+            this.cancelMealsForLeavePeriod(leave as any).catch((err) =>
+              console.error(
+                `[LeaveCancellation] Bulk Hook Error for ${item.leaveId}: ${err.message}`
+              )
+            );
+          }
+        }
       }
 
       return UPDATE_DATA;
@@ -1429,6 +1475,211 @@ class StudentLeaveService {
       }
     } catch (error) {
       throw new Error(UNIQUE_GENERATE_FAILED);
+    }
+  };
+
+  /**
+   * SECTION: Method to cancel meals for leave period
+   * Runs upon warden approval of a leave request.
+   */
+  cancelMealsForLeavePeriod = async (leave: IStudentLeave): Promise<void> => {
+    try {
+      const { startDate, endDate, userId, hostelId } = leave;
+      const studentIdObj = new mongoose.Types.ObjectId(String(userId));
+      const hostelIdObj = new mongoose.Types.ObjectId(String(hostelId));
+
+      // Calculate the full date range for the leave in IST
+      const startDayjs = dayjs(startDate).tz("Asia/Kolkata");
+      const endDayjs = dayjs(endDate).tz("Asia/Kolkata");
+
+      // Get all unique dates (YYYY-MM-DD) in the range
+      const datesInRange: string[] = [];
+      let current = dayjs(startDayjs).startOf("day");
+      const endMarker = dayjs(endDayjs).startOf("day");
+
+      while (current.isSameOrBefore(endMarker)) {
+        datesInRange.push(current.format("YYYY-MM-DD"));
+        current = current.add(1, "day");
+      }
+
+      // Fetch dependencies in bulk (General Timing and Daily Menus)
+      const [generalTimings, menus] = await Promise.all([
+        HostelMealTiming.findOne({ hostelId, status: true }).lean(),
+        MessMenu.find({
+          hostelId,
+          date: { $in: datesInRange.map((d) => dayjs.utc(d).toDate()) },
+          status: true,
+        }).lean(),
+      ]);
+
+      // Maps for quick lookup
+      const menuMap = new Map();
+      menus.forEach((m) => menuMap.set(dayjs(m.date).format("YYYY-MM-DD"), m));
+
+      const bulkOps: any[] = [];
+
+      // Process each date
+      for (const dateKey of datesInRange) {
+        const targetDateUTC = dayjs.utc(dateKey).toDate();
+        const dDayjs = dayjs.tz(dateKey, "Asia/Kolkata");
+        const menu = menuMap.get(dateKey);
+
+        const timings: any = generalTimings || {
+          breakfastStartTime: "07:00",
+          lunchStartTime: "12:00",
+          snacksStartTime: "17:00",
+          dinnerStartTime: "19:30",
+          breakfastEndTime: "10:00",
+          lunchEndTime: "15:30",
+          snacksEndTime: "19:00",
+          dinnerEndTime: "22:00",
+        };
+
+        const mealDefs = [
+          {
+            name: "breakfast",
+            start: timings.breakfastStartTime,
+            bool: "isBreakfastBooked",
+          },
+          {
+            name: "lunch",
+            start: timings.lunchStartTime,
+            bool: "isLunchBooked",
+          },
+          {
+            name: "snacks",
+            start: timings.snacksStartTime,
+            bool: "isSnacksBooked",
+          },
+          {
+            name: "dinner",
+            start: timings.dinnerStartTime,
+            bool: "isDinnerBooked",
+          },
+        ];
+
+        const setUpdates: any = {
+          updatedAt: dayjs().tz("Asia/Kolkata").toDate(),
+          status: true,
+        };
+        const setOnInsert: any = {
+          hostelId: hostelIdObj,
+          studentId: studentIdObj,
+          date: targetDateUTC,
+          isManualBooking: false, // Default for new records; existing records preserve their flag
+          createdAt: dayjs().tz("Asia/Kolkata").toDate(),
+          createdBy: studentIdObj,
+          updatedBy: studentIdObj,
+        };
+        if (menu) setOnInsert.mealId = menu._id;
+
+        let cancelledInDay = 0;
+
+        for (const mDef of mealDefs) {
+          const [h, m] = mDef.start.split(":").map(Number);
+          const mealStartMoment = dDayjs
+            .clone()
+            .set("hour", h)
+            .set("minute", m)
+            .set("second", 0)
+            .set("millisecond", 0);
+
+          const isAtLeave =
+            mealStartMoment.isAfter(startDayjs) &&
+            mealStartMoment.isBefore(endDayjs);
+
+          if (isAtLeave) {
+            setUpdates[mDef.bool] = false; // Legacy Boolean flag
+            setUpdates[`meals.${mDef.name}`] = {
+              status: MealBookingIntent.SKIPPED,
+              locked: true,
+              consumed: false,
+              consumedAt: null,
+              cancelSource: MealCancelSource.LEAVE,
+            };
+            cancelledInDay++;
+          }
+        }
+
+        if (cancelledInDay > 0) {
+          // Determine overall booking status for the record
+          setUpdates.bookingStatus =
+            cancelledInDay === 4
+              ? MealBookingStatusTypes.SKIPPED
+              : MealBookingStatusTypes.PARTIALLY_CANCELLED;
+
+          bulkOps.push({
+            updateOne: {
+              filter: {
+                studentId: studentIdObj,
+                date: targetDateUTC,
+                hostelId: hostelIdObj,
+              },
+              update: { $set: setUpdates, $setOnInsert: setOnInsert },
+              upsert: true,
+            },
+          });
+        }
+      }
+
+      if (bulkOps.length > 0) {
+        await BookMeals.bulkWrite(bulkOps);
+
+        // NOTE: Simplified Notification Logic for Meal Cancellation due to Leave
+        try {
+          const studentId = String(userId);
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await fetchPlayerNotificationConfig(
+              studentId,
+              TemplateTypes.MEAL_CANCELLED
+            );
+
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              TemplateTypes.MEAL_CANCELLED
+            );
+
+          const finalNoticeCreated =
+            isPlayedNoticeCreated && isHostelNoticeCreated;
+          const notificationLog = [log, hostelLogs].filter(Boolean);
+
+          // Simplified message: No dates as per user request
+          const description =
+            template?.description || "Your meal booking has been cancelled.";
+
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+
+          if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title || "Meal Cancellation",
+              description,
+              TemplateTypes.MEAL_CANCELLED
+            );
+          }
+        } catch (notificationError: any) {
+          console.error(
+            `[Leave Meal Cancellation Notification Failed] StudentId: ${userId}, Error: ${notificationError.message}`
+          );
+        }
+      }
+    } catch (error: any) {
+      console.error(`[LeaveCancellation] Final Fix Failure: ${error.message}`);
     }
   };
 }

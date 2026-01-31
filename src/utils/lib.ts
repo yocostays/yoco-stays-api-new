@@ -490,6 +490,7 @@ export const populateTemplate = (
   template: string,
   data: Record<string, any>
 ): string => {
+  if (!template) return "";
   return template.replace(/{{(.*?)}}/g, (_, key) => data[key.trim()] ?? "");
 };
 

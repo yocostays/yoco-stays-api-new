@@ -128,6 +128,10 @@ const StudentHostelAllocationSchema: Schema<IUserHostelAssignment> =
     { timestamps: true }
   );
 
+StudentHostelAllocationSchema.index({ hostelId: 1, status: 1 });
+StudentHostelAllocationSchema.index({ hostelId: 1, floorNumber: 1, roomNumber: 1 });
+StudentHostelAllocationSchema.index({ studentId: 1, hostelId: 1 });
+
 const StudentHostelAllocation = mongoose.model<IUserHostelAssignment>(
   "StudentHostelAllocation",
   StudentHostelAllocationSchema

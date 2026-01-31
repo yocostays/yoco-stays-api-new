@@ -11,8 +11,7 @@ export interface IWastageDetails extends Document {
 export interface IFoodWastage extends Document {
   mealIds: mongoose.Types.ObjectId[]; // Changed to an array of ObjectId
   foodWastageNumber: string;
-  startDate: Date;
-  endDate: Date;
+  date: Date;
   breakfast: IWastageDetails;
   lunch: IWastageDetails;
   snacks: IWastageDetails;
@@ -46,11 +45,7 @@ const FoodWastageSchema: Schema = new Schema<IFoodWastage>(
       required: false,
       default: null,
     },
-    startDate: {
-      type: Date,
-      required: true,
-    },
-    endDate: {
+    date: {
       type: Date,
       required: true,
     },
@@ -107,8 +102,9 @@ const FoodWastageSchema: Schema = new Schema<IFoodWastage>(
 );
 
 // Add indexes to frequently queried fields
-FoodWastageSchema.index({ mealIds: 1, startDate: 1, endDate: 1 });
-FoodWastageSchema.index({ hostelId: 1, startDate: 1, endDate: 1 });
+FoodWastageSchema.index({ mealIds: 1 });
+FoodWastageSchema.index({ date: 1 });
+FoodWastageSchema.index({ hostelId: 1, date: 1 });
 FoodWastageSchema.index({ status: 1 }); // For quick lookups based on status
 
 const FoodWastage = mongoose.model<IFoodWastage>(

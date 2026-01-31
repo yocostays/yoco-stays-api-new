@@ -49,7 +49,7 @@ import authService from "../services/auth.service";
 import Otp from "../models/otp.model";
 import { sendStudentWelcomeEmail } from "../services/mailService";
 import { generateRandomPassword, hashPassword } from "../utils/hashUtils";
-import { OtpChannel, OtpPurpose } from "../validators/otp.schema";
+import { OtpChannel, OtpPurpose } from "../utils/validators/otp.schema";
 import OtpLogicService from "../services/otp.service";
 
 const { generateOtp } = authService;
@@ -2567,7 +2567,6 @@ class UserController {
       const tempPassword = generateRandomPassword(8);
       const hashedPassword = await hashPassword(tempPassword);
       user.password = hashedPassword;
-      user.testPassword = tempPassword;
 
       await user.save();
 

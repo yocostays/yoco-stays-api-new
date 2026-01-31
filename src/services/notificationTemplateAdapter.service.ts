@@ -52,8 +52,6 @@ class NotificationTemplateAdapter {
         );
         globalSubId = globalSubData?._id?.toString();
 
-      } else {
-        console.log(`  [Global] No GlobalTemplate/Subcategory found for: ${templateType}`);
       }
 
       // Try to find hostel-specific override using Global ID or falling back to type/title

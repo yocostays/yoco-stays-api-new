@@ -88,6 +88,37 @@ export enum MealBookingStatusTypes {
   GUEST_BOOKED = "guest booked",
 }
 
+/**
+ * Booking intent per meal - represents what the student intended for a specific meal.
+ * Used in the new meals state machine for granular tracking.
+ */
+export enum MealBookingIntent {
+  CONFIRMED = "CONFIRMED", // Student actively booked this meal
+  CANCELLED = "CANCELLED", // Student actively cancelled this meal
+  NOT_APPLICABLE = "N/A", // Meal was never booked (null-equivalent)
+  PENDING = "PENDING", // No decision yet
+  SKIPPED = "SKIPPED", // Student explicitly skipped this meal
+}
+
+// Source of meal cancellation for audit and tracking purposes.
+export enum MealCancelSource {
+  MANUAL = "manual", // User cancelled manually
+  LEAVE = "leave", // Cancelled due to approved leave
+  SYSTEM = "system", // System-triggered cancellation
+}
+
+/**
+ * Derived status for reporting and display purposes.
+ * Calculated based on booking intent and consumption status.
+ */
+export enum MealDerivedStatus {
+  CONSUMED = "CONSUMED",
+  MISSED = "MISSED",
+  SKIPPED = "SKIPPED",
+  SKIPPED_CONSUMED = "SKIPPED_CONSUMED",
+  NOT_BOOKED = "NOT_BOOKED",
+}
+
 export enum ComplainStatusTypes {
   ALL = "all",
   PENDING = "pending",
@@ -185,7 +216,7 @@ export enum BulkUploadTypes {
   MEAL = "meal",
   FOOD_WASTAGE = "food wastage",
   HOSTEL = "hostel",
-  HOSTEL_ROOM_MAP = "hostel room map"
+  HOSTEL_ROOM_MAP = "hostel room map",
 }
 
 export enum HostelTypes {
@@ -308,6 +339,7 @@ export enum TemplateTypes {
   //LINK: Meal
   MEAL_BOOKED = "meal booked",
   MEAL_CANCELLED = "meal cancelled",
+  MEAL_AUTO_BOOKED = "meals autobooked",
 
   //LINK: Complaint
   COMPLAINT_SUBMITTED = "complaint submitted",
@@ -330,4 +362,10 @@ export enum NoticeTypes {
 export enum PushNotificationTypes {
   AUTO = "auto",
   MANUAL = "manual",
+}
+
+export enum QRPurpose {
+  MESS_ATTENDANCE = "MESS_ATTENDANCE",
+  LEAVE = "LEAVE",
+  HOSTEL_ATTENDANCE = "HOSTEL_ATTENDANCE",
 }

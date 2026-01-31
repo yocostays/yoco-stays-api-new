@@ -63,13 +63,13 @@ const MessMenuSchema: Schema = new Schema<IMessMenu>(
       type: Boolean,
       required: true,
       default: true,
-      index: true, 
+      index: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "Staff",
       required: true,
-      index: true, 
+      index: true,
     },
     updatedBy: {
       type: Schema.Types.ObjectId,
@@ -82,6 +82,7 @@ const MessMenuSchema: Schema = new Schema<IMessMenu>(
 );
 
 // Compound Indexes for Efficient Queries
+MessMenuSchema.index({ hostelId: 1, date: -1 });
 MessMenuSchema.index({ hostelId: 1, date: 1 }, { unique: true });
 MessMenuSchema.index({ status: 1, date: -1 });
 
