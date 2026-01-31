@@ -1824,7 +1824,7 @@ class MessService {
     try {
       // Find the last bookMealNumber in descending order
       const lastBookMeal: any = await BookMeals.findOne()
-        .sort({ bookMealNumber: -1 })
+        .sort({ createdAt: -1 })
         .select("bookMealNumber");
 
       let newBookMealNumber = "BM-001"; // Default value if no previous record
@@ -1854,7 +1854,7 @@ class MessService {
     try {
       // Find the last created record sorted by `uniqueId` in descending order
       const lastMeal = await MessMenu.findOne({})
-        .sort({ uniqueId: -1 })
+        .sort({ createdAt: -1 })
         .select("uniqueId");
 
       let newMealNumber = "M001";
