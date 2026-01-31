@@ -97,10 +97,7 @@ class AnnouncementService {
       // Validate image sizes (Max 2MB per image)
       for (const file of imageFiles) {
         if (file.size > 2 * 1024 * 1024) {
-          throw new AppError(
-            `Image size exceeds, required less than 2MB`,
-            400,
-          );
+          throw new AppError(`Image size exceeds, required less than 2MB`, 400);
         }
       }
 
@@ -185,7 +182,9 @@ class AnnouncementService {
           hostelId,
           TemplateTypes.ANNOUNCEMENT_CREATED,
           activeStudentsOnly,
-        ).catch((err) => console.error("Announcement Create Notif Error:", err));
+        ).catch((err) =>
+          console.error("Announcement Create Notif Error:", err),
+        );
       }
 
       return { announcement };
@@ -198,7 +197,7 @@ class AnnouncementService {
       }
       throw error;
     }
-  }
+  };
 
   // Update announcement
   updateAnnouncementHandler = async (
@@ -285,10 +284,7 @@ class AnnouncementService {
 
         // Parallel Image Uploads
         const imageUploadPromises = imageFiles.map((file) =>
-          uploadFileToCloudStorage(
-            file,
-            `ann/${announcement.hostelId}`,
-          ),
+          uploadFileToCloudStorage(file, `ann/${announcement.hostelId}`),
         );
 
         const imageResults = await Promise.all(imageUploadPromises);
@@ -385,7 +381,9 @@ class AnnouncementService {
           updated.hostelId.toString(),
           TemplateTypes.ANNOUNCEMENT_UPDATED,
           updated.activeStudentsOnly,
-        ).catch((err) => console.error("Announcement Update Notif Error:", err));
+        ).catch((err) =>
+          console.error("Announcement Update Notif Error:", err),
+        );
       }
 
       return { announcement: updated };
@@ -398,7 +396,7 @@ class AnnouncementService {
       }
       throw error;
     }
-  }
+  };
 
   // Get announcements for warden with status filter
   getAnnouncementsForWardenHandler = async (
@@ -498,8 +496,10 @@ class AnnouncementService {
       data.map(async (announcement: any) => {
         const signedImages = announcement.images
           ? await Promise.all(
-            announcement.images.map(async (img: string) => (await getSignedUrl(img)) || ""),
-          )
+              announcement.images.map(
+                async (img: string) => (await getSignedUrl(img)) || "",
+              ),
+            )
           : [];
 
         let signedAttachment = announcement.attachment;
@@ -530,7 +530,7 @@ class AnnouncementService {
       currentPage: page,
       totalPages,
     };
-  }
+  };
 
   // Delete announcement
   deleteAnnouncement = async (
@@ -570,7 +570,7 @@ class AnnouncementService {
 
     // Delete from DB
     await Announcement.findByIdAndDelete(announcementId);
-  }
+  };
 
   // Get announcement by id
   getAnnouncementById = async (id: string): Promise<any> => {
@@ -579,84 +579,75 @@ class AnnouncementService {
       throw new Error(RECORD_NOT_FOUND("Announcement"));
     }
     return announcement;
-  }
-
+  };
 
   // //----------------------student methods----------------------------
 
-  // // Get announcements for student dashboard
-  // getAnnouncementsForStudent = async (
-  //   userId: mongoose.Types.ObjectId,
-  //   hostelId: mongoose.Types.ObjectId,
-  // ): Promise<{ announcements: any[] }> => {
-  //   // Get student details
-  //   const student = await User.findById(userId).select("isVerified");
-  //   if (!student) {
-  //     throw new Error(RECORD_NOT_FOUND("Student"));
-  //   }
+  // Get announcements for student dashboard
+  getAnnouncementsForStudent = async (
+    userId: mongoose.Types.ObjectId,
+    hostelId: mongoose.Types.ObjectId,
+  ): Promise<{ announcements: any[] }> => {
+    // Get student details
+    const student = await User.findById(userId).select("status").lean();
+    if (!student) {
+      throw new Error(RECORD_NOT_FOUND("Student"));
+    }
 
-  //   // Fetch all announcements for the hostel
-  //   const announcements = await Announcement.find({
-  //     hostelId,
-  //     isHidden: false,
-  //   }).sort({ publishFrom: -1 });
+    const today = dayjs().utc().startOf("day").toDate();
 
-  //   // Filter and attach computed status
-  //   const filteredAnnouncements = announcements
-  //     .map((announcement) => {
-  //       const status = AnnouncementService.computeAnnouncementStatus(
-  //         announcement.publishFrom as Date,
-  //         announcement.publishTo as Date,
-  //       );
+    const query: any = {
+      hostelId,
+      isHidden: false,
+      publishFrom: { $lte: today },
+      publishTo: { $gte: today },
+    };
 
-  //       return {
-  //         ...announcement.toObject(),
-  //         status,
-  //       };
-  //     })
-  //     .filter((announcement) => {
-  //       // Exclude PAST announcements
-  //       if (announcement.status === AnnouncementStatus.PAST) return false;
+    if (!student.status) {
+      query.activeStudentsOnly = false;
+    }
 
-  //       // If activeStudentsOnly is true, check student's active status
-  //       if (announcement.activeStudentsOnly && !student.isVerified)
-  //         return false;
+    // Fetch announcements for the hostel that are currently published and not hidden
+    const announcements = await Announcement.find(query)
+      .sort({ publishFrom: -1 })
+      .lean();
+    // Map through data to sign URLs
+    const signedAnnouncements = await Promise.all(
+      announcements.map(async (announcement: any) => {
+        // Compute status for display
+        const status = AnnouncementService.computeAnnouncementStatus(
+          announcement.publishFrom as Date,
+          announcement.publishTo as Date,
+        );
 
-  //       return true;
-  //     });
+        const firstImage = announcement.images?.[0];
+        const signedImages = firstImage
+          ? [(await getSignedUrl(firstImage)) || ""]
+          : [];
 
-  //   // Map through data to sign URLs
-  //   const signedAnnouncements = await Promise.all(
-  //     filteredAnnouncements.map(async (announcement: any) => {
-  //       const signedImages = announcement.images
-  //         ? await Promise.all(
-  //           announcement.images.map(async (img: string) => (await getSignedUrl(img)) || ""),
-  //         )
-  //         : [];
+        let signedAttachment = announcement.attachment;
+        if (
+          announcement.attachment &&
+          announcement.attachment.type === "FILE" &&
+          announcement.attachment.url
+        ) {
+          signedAttachment = {
+            ...announcement.attachment,
+            url: (await getSignedUrl(announcement.attachment.url)) || "",
+          };
+        }
 
-  //       let signedAttachment = announcement.attachment;
-  //       if (
-  //         announcement.attachment &&
-  //         announcement.attachment.type === "FILE" &&
-  //         announcement.attachment.url
-  //       ) {
-  //         signedAttachment = {
-  //           ...announcement.attachment,
-  //           url: (await getSignedUrl(announcement.attachment.url)) || "",
-  //         };
-  //       }
+        return {
+          ...announcement,
+          status,
+          images: signedImages,
+          attachment: signedAttachment,
+        };
+      }),
+    );
 
-  //       return {
-  //         ...announcement,
-  //         images: signedImages,
-  //         attachment: signedAttachment,
-  //       };
-  //     }),
-  //   );
-
-  //   return { announcements: signedAnnouncements };
-  // }
-
+    return { announcements: signedAnnouncements };
+  };
 
   // Notify students about new or updated announcement
   private notifyStudents = async (
@@ -664,7 +655,6 @@ class AnnouncementService {
     templateType: TemplateTypes,
     activeStudentsOnly: boolean = false,
   ): Promise<void> => {
-    console.log(`[Announcement Notif] Starting notification for hostel: ${hostelId}, type: ${templateType}`);
     try {
       //  Fetch eligible students
       const userQuery: any = {
@@ -676,8 +666,6 @@ class AnnouncementService {
       }
 
       const students = await User.find(userQuery).select("_id").lean();
-
-      console.log(`[Announcement Notif] Found ${students.length} eligible students`);
 
       if (students.length === 0) return;
 
@@ -704,7 +692,6 @@ class AnnouncementService {
           const notificationLog = [log, hostelLogs].filter(Boolean);
 
           if (template) {
-            console.log(`[Announcement Notif] Template found for student ${studentId}. Sending...`);
             // Create Notice (In-app)
             await Notice.create({
               userId: student?._id,
@@ -720,7 +707,6 @@ class AnnouncementService {
               notificationLog,
               createdAt: getCurrentISTTime(),
             });
-            console.log(`[Announcement Notif] In-app notice created for student ${studentId}`);
 
             // Send Push Notification
             if (finalNoticeCreated && playedIds && playedIds.length > 0) {
@@ -730,10 +716,7 @@ class AnnouncementService {
                 template.description || template.body,
                 templateType,
               );
-              console.log(`[Announcement Notif] Push notification sent to student ${studentId} (PlayerIds: ${playedIds.length})`);
             }
-          } else {
-            console.warn(`[Announcement Notif] No template found for student ${studentId} and type ${templateType}`);
           }
         } catch (innerError: any) {
           console.error(
@@ -748,7 +731,7 @@ class AnnouncementService {
         error.message,
       );
     }
-  }
+  };
 }
 
 export default new AnnouncementService();
