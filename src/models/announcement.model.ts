@@ -18,8 +18,10 @@ export interface IAnnouncement extends Document {
   attachment?: IAttachment;
   publishFrom: Date;
   publishTo: Date;
-  date?: string;
-  time?: string;
+  startDate?: string;
+  endDate?: string;
+  startTime?: string;
+  endTime?: string;
   venue?: string;
   hostelId: mongoose.Types.ObjectId;
   activeStudentsOnly: boolean;
@@ -84,12 +86,22 @@ const AnnouncementSchema: Schema = new Schema<IAnnouncement>(
       type: Date,
       required: true,
     },
-    date: {
+    startDate: {
       type: String,
       trim: true,
       default: null,
     },
-    time: {
+    endDate: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    startTime: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    endTime: {
       type: String,
       trim: true,
       default: null,

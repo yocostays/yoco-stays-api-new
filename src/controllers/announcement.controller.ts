@@ -53,8 +53,10 @@ class AnnouncementController {
         isHidden,
         eventName,
         eventTagline,
-        date,
-        time,
+        startDate,
+        endDate,
+        startTime,
+        endTime,
         venue,
         attachmentLinks,
       } = parseResult.data;
@@ -102,8 +104,10 @@ class AnnouncementController {
         imageFiles,
         eventName,
         eventTagline,
-        date,
-        time,
+        startDate,
+        endDate,
+        startTime,
+        endTime,
         venue,
         attachmentFile ? [attachmentFile] : undefined,
         parsedLink ? [parsedLink] : undefined,
@@ -206,7 +210,8 @@ class AnnouncementController {
         return sendZodError(res, parseResult) as any;
       }
 
-      const { hostelId, status, page, limit } = parseResult.data;
+      const { hostelId, status, isHidden, fromDate, toDate, page, limit } =
+        parseResult.data;
 
       // Validate staff exists
       const { staff } = await getStaffById(wardenId);
@@ -220,6 +225,9 @@ class AnnouncementController {
       const result = await getAnnouncementsForWardenHandler(
         hostelId,
         status as any,
+        isHidden,
+        fromDate,
+        toDate,
         page,
         limit,
       );

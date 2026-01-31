@@ -31,13 +31,39 @@ export const CreateAnnouncementSchema = z
       .max(24, "Invalid Hostel ID"),
     eventName: z.string().optional(),
     eventTagline: z.string().optional(),
-    date: z.string().optional(),
-    time: z.string().optional(),
+    startDate: z
+      .string()
+      .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+        message: "Invalid startDate format (YYYY-MM-DD)",
+      })
+      .optional(),
+    endDate: z
+      .string()
+      .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+        message: "Invalid endDate format (YYYY-MM-DD)",
+      })
+      .optional(),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
     venue: z.string().optional(),
     attachmentLinks: z.string().optional(),
     activeStudentsOnly: booleanString.default(false),
     isHidden: booleanString.default(false),
   })
+  .refine(
+    (data) => {
+      if (data.startDate && data.endDate) {
+        const start = dayjs(data.startDate);
+        const end = dayjs(data.endDate);
+        return !end.isBefore(start);
+      }
+      return true;
+    },
+    {
+      message: "endDate must be on or after startDate",
+      path: ["endDate"],
+    },
+  )
   .refine(
     (data) => {
       const from = dayjs(data.publishFrom);
@@ -69,14 +95,40 @@ export const UpdateAnnouncementSchema = z
         message: "Invalid publishTo date format (YYYY-MM-DD)",
       })
       .optional(),
-    date: z.string().optional(),
-    time: z.string().optional(),
+    startDate: z
+      .string()
+      .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+        message: "Invalid startDate format (YYYY-MM-DD)",
+      })
+      .optional(),
+    endDate: z
+      .string()
+      .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+        message: "Invalid endDate format (YYYY-MM-DD)",
+      })
+      .optional(),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
     venue: z.string().optional(),
     isHidden: booleanString,
     eventStatus: z.enum([EventStatus.ACTIVE, EventStatus.CANCELLED]).optional(),
     activeStudentsOnly: booleanString,
     attachmentLinks: z.string().optional(),
   })
+  .refine(
+    (data) => {
+      if (data.startDate && data.endDate) {
+        const start = dayjs(data.startDate);
+        const end = dayjs(data.endDate);
+        return !end.isBefore(start);
+      }
+      return true;
+    },
+    {
+      message: "endDate must be on or after startDate",
+      path: ["endDate"],
+    },
+  )
   .refine(
     (data) => {
       if (data.publishFrom && data.publishTo) {
@@ -97,6 +149,19 @@ export type UpdateAnnouncementInput = z.infer<typeof UpdateAnnouncementSchema>;
 export const GetWardenAnnouncementsSchema = z.object({
   hostelId: z.string().min(24).max(24),
   status: z.nativeEnum(AnnouncementStatus).optional(),
+  isHidden: booleanString,
+  fromDate: z
+    .string()
+    .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+      message: "Invalid fromDate format (YYYY-MM-DD)",
+    })
+    .optional(),
+  toDate: z
+    .string()
+    .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+      message: "Invalid toDate format (YYYY-MM-DD)",
+    })
+    .optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(10),
 });

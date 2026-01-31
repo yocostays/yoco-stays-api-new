@@ -3,14 +3,25 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import Announcement from "../models/announcement.model";
 import User from "../models/user.model";
+import Notice from "../models/notice.model";
+import UserService from "./user.service";
 import {
   uploadFileToCloudStorage,
   deleteFromS3,
+  getSignedUrl,
 } from "../utils/awsUploadService";
-import { AnnouncementStatus, EventStatus } from "../utils/enum";
+import {
+  AnnouncementStatus,
+  EventStatus,
+  NoticeTypes,
+  PushNotificationTypes,
+  TemplateTypes,
+} from "../utils/enum";
 import { ERROR_MESSAGES } from "../utils/messages";
 import { paginateAggregate } from "../utils/pagination";
 import { AppError } from "../utils/errors";
+import { sendPushNotificationToUser } from "../utils/commonService/pushNotificationService";
+import { getCurrentISTTime } from "../utils/lib";
 
 dayjs.extend(utc);
 
@@ -52,7 +63,7 @@ class AnnouncementService {
   }
 
   // Create announcement
-  async createAnnouncementHandler(
+  createAnnouncementHandler = async (
     title: string,
     publishFrom: string,
     publishTo: string,
@@ -61,14 +72,16 @@ class AnnouncementService {
     imageFiles: Express.Multer.File[],
     eventName?: string,
     eventTagline?: string,
-    date?: string,
-    time?: string,
+    startDate?: string,
+    endDate?: string,
+    startTime?: string,
+    endTime?: string,
     venue?: string,
     attachmentFiles?: Express.Multer.File[],
     attachmentLinks?: Array<{ url: string; name?: string }>,
     activeStudentsOnly: boolean = false,
     isHidden: boolean = false,
-  ): Promise<{ announcement: any }> {
+  ): Promise<{ announcement: any }> => {
     const uploadedKeys: string[] = [];
 
     try {
@@ -81,9 +94,19 @@ class AnnouncementService {
         throw new Error("Maximum 5 images allowed");
       }
 
+      // Validate image sizes (Max 2MB per image)
+      for (const file of imageFiles) {
+        if (file.size > 2 * 1024 * 1024) {
+          throw new AppError(
+            `Image size exceeds, required less than 2MB`,
+            400,
+          );
+        }
+      }
+
       // Parallel Image Uploads
       const imageUploadPromises = imageFiles.map((file) =>
-        uploadFileToCloudStorage(file, `announcements/${hostelId}`),
+        uploadFileToCloudStorage(file, `ann/${hostelId}`),
       );
 
       const imageResults = await Promise.all(imageUploadPromises);
@@ -112,7 +135,7 @@ class AnnouncementService {
         const file = attachmentFiles[0];
         const uploadResult = await uploadFileToCloudStorage(
           file,
-          `announcements/${hostelId}/attachments`,
+          `ann/${hostelId}/att`,
         );
 
         if (uploadResult && uploadResult.Key) {
@@ -145,8 +168,10 @@ class AnnouncementService {
         attachment,
         publishFrom: AnnouncementService.normalizeDateToUTC(publishFrom),
         publishTo: AnnouncementService.normalizeDateToUTC(publishTo),
-        date: date || null,
-        time: time || null,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        startTime: startTime || null,
+        endTime: endTime || null,
         venue: venue || null,
         hostelId: new mongoose.Types.ObjectId(hostelId),
         activeStudentsOnly,
@@ -154,6 +179,14 @@ class AnnouncementService {
         eventStatus: EventStatus.ACTIVE,
         createdBy: createdById,
       });
+
+      if (!isHidden) {
+        this.notifyStudents(
+          hostelId,
+          TemplateTypes.ANNOUNCEMENT_CREATED,
+          activeStudentsOnly,
+        ).catch((err) => console.error("Announcement Create Notif Error:", err));
+      }
 
       return { announcement };
     } catch (error) {
@@ -168,7 +201,7 @@ class AnnouncementService {
   }
 
   // Update announcement
-  async updateAnnouncementHandler(
+  updateAnnouncementHandler = async (
     announcementId: string,
     updateData: {
       title?: string;
@@ -176,8 +209,10 @@ class AnnouncementService {
       eventTagline?: string;
       publishFrom?: string;
       publishTo?: string;
-      date?: string;
-      time?: string;
+      startDate?: string;
+      endDate?: string;
+      startTime?: string;
+      endTime?: string;
       venue?: string;
       isHidden?: boolean;
       eventStatus?: EventStatus;
@@ -187,7 +222,7 @@ class AnnouncementService {
     imageFiles?: Express.Multer.File[],
     attachmentFiles?: Express.Multer.File[],
     attachmentLinks?: Array<{ url: string; name?: string }>,
-  ): Promise<{ announcement: any }> {
+  ): Promise<{ announcement: any }> => {
     const uploadedKeys: string[] = [];
     const keysToDelete: string[] = [];
 
@@ -208,8 +243,10 @@ class AnnouncementService {
       if (updateData.eventName) updateFields.eventName = updateData.eventName;
       if (updateData.eventTagline)
         updateFields.eventTagline = updateData.eventTagline;
-      if (updateData.date) updateFields.date = updateData.date;
-      if (updateData.time) updateFields.time = updateData.time;
+      if (updateData.startDate) updateFields.startDate = updateData.startDate;
+      if (updateData.endDate) updateFields.endDate = updateData.endDate;
+      if (updateData.startTime) updateFields.startTime = updateData.startTime;
+      if (updateData.endTime) updateFields.endTime = updateData.endTime;
       if (updateData.venue) updateFields.venue = updateData.venue;
       if (updateData.isHidden !== undefined)
         updateFields.isHidden = updateData.isHidden;
@@ -236,11 +273,21 @@ class AnnouncementService {
           throw new Error("Maximum 5 images allowed");
         }
 
+        // Validate image sizes (Max 2MB per image)
+        for (const file of imageFiles) {
+          if (file.size > 2 * 1024 * 1024) {
+            throw new AppError(
+              `Image ${file.originalname} exceeds the 2MB size limit`,
+              400,
+            );
+          }
+        }
+
         // Parallel Image Uploads
         const imageUploadPromises = imageFiles.map((file) =>
           uploadFileToCloudStorage(
             file,
-            `announcements/${announcement.hostelId}`,
+            `ann/${announcement.hostelId}`,
           ),
         );
 
@@ -273,7 +320,7 @@ class AnnouncementService {
         const file = attachmentFiles[0];
         const uploadResult = await uploadFileToCloudStorage(
           file,
-          `announcements/${announcement.hostelId}/attachments`,
+          `ann/${announcement.hostelId}/att`,
         );
 
         if (uploadResult && uploadResult.Key) {
@@ -331,6 +378,16 @@ class AnnouncementService {
         );
       }
 
+      // Trigger Notification (Async, don't block response)
+      // Note: We notify on update if it's currently published (not hidden)
+      if (updated && !updated.isHidden) {
+        this.notifyStudents(
+          updated.hostelId.toString(),
+          TemplateTypes.ANNOUNCEMENT_UPDATED,
+          updated.activeStudentsOnly,
+        ).catch((err) => console.error("Announcement Update Notif Error:", err));
+      }
+
       return { announcement: updated };
     } catch (error) {
       // Rollback: Delete newly uploaded files if DB update fails
@@ -344,9 +401,12 @@ class AnnouncementService {
   }
 
   // Get announcements for warden with status filter
-  async getAnnouncementsForWardenHandler(
+  getAnnouncementsForWardenHandler = async (
     hostelId: string,
     status?: AnnouncementStatus,
+    isHidden?: boolean,
+    fromDate?: string,
+    toDate?: string,
     page: number = 1,
     limit: number = 10,
   ): Promise<{
@@ -356,7 +416,7 @@ class AnnouncementService {
     endIndex: number;
     currentPage: number;
     totalPages: number;
-  }> {
+  }> => {
     const today = dayjs().utc().startOf("day").toDate();
 
     const pipeline: any[] = [
@@ -365,28 +425,50 @@ class AnnouncementService {
           hostelId: new mongoose.Types.ObjectId(hostelId),
         },
       },
-      {
-        $addFields: {
-          status: {
-            $switch: {
-              branches: [
-                {
-                  case: { $lt: [today, "$publishFrom"] },
-                  then: AnnouncementStatus.UPCOMING,
-                },
-                {
-                  case: { $gt: [today, "$publishTo"] },
-                  then: AnnouncementStatus.PAST,
-                },
-              ],
-              default: AnnouncementStatus.CURRENT,
-            },
+    ];
+
+    // Filter by isHidden if provided
+    if (isHidden !== undefined) {
+      pipeline.push({
+        $match: { isHidden: isHidden },
+      });
+    }
+
+    // Filter by date range (on publishFrom) if provided
+    if (fromDate || toDate) {
+      const dateFilter: any = {};
+      if (fromDate) {
+        dateFilter.$gte = dayjs.utc(fromDate).startOf("day").toDate();
+      }
+      if (toDate) {
+        dateFilter.$lte = dayjs.utc(toDate).endOf("day").toDate();
+      }
+      pipeline.push({
+        $match: { publishFrom: dateFilter },
+      });
+    }
+
+    pipeline.push({
+      $addFields: {
+        status: {
+          $switch: {
+            branches: [
+              {
+                case: { $lt: [today, "$publishFrom"] },
+                then: AnnouncementStatus.UPCOMING,
+              },
+              {
+                case: { $gt: [today, "$publishTo"] },
+                then: AnnouncementStatus.PAST,
+              },
+            ],
+            default: AnnouncementStatus.CURRENT,
           },
         },
       },
-    ];
+    });
 
-    // Filter by status if provided
+    // Filter by computed status if provided
     if (status) {
       pipeline.push({
         $match: {
@@ -411,8 +493,37 @@ class AnnouncementService {
     const startIndex = (page - 1) * limit;
     const endIndex = startIndex + limit;
 
+    // Map through data to sign URLs
+    const signedAnnouncements = await Promise.all(
+      data.map(async (announcement: any) => {
+        const signedImages = announcement.images
+          ? await Promise.all(
+            announcement.images.map(async (img: string) => (await getSignedUrl(img)) || ""),
+          )
+          : [];
+
+        let signedAttachment = announcement.attachment;
+        if (
+          announcement.attachment &&
+          announcement.attachment.type === "FILE" &&
+          announcement.attachment.url
+        ) {
+          signedAttachment = {
+            ...announcement.attachment,
+            url: (await getSignedUrl(announcement.attachment.url)) || "",
+          };
+        }
+
+        return {
+          ...announcement,
+          images: signedImages,
+          attachment: signedAttachment,
+        };
+      }),
+    );
+
     return {
-      announcements: data,
+      announcements: signedAnnouncements,
       totalCount: count,
       startIndex: startIndex + 1,
       endIndex: Math.min(endIndex, count),
@@ -422,10 +533,10 @@ class AnnouncementService {
   }
 
   // Delete announcement
-  async deleteAnnouncement(
+  deleteAnnouncement = async (
     announcementId: string,
     deletedById: mongoose.Types.ObjectId,
-  ): Promise<void> {
+  ): Promise<void> => {
     const announcement = await Announcement.findById(announcementId);
     if (!announcement) {
       throw new Error(RECORD_NOT_FOUND("Announcement"));
@@ -462,12 +573,181 @@ class AnnouncementService {
   }
 
   // Get announcement by id
-  async getAnnouncementById(id: string): Promise<any> {
+  getAnnouncementById = async (id: string): Promise<any> => {
     const announcement = await Announcement.findById(id);
     if (!announcement) {
       throw new Error(RECORD_NOT_FOUND("Announcement"));
     }
     return announcement;
+  }
+
+
+  // //----------------------student methods----------------------------
+
+  // // Get announcements for student dashboard
+  // getAnnouncementsForStudent = async (
+  //   userId: mongoose.Types.ObjectId,
+  //   hostelId: mongoose.Types.ObjectId,
+  // ): Promise<{ announcements: any[] }> => {
+  //   // Get student details
+  //   const student = await User.findById(userId).select("isVerified");
+  //   if (!student) {
+  //     throw new Error(RECORD_NOT_FOUND("Student"));
+  //   }
+
+  //   // Fetch all announcements for the hostel
+  //   const announcements = await Announcement.find({
+  //     hostelId,
+  //     isHidden: false,
+  //   }).sort({ publishFrom: -1 });
+
+  //   // Filter and attach computed status
+  //   const filteredAnnouncements = announcements
+  //     .map((announcement) => {
+  //       const status = AnnouncementService.computeAnnouncementStatus(
+  //         announcement.publishFrom as Date,
+  //         announcement.publishTo as Date,
+  //       );
+
+  //       return {
+  //         ...announcement.toObject(),
+  //         status,
+  //       };
+  //     })
+  //     .filter((announcement) => {
+  //       // Exclude PAST announcements
+  //       if (announcement.status === AnnouncementStatus.PAST) return false;
+
+  //       // If activeStudentsOnly is true, check student's active status
+  //       if (announcement.activeStudentsOnly && !student.isVerified)
+  //         return false;
+
+  //       return true;
+  //     });
+
+  //   // Map through data to sign URLs
+  //   const signedAnnouncements = await Promise.all(
+  //     filteredAnnouncements.map(async (announcement: any) => {
+  //       const signedImages = announcement.images
+  //         ? await Promise.all(
+  //           announcement.images.map(async (img: string) => (await getSignedUrl(img)) || ""),
+  //         )
+  //         : [];
+
+  //       let signedAttachment = announcement.attachment;
+  //       if (
+  //         announcement.attachment &&
+  //         announcement.attachment.type === "FILE" &&
+  //         announcement.attachment.url
+  //       ) {
+  //         signedAttachment = {
+  //           ...announcement.attachment,
+  //           url: (await getSignedUrl(announcement.attachment.url)) || "",
+  //         };
+  //       }
+
+  //       return {
+  //         ...announcement,
+  //         images: signedImages,
+  //         attachment: signedAttachment,
+  //       };
+  //     }),
+  //   );
+
+  //   return { announcements: signedAnnouncements };
+  // }
+
+
+  // Notify students about new or updated announcement
+  private notifyStudents = async (
+    hostelId: string,
+    templateType: TemplateTypes,
+    activeStudentsOnly: boolean = false,
+  ): Promise<void> => {
+    console.log(`[Announcement Notif] Starting notification for hostel: ${hostelId}, type: ${templateType}`);
+    try {
+      //  Fetch eligible students
+      const userQuery: any = {
+        hostelId: new mongoose.Types.ObjectId(hostelId),
+        isLeft: false,
+      };
+      if (activeStudentsOnly) {
+        userQuery.isVerified = true;
+      }
+
+      const students = await User.find(userQuery).select("_id").lean();
+
+      console.log(`[Announcement Notif] Found ${students.length} eligible students`);
+
+      if (students.length === 0) return;
+
+      //  Loop through students and send notifications
+      for (const student of students) {
+        try {
+          const studentId = student._id.toString();
+
+          const { playedIds, template, isPlayedNoticeCreated, log } =
+            await UserService.fetchPlayerNotificationConfig(
+              studentId,
+              templateType,
+            );
+
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await UserService.getStudentAllocatedHostelDetails(
+              studentId,
+              hostelId,
+              templateType,
+            );
+
+          const finalNoticeCreated =
+            isPlayedNoticeCreated && isHostelNoticeCreated;
+          const notificationLog = [log, hostelLogs].filter(Boolean);
+
+          if (template) {
+            console.log(`[Announcement Notif] Template found for student ${studentId}. Sending...`);
+            // Create Notice (In-app)
+            await Notice.create({
+              userId: student?._id,
+              hostelId: new mongoose.Types.ObjectId(hostelId),
+              floorNumber: hostelDetail?.floorNumber,
+              bedType: hostelDetail?.bedType,
+              roomNumber: hostelDetail?.roomNumber,
+              noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+              pushNotificationTypes: PushNotificationTypes.AUTO,
+              templateId: template?._id,
+              templateSendMessage: template.description || template.body,
+              isNoticeCreated: finalNoticeCreated,
+              notificationLog,
+              createdAt: getCurrentISTTime(),
+            });
+            console.log(`[Announcement Notif] In-app notice created for student ${studentId}`);
+
+            // Send Push Notification
+            if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+              await sendPushNotificationToUser(
+                playedIds,
+                template.title || template.heading || "Announcement",
+                template.description || template.body,
+                templateType,
+              );
+              console.log(`[Announcement Notif] Push notification sent to student ${studentId} (PlayerIds: ${playedIds.length})`);
+            }
+          } else {
+            console.warn(`[Announcement Notif] No template found for student ${studentId} and type ${templateType}`);
+          }
+        } catch (innerError: any) {
+          console.error(
+            `[Announcement Notif Error] Student ${student._id}:`,
+            innerError.message,
+          );
+        }
+      }
+    } catch (error: any) {
+      console.error(
+        `[Announcement Notif Error] Hostel ${hostelId}:`,
+        error.message,
+      );
+    }
   }
 }
 

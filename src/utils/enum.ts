@@ -351,6 +351,8 @@ export enum TemplateTypes {
   COMPLAINT_APPROVAL_PENDING = "complaint Approval pending",
 
   OTHER = "other",
+  ANNOUNCEMENT_CREATED = "new announcement created",
+  ANNOUNCEMENT_UPDATED = "announcement updated",
 }
 
 export enum NoticeTypes {
