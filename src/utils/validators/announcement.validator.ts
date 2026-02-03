@@ -148,18 +148,22 @@ export type UpdateAnnouncementInput = z.infer<typeof UpdateAnnouncementSchema>;
 
 export const GetWardenAnnouncementsSchema = z.object({
   hostelId: z.string().min(24).max(24),
-  status: z.nativeEnum(AnnouncementStatus).optional(),
-  isHidden: booleanString,
-  fromDate: z
-    .string()
-    .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
-      message: "Invalid fromDate format (YYYY-MM-DD)",
-    })
-    .optional(),
-  toDate: z
-    .string()
-    .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
-      message: "Invalid toDate format (YYYY-MM-DD)",
+  filters: z
+    .object({
+      status: z.nativeEnum(AnnouncementStatus).optional(),
+      isHidden: booleanString,
+      fromDate: z
+        .string()
+        .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+          message: "Invalid fromDate format (YYYY-MM-DD)",
+        })
+        .optional(),
+      toDate: z
+        .string()
+        .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+          message: "Invalid toDate format (YYYY-MM-DD)",
+        })
+        .optional(),
     })
     .optional(),
   page: z.coerce.number().min(1).default(1),

@@ -210,8 +210,8 @@ class AnnouncementController {
         return sendZodError(res, parseResult) as any;
       }
 
-      const { hostelId, status, isHidden, fromDate, toDate, page, limit } =
-        parseResult.data;
+      const { hostelId, filters, page, limit } = parseResult.data;
+      const { status, isHidden, fromDate, toDate } = filters || {};
 
       // Validate staff exists
       const { staff } = await getStaffById(wardenId);

@@ -21,7 +21,7 @@ announcementRouter.post(
   "/",
   validateToken,
   uploadFileWithMulter.fields([
-    { name: "images", maxCount: 5 },
+    { name: "images", maxCount: 3 },
     { name: "attachment", maxCount: 1 },
   ]),
   createAnnouncement,
@@ -32,7 +32,7 @@ announcementRouter.put(
   "/:id",
   validateToken,
   uploadFileWithMulter.fields([
-    { name: "images", maxCount: 5 },
+    { name: "images", maxCount: 3 },
     { name: "attachment", maxCount: 1 },
   ]),
   updateAnnouncement,
