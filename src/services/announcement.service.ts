@@ -496,10 +496,10 @@ class AnnouncementService {
       data.map(async (announcement: any) => {
         const signedImages = announcement.images
           ? await Promise.all(
-              announcement.images.map(
-                async (img: string) => (await getSignedUrl(img)) || "",
-              ),
-            )
+            announcement.images.map(
+              async (img: string) => (await getSignedUrl(img)) || "",
+            ),
+          )
           : [];
 
         let signedAttachment = announcement.attachment;
@@ -620,9 +620,12 @@ class AnnouncementService {
           announcement.publishTo as Date,
         );
 
-        const firstImage = announcement.images?.[0];
-        const signedImages = firstImage
-          ? [(await getSignedUrl(firstImage)) || ""]
+        const signedImages = announcement.images
+          ? await Promise.all(
+            announcement.images.map(
+              async (img: string) => (await getSignedUrl(img)) || "",
+            ),
+          )
           : [];
 
         let signedAttachment = announcement.attachment;
