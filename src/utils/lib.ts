@@ -509,3 +509,12 @@ export const removeHtmlTags = (str: string): string => {
   }
   return str?.replace(/<\/?[^>]+(>|$)/g, "");
 };
+
+//ANCHOR - Check if staff is authorized for a hostel
+export const isStaffAuthorizedForHostel = (
+  staff: any,
+  hostelId: string
+): boolean => {
+  if (!staff || !staff.hostelIds || !hostelId) return false;
+  return staff.hostelIds.some((h: any) => h._id.toString() === hostelId);
+};

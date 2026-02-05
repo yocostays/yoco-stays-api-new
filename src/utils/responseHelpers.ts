@@ -8,7 +8,7 @@ export const sendSuccess = (
   message: string,
   data?: any,
   statusCode: number = 200,
-  count?: number
+  count?: number,
 ): Response<HttpResponse> => {
   const response: HttpResponse = {
     statusCode,
@@ -24,7 +24,7 @@ export const sendSuccess = (
 export const sendError = (
   res: Response,
   message: string,
-  statusCode: number = 400
+  statusCode: number = 400,
 ): Response<HttpResponse> => {
   const response: HttpResponse = {
     statusCode,
@@ -36,7 +36,7 @@ export const sendError = (
 // Handles Zod validation errors and sends formatted error response
 export const sendZodError = (
   res: Response,
-  parseResult: any
+  parseResult: any,
 ): Response<HttpResponse> | null => {
   if (parseResult.success) {
     return null; // No error, validation passed
@@ -46,5 +46,5 @@ export const sendZodError = (
     .map((e: { message: string }) => e.message)
     .join(", ");
 
-  return sendError(res, `Validation error: ${errors}`, 400);
+  return sendError(res, `${errors}`, 400);
 };

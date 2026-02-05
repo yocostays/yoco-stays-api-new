@@ -14,9 +14,7 @@ import {
 import { getCurrentISTTime } from "../utils/lib";
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from "../utils/messages";
 
-const {
-  RECORD_NOT_FOUND,
-} = ERROR_MESSAGES;
+const { RECORD_NOT_FOUND } = ERROR_MESSAGES;
 const { CREATE_DATA } = SUCCESS_MESSAGES;
 
 class NoticeService {
@@ -24,7 +22,7 @@ class NoticeService {
   async createNotice(
     userIds: any[],
     noticeTypes: NoticeTypes,
-    templateId: string
+    templateId: string,
   ): Promise<string> {
     try {
       //NOTE: Get template data if available.
@@ -69,7 +67,7 @@ class NoticeService {
               playedIds,
               templateData.title,
               templateData.description,
-              templateData.templateType
+              templateData.templateType,
             );
           }
 
@@ -85,7 +83,7 @@ class NoticeService {
             templateId: templateData?._id,
             createdAt: getCurrentISTTime(),
           });
-        })
+        }),
       );
 
       return CREATE_DATA;
@@ -103,7 +101,7 @@ class NoticeService {
     floorNumber?: number,
     roomNumber?: number,
     noticeType?: NoticeTypes,
-    sort?: string
+    sort?: string,
   ): Promise<{ notices: any[]; count: number }> {
     try {
       const searchParams: any = {};
@@ -192,6 +190,53 @@ class NoticeService {
         createdAt: notice?.createdAt ?? null,
       }));
       return { notices: result, count };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  //SECTION: Get user notifications
+  async getUserNotifications(
+    userId: string,
+  ): Promise<{ items: any[]; unreadCount: number }> {
+    try {
+      if (!mongoose.isValidObjectId(userId)) throw new Error("Invalid User ID");
+
+      const notifications = await Notice.find({ userId })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean();
+
+      const unreadCount = await Notice.countDocuments({
+        userId,
+        isRead: false,
+      });
+
+      const items = notifications.map((notice: any) => ({
+        id: notice._id,
+        message: notice.templateSendMessage,
+        isRead: notice.isRead,
+        createdAt: notice.createdAt,
+      }));
+
+      return { items, unreadCount };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  //SECTION: Mark all notifications as read for a user
+  async markNotificationsAsRead(userId: string): Promise<void> {
+    try {
+      if (!mongoose.isValidObjectId(userId)) throw new Error("Invalid User ID");
+
+      await Notice.updateMany(
+        { userId, isRead: false },
+        {
+          isRead: true,
+          readAt: getCurrentISTTime(),
+        },
+      );
     } catch (error: any) {
       throw new Error(error.message);
     }

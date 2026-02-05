@@ -19,11 +19,19 @@ export async function sendPushNotificationToUser(
   extraData: Record<string, any> = {}
 ): Promise<string> {
   try {
+    // Deduplicate player IDs
+    const uniquePlayerIds = Array.from(
+      new Set(Array.isArray(playerIds) ? playerIds : [playerIds])
+    ).filter(Boolean);
+
+    if (uniquePlayerIds.length === 0)
+      return NOTIFICATION_SEND_SUCCESS(templateType);
+
     await axios.post(
       ONE_SIGNAL_API_URL as string,
       {
         app_id: ONE_SIGNAL_APP_ID,
-        include_player_ids: playerIds,
+        include_player_ids: uniquePlayerIds,
         headings: { en: templateHeading },
         contents: { en: templateDescription },
         data: extraData,
@@ -51,8 +59,8 @@ export async function sendPushNotificationV2(
   extraData: Record<string, any> = {}
 ): Promise<string> {
   try {
-    // Filter out null/undefined player IDs
-    const validPlayerIds = playerIds.filter(Boolean);
+    // Filter out null/undefined and deduplicate player IDs
+    const validPlayerIds = Array.from(new Set(playerIds.filter(Boolean)));
 
     if (validPlayerIds.length === 0) {
       throw new Error("No valid player IDs provided for notification");

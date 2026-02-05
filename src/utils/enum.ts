@@ -351,6 +351,8 @@ export enum TemplateTypes {
   COMPLAINT_APPROVAL_PENDING = "complaint Approval pending",
 
   OTHER = "other",
+  ANNOUNCEMENT_CREATED = "new announcement created",
+  ANNOUNCEMENT_UPDATED = "announcement updated",
 }
 
 export enum NoticeTypes {
@@ -368,4 +370,20 @@ export enum QRPurpose {
   MESS_ATTENDANCE = "MESS_ATTENDANCE",
   LEAVE = "LEAVE",
   HOSTEL_ATTENDANCE = "HOSTEL_ATTENDANCE",
+}
+
+export enum AnnouncementStatus {
+  UPCOMING = "UPCOMING",
+  CURRENT = "CURRENT",
+  PAST = "PAST",
+}
+
+export enum EventStatus {
+  ACTIVE = "ACTIVE",
+  CANCELLED = "CANCELLED",
+}
+
+export enum AttachmentType {
+  FILE = "FILE",
+  LINK = "LINK",
 }
