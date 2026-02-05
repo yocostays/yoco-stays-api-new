@@ -24,6 +24,8 @@ export interface INotice extends Document {
   templateId: Schema.Types.ObjectId;
   templateSendMessage: string;
   isNoticeCreated: boolean;
+  isRead: boolean;
+  readAt: Date | null;
   createdAt: Date;
 }
 
@@ -104,11 +106,22 @@ const NoticeSchema: Schema = new Schema<INotice>(
       type: Boolean,
       default: true,
     },
+    isRead: {
+      type: Boolean,
+      default: false,
+    },
+    readAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
+
+NoticeSchema.index({ userId: 1, createdAt: -1 });
+NoticeSchema.index({ userId: 1, isRead: 1 });
 
 const Notice = model<INotice>("Notice", NoticeSchema);
 export default Notice;

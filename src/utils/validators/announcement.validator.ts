@@ -19,6 +19,9 @@ export const CreateAnnouncementSchema = z
       .string({ message: "Publish from date is required" })
       .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
         message: "Invalid publishFrom date format (YYYY-MM-DD)",
+      })
+      .refine((val) => !dayjs(val).isBefore(dayjs().startOf("day")), {
+        message: "Publish from date cannot be in the past",
       }),
     publishTo: z
       .string({ message: "Publish to date is required" })
@@ -87,6 +90,9 @@ export const UpdateAnnouncementSchema = z
       .string()
       .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
         message: "Invalid publishFrom date format (YYYY-MM-DD)",
+      })
+      .refine((val) => !dayjs(val).isBefore(dayjs().startOf("day")), {
+        message: "Publish from date cannot be in the past",
       })
       .optional(),
     publishTo: z
