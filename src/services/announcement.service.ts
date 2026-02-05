@@ -5,6 +5,7 @@ import Announcement from "../models/announcement.model";
 import User from "../models/user.model";
 import Notice from "../models/notice.model";
 import UserService from "./user.service";
+import TemplateService from "./template.service";
 import {
   uploadFileToCloudStorage,
   deleteFromS3,
@@ -659,7 +660,17 @@ class AnnouncementService {
     activeStudentsOnly: boolean = false,
   ): Promise<void> => {
     try {
-      //  Fetch eligible students
+      // Fetch template once for the hostel
+      const { template } = await TemplateService.checkTemplateExist(
+        hostelId,
+        templateType,
+      );
+
+      if (!template) {
+        return;
+      }
+
+      // Fetch eligible students with their allocation details in one go
       const userQuery: any = {
         hostelId: new mongoose.Types.ObjectId(hostelId),
         isLeft: false,
@@ -668,69 +679,104 @@ class AnnouncementService {
         userQuery.isVerified = true;
       }
 
-      const students = await User.find(userQuery).select("_id").lean();
+      // We use aggregation to get both user details and their current allocation
+      const studentData = await User.aggregate([
+        { $match: userQuery },
+        {
+          $lookup: {
+            from: "studenthostelallocations",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$studentId", "$$userId"] },
+                      { $eq: ["$hostelId", new mongoose.Types.ObjectId(hostelId)] },
+                    ],
+                  },
+                },
+              },
+              { $sort: { createdAt: -1 } },
+              { $limit: 1 },
+            ],
+            as: "allocation",
+          },
+        },
+        { $unwind: { path: "$allocation", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            oneSignalWebId: 1,
+            oneSignalAndoridId: 1,
+            oneSignalIosId: 1,
+            "allocation.floorNumber": 1,
+            "allocation.bedType": 1,
+            "allocation.roomNumber": 1,
+          },
+        },
+      ]);
 
-      if (students.length === 0) return;
+      if (studentData.length === 0) {
+        return;
+      }
 
-      //  Loop through students and send notifications
-      for (const student of students) {
-        try {
-          const studentId = student._id.toString();
+      const noticesToCreate: any[] = [];
+      const allPlayerIds: string[] = [];
+      const currentTime = getCurrentISTTime();
 
-          const { playedIds, template, isPlayedNoticeCreated, log } =
-            await UserService.fetchPlayerNotificationConfig(
-              studentId,
-              templateType,
-            );
+      // Prepare bulk data
+      for (const student of studentData) {
+        // Collect player IDs
+        if (student.oneSignalWebId) allPlayerIds.push(student.oneSignalWebId);
+        if (student.oneSignalAndoridId)
+          allPlayerIds.push(student.oneSignalAndoridId);
+        if (student.oneSignalIosId) allPlayerIds.push(student.oneSignalIosId);
 
-          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-            await UserService.getStudentAllocatedHostelDetails(
-              studentId,
-              hostelId,
-              templateType,
-            );
+        // Prepare Notice record
+        noticesToCreate.push({
+          userId: student._id,
+          hostelId: new mongoose.Types.ObjectId(hostelId),
+          floorNumber: student.allocation?.floorNumber || 0,
+          bedType: student.allocation?.bedType || null,
+          roomNumber: student.allocation?.roomNumber || 0,
+          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+          pushNotificationTypes: PushNotificationTypes.AUTO,
+          templateId: template._id,
+          templateSendMessage: template.description || template.body,
+          isNoticeCreated: true,
+          createdAt: currentTime,
+        });
+      }
 
-          const finalNoticeCreated =
-            isPlayedNoticeCreated && isHostelNoticeCreated;
-          const notificationLog = [log, hostelLogs].filter(Boolean);
+      // Bulk Create Notices
+      if (noticesToCreate.length > 0) {
+        await Notice.insertMany(noticesToCreate, { ordered: false }).catch(
+          (err) => console.error("Bulk Notice Create Error:", err),
+        );
+      }
 
-          if (template) {
-            // Create Notice (In-app)
-            await Notice.create({
-              userId: student?._id,
-              hostelId: new mongoose.Types.ObjectId(hostelId),
-              floorNumber: hostelDetail?.floorNumber,
-              bedType: hostelDetail?.bedType,
-              roomNumber: hostelDetail?.roomNumber,
-              noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-              pushNotificationTypes: PushNotificationTypes.AUTO,
-              templateId: template?._id,
-              templateSendMessage: template.description || template.body,
-              isNoticeCreated: finalNoticeCreated,
-              notificationLog,
-              createdAt: getCurrentISTTime(),
-            });
+      // Send Batch Push Notification (Deduplicated inside sendPushNotificationToUser)
+      if (allPlayerIds.length > 0) {
+        // Deduplicate and filter empty IDs before sending
+        const uniqueIds = Array.from(new Set(allPlayerIds));
 
-            // Send Push Notification
-            if (finalNoticeCreated && playedIds && playedIds.length > 0) {
-              await sendPushNotificationToUser(
-                playedIds,
-                template.title || template.heading || "Announcement",
-                template.description || template.body,
-                templateType,
-              );
-            }
-          }
-        } catch (innerError: any) {
-          console.error(
-            `[Announcement Notif Error] Student ${student._id}:`,
-            innerError.message,
+        // OneSignal has a limit of 2000 IDs per request for include_player_ids
+        for (let i = 0; i < uniqueIds.length; i += 2000) {
+          const chunk = uniqueIds.slice(i, i + 2000);
+          sendPushNotificationToUser(
+            chunk,
+            template.title || template.heading || "Announcement",
+            template.description || template.body,
+            templateType,
+          ).catch((err) =>
+            console.error("Announcement Batch Push Error:", err),
           );
         }
       }
     } catch (error: any) {
       console.error(
-        `[Announcement Notif Error] Hostel ${hostelId}:`,
+        `[Announcement Batch Notif Error] Hostel ${hostelId}:`,
         error.message,
       );
     }
