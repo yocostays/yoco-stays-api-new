@@ -10,6 +10,11 @@ const booleanString = z.preprocess((val) => {
   return val;
 }, z.boolean().optional());
 
+const nullableDateString = z.preprocess((val) => {
+  if (val === "null" || val === "") return null;
+  return val;
+}, z.string().nullable().optional());
+
 export const CreateAnnouncementSchema = z
   .object({
     title: z
@@ -101,18 +106,18 @@ export const UpdateAnnouncementSchema = z
         message: "Invalid publishTo date format (YYYY-MM-DD)",
       })
       .optional(),
-    startDate: z
-      .string()
-      .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+    startDate: nullableDateString.refine(
+      (val) => !val || dayjs(val, "YYYY-MM-DD", true).isValid(),
+      {
         message: "Invalid startDate format (YYYY-MM-DD)",
-      })
-      .optional(),
-    endDate: z
-      .string()
-      .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
+      },
+    ),
+    endDate: nullableDateString.refine(
+      (val) => !val || dayjs(val, "YYYY-MM-DD", true).isValid(),
+      {
         message: "Invalid endDate format (YYYY-MM-DD)",
-      })
-      .optional(),
+      },
+    ),
     startTime: z.string().optional(),
     endTime: z.string().optional(),
     venue: z.string().optional(),

@@ -243,8 +243,10 @@ class AnnouncementService {
       if (updateData.eventName) updateFields.eventName = updateData.eventName;
       if (updateData.eventTagline)
         updateFields.eventTagline = updateData.eventTagline;
-      if (updateData.startDate) updateFields.startDate = updateData.startDate;
-      if (updateData.endDate) updateFields.endDate = updateData.endDate;
+      if (updateData.startDate !== undefined)
+        updateFields.startDate = updateData.startDate;
+      if (updateData.endDate !== undefined)
+        updateFields.endDate = updateData.endDate;
       if (updateData.startTime) updateFields.startTime = updateData.startTime;
       if (updateData.endTime) updateFields.endTime = updateData.endTime;
       if (updateData.venue) updateFields.venue = updateData.venue;
@@ -497,10 +499,10 @@ class AnnouncementService {
       data.map(async (announcement: any) => {
         const signedImages = announcement.images
           ? await Promise.all(
-            announcement.images.map(
-              async (img: string) => (await getSignedUrl(img)) || "",
-            ),
-          )
+              announcement.images.map(
+                async (img: string) => (await getSignedUrl(img)) || "",
+              ),
+            )
           : [];
 
         let signedAttachment = announcement.attachment;
@@ -623,10 +625,10 @@ class AnnouncementService {
 
         const signedImages = announcement.images
           ? await Promise.all(
-            announcement.images.map(
-              async (img: string) => (await getSignedUrl(img)) || "",
-            ),
-          )
+              announcement.images.map(
+                async (img: string) => (await getSignedUrl(img)) || "",
+              ),
+            )
           : [];
 
         let signedAttachment = announcement.attachment;
@@ -692,7 +694,12 @@ class AnnouncementService {
                   $expr: {
                     $and: [
                       { $eq: ["$studentId", "$$userId"] },
-                      { $eq: ["$hostelId", new mongoose.Types.ObjectId(hostelId)] },
+                      {
+                        $eq: [
+                          "$hostelId",
+                          new mongoose.Types.ObjectId(hostelId),
+                        ],
+                      },
                     ],
                   },
                 },
