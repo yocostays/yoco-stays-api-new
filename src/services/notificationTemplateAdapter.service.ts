@@ -13,10 +13,11 @@ class NotificationTemplateAdapter {
   // Fetch notification template with hostel-specific override support
   async getNotificationTemplate(
     templateType: TemplateTypes,
-    hostelId?: string | Types.ObjectId
+    hostelId?: string | Types.ObjectId,
   ): Promise<{
     heading: string;
     body: string;
+    templateId?: string;
     extraData?: any;
   }> {
     try {
@@ -34,29 +35,31 @@ class NotificationTemplateAdapter {
       let globalSubId: string | null = null;
 
       // Find the target Global Subcategory first (providing stable ID)
-      const globalTemplate = await GlobalTemplate.findOne({
+      const globalTemplate = (await GlobalTemplate.findOne({
         $or: [
           { "subcategories.meta.templateType": templateType },
-          { "subcategories.title": { $regex: new RegExp(`^${templateType}$`, "i") } }
+          {
+            "subcategories.title": {
+              $regex: new RegExp(`^${templateType}$`, "i"),
+            },
+          },
         ],
         scope: "global",
         isActive: true,
         isDeleted: false,
-      }).lean() as any;
+      }).lean()) as any;
 
       if (globalTemplate) {
         globalSubData = globalTemplate.subcategories.find(
           (sc: any) =>
             sc.meta?.templateType === templateType ||
-            sc.title?.toLowerCase() === templateType.toLowerCase()
+            sc.title?.toLowerCase() === templateType.toLowerCase(),
         );
         globalSubId = globalSubData?._id?.toString();
-
       }
 
       // Try to find hostel-specific override using Global ID or falling back to type/title
       if (hostelId) {
-
         // Build query to find the specific category template for this hostel
         const hostelQuery: any = {
           hostelId: new Types.ObjectId(hostelId as string),
@@ -68,23 +71,25 @@ class NotificationTemplateAdapter {
           hostelQuery.globalTemplateId = globalTemplate._id;
         }
 
-        const hostelTemplate = await HostelTemplate.findOne(hostelQuery).lean() as any;
+        const hostelTemplate = (await HostelTemplate.findOne(
+          hostelQuery,
+        ).lean()) as any;
 
         if (hostelTemplate) {
           // Robust matching: originalSubcategoryId OR templateType OR title
-          const hostelSubcategory = hostelTemplate.subcategories.find((sc: any) => {
-            const matchesId = globalSubId && sc.originalSubcategoryId?.toString() === globalSubId;
-            const matchesType = sc.meta?.templateType === templateType;
-            const matchesTitle = sc.title?.toLowerCase() === templateType.toLowerCase();
-            return matchesId || matchesType || matchesTitle;
-          });
+          const hostelSubcategory = hostelTemplate.subcategories.find(
+            (sc: any) => {
+              const matchesId =
+                globalSubId &&
+                sc.originalSubcategoryId?.toString() === globalSubId;
+              const matchesType = sc.meta?.templateType === templateType;
+              const matchesTitle =
+                sc.title?.toLowerCase() === templateType.toLowerCase();
+              return matchesId || matchesType || matchesTitle;
+            },
+          );
 
           if (hostelSubcategory) {
-            const hasCustomTemplate =
-              hostelSubcategory.notificationTemplate?.heading &&
-              hostelSubcategory.notificationTemplate?.body;
-
-
             notificationData = {
               heading:
                 hostelSubcategory.notificationTemplate?.heading ||
@@ -94,9 +99,10 @@ class NotificationTemplateAdapter {
                 hostelSubcategory.notificationTemplate?.body ||
                 hostelSubcategory.description ||
                 "You have a new update.",
-              extraData: hostelSubcategory.notificationTemplate?.actionData || {},
+              templateId: hostelSubcategory._id?.toString(),
+              extraData:
+                hostelSubcategory.notificationTemplate?.actionData || {},
             };
-          } else {
           }
         }
       }
@@ -112,13 +118,14 @@ class NotificationTemplateAdapter {
             globalSubData.notificationTemplate?.body ||
             globalSubData.description ||
             "You have a new update.",
+          templateId: globalSubData._id?.toString(),
           extraData: globalSubData.notificationTemplate?.actionData || {},
         };
       }
 
       if (!notificationData) {
         throw new Error(
-          RECORD_NOT_FOUND(`Notification template for ${templateType}`)
+          RECORD_NOT_FOUND(`Notification template for ${templateType}`),
         );
       }
 
@@ -127,7 +134,7 @@ class NotificationTemplateAdapter {
       return notificationData;
     } catch (error: any) {
       throw new Error(
-        `Failed to fetch notification template: ${error.message}`
+        `Failed to fetch notification template: ${error.message}`,
       );
     }
   }
@@ -149,7 +156,7 @@ class NotificationTemplateAdapter {
   async getPopulatedTemplate(
     templateType: TemplateTypes,
     hostelId: string | Types.ObjectId | undefined,
-    dynamicData: Record<string, any>
+    dynamicData: Record<string, any>,
   ): Promise<{
     heading: string;
     body: string;

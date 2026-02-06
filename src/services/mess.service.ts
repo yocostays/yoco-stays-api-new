@@ -2839,8 +2839,11 @@ class MessService {
                     TemplateTypes.MEAL_AUTO_BOOKED,
                   );
 
+                // Treat notice as "created" if we have valid player IDs for a fallback push
                 const finalNoticeCreated =
-                  isPlayedNoticeCreated && isHostelNoticeCreated;
+                  (isPlayedNoticeCreated && isHostelNoticeCreated) ||
+                  (playedIds && playedIds.length > 0);
+
                 const notificationLog = [log, hostelLogs].filter(Boolean);
 
                 const description =
@@ -2862,12 +2865,17 @@ class MessService {
                   createdAt: getCurrentISTTime(),
                 });
 
-                if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+                // RELAXED CONDITION: Send push even if template record is missing, as long as we have player IDs
+                if (playedIds && playedIds.length > 0) {
                   await sendPushNotificationToUser(
                     playedIds,
                     template?.title || "Mess",
                     description,
                     TemplateTypes.MEAL_AUTO_BOOKED,
+                  );
+                } else {
+                  console.warn(
+                    `[AutoBooking] Push skipped - No player IDs found for student: ${studentId}`,
                   );
                 }
               } catch (notifyErr: any) {
