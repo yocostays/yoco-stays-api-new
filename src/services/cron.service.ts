@@ -38,7 +38,7 @@ class CronService {
 
     // Schedule: Daily at 12:00 PM IST for auto-booking next day's meals
     cron.schedule(
-      "0 16 * * *",
+      "0 12 * * *",
       async () => {
         try {
           await MessService.autoBookMealsForNextDay();
