@@ -21,7 +21,7 @@ class TemplateService {
     description: string,
     templateType: TemplateTypes,
     staffId: string,
-    image?: string
+    image?: string,
   ): Promise<string> {
     try {
       if (image && image.includes("base64")) {
@@ -54,7 +54,7 @@ class TemplateService {
     limit: number,
     search?: string,
     hostelId?: string,
-    templateType?: TemplateTypes
+    templateType?: TemplateTypes,
   ): Promise<{ templates: any[]; count: number }> {
     try {
       // Calculate the number of documents to skip
@@ -98,7 +98,7 @@ class TemplateService {
           status: ele?.status ?? null,
           createdBy: (ele?.createdBy as any)?.name ?? null,
           createdAt: ele?.createdAt ?? null,
-        }))
+        })),
       );
 
       return { templates: response, count };
@@ -135,7 +135,7 @@ class TemplateService {
     image: string,
     templateType: TemplateTypes,
     updatedById: string,
-    status?: boolean
+    status?: boolean,
   ): Promise<string> {
     try {
       const template = await Template.findById(id);
@@ -156,7 +156,7 @@ class TemplateService {
         if (existingImageKey) {
           await deleteFromS3(
             process.env.S3_BUCKET_NAME ?? "yoco-staging",
-            existingImageKey
+            existingImageKey,
           );
         }
         payload.image = null;
@@ -171,12 +171,12 @@ class TemplateService {
           if (existingImageKey) {
             await deleteFromS3(
               process.env.S3_BUCKET_NAME ?? "yoco-staging",
-              existingImageKey
+              existingImageKey,
             );
           }
           const uploadImage = await uploadFileInS3Bucket(
             image,
-            TEMPLATE_FOLDER
+            TEMPLATE_FOLDER,
           );
           if (uploadImage !== false) {
             payload.image = uploadImage.Key;
@@ -195,7 +195,7 @@ class TemplateService {
   //SECTION: Method to check template exists or not (NEW SYSTEM - Uses GlobalTemplate/HostelTemplate)
   async checkTemplateExist(
     hostelId: string,
-    templateType: TemplateTypes
+    templateType: TemplateTypes,
   ): Promise<{ template: any }> {
     try {
       const notificationTemplateAdapter =
@@ -204,7 +204,7 @@ class TemplateService {
       const notificationData =
         await notificationTemplateAdapter.getNotificationTemplate(
           templateType,
-          hostelId
+          hostelId,
         );
 
       if (!notificationData) {
@@ -213,6 +213,7 @@ class TemplateService {
 
       // Format to match expected structure
       const template = {
+        _id: notificationData.templateId,
         title: notificationData.heading,
         description: notificationData.body,
         _templateType: templateType,

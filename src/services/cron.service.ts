@@ -38,7 +38,7 @@ class CronService {
 
     // Schedule: Daily at 12:00 PM IST for auto-booking next day's meals
     cron.schedule(
-      "0 12 * * *",
+      "0 16 * * *",
       async () => {
         try {
           await MessService.autoBookMealsForNextDay();
@@ -46,7 +46,7 @@ class CronService {
           console.error("[CronService] Auto-Booking Failed:", error.message);
         }
       },
-      { timezone: "Asia/Kolkata" }
+      { timezone: "Asia/Kolkata" },
     );
 
     // Schedule: Every hour to sync meal statuses (IST)
@@ -58,11 +58,11 @@ class CronService {
         } catch (error: any) {
           console.error(
             "[CronService] Meal Status Sync Failed:",
-            error.message
+            error.message,
           );
         }
       },
-      { timezone: "Asia/Kolkata" }
+      { timezone: "Asia/Kolkata" },
     );
 
     console.log("[CronService] Production jobs scheduled (Asia/Kolkata).");
@@ -77,7 +77,7 @@ class CronService {
     try {
       const nowIST = dayjs().tz("Asia/Kolkata");
       console.log(
-        `[StatusSync] Starting sync at ${nowIST.format("YYYY-MM-DD HH:mm")} IST`
+        `[StatusSync] Starting sync at ${nowIST.format("YYYY-MM-DD HH:mm")} IST`,
       );
 
       const [allHostels, allPolicies, allTimings] = await Promise.all([
@@ -87,10 +87,10 @@ class CronService {
       ]);
 
       const policiesMap = new Map(
-        allPolicies.map((p) => [p.hostelId.toString(), p])
+        allPolicies.map((p) => [p.hostelId.toString(), p]),
       );
       const timingsMap = new Map(
-        allTimings.map((t) => [t.hostelId.toString(), t])
+        allTimings.map((t) => [t.hostelId.toString(), t]),
       );
 
       const datesToSync = [
@@ -151,7 +151,7 @@ class CronService {
 
       const modifiedCount = await this.executeBulkInChunks(bulkOps);
       console.log(
-        `[StatusSync] Success. Synchronized ${modifiedCount} records.`
+        `[StatusSync] Success. Synchronized ${modifiedCount} records.`,
       );
     } catch (error: any) {
       console.error("[StatusSync] Fatal Error:", error.message);
@@ -162,7 +162,7 @@ class CronService {
   private getBookingCutoff(
     targetDate: Dayjs,
     meal: MealType,
-    policy: any
+    policy: any,
   ): Dayjs {
     let dOffset = DEFAULT_BOOKING_CUTOFFS[meal].dayOffset;
     let timeStr = DEFAULT_BOOKING_CUTOFFS[meal].time;
@@ -185,7 +185,7 @@ class CronService {
   private getMealEndTime(
     targetDate: Dayjs,
     meal: MealType,
-    timing: any
+    timing: any,
   ): Dayjs {
     let timeStr = DEFAULT_CONSUMPTION_END[meal];
     const field = `${meal}EndTime`;
@@ -199,7 +199,7 @@ class CronService {
 
   private async executeBulkInChunks(
     ops: any[],
-    chunkSize = 500
+    chunkSize = 500,
   ): Promise<number> {
     let totalModified = 0;
     for (let i = 0; i < ops.length; i += chunkSize) {
