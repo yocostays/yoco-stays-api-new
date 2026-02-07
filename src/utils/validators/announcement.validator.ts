@@ -15,6 +15,11 @@ const nullableDateString = z.preprocess((val) => {
   return val;
 }, z.string().nullable().optional());
 
+const nullableString = z.preprocess((val) => {
+  if (val === "null" || val === "" || val === null) return null;
+  return val;
+}, z.string().nullable().optional());
+
 export const CreateAnnouncementSchema = z
   .object({
     title: z
@@ -37,8 +42,8 @@ export const CreateAnnouncementSchema = z
       .string({ message: "Hostel ID is required" })
       .min(24, "Invalid Hostel ID")
       .max(24, "Invalid Hostel ID"),
-    eventName: z.string().optional(),
-    eventTagline: z.string().optional(),
+    eventName: nullableString,
+    eventTagline: nullableString,
     startDate: z
       .string()
       .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
@@ -51,9 +56,9 @@ export const CreateAnnouncementSchema = z
         message: "Invalid endDate format (YYYY-MM-DD)",
       })
       .optional(),
-    startTime: z.string().optional(),
-    endTime: z.string().optional(),
-    venue: z.string().optional(),
+    startTime: nullableString,
+    endTime: nullableString,
+    venue: nullableString,
     attachmentLinks: z.string().optional(),
     activeStudentsOnly: booleanString.default(false),
     isHidden: booleanString.default(false),
@@ -89,8 +94,8 @@ export type CreateAnnouncementInput = z.infer<typeof CreateAnnouncementSchema>;
 export const UpdateAnnouncementSchema = z
   .object({
     title: z.string().min(1, "Title cannot be empty").optional(),
-    eventName: z.string().min(1, "Event name cannot be empty").optional(),
-    eventTagline: z.string().min(1, "Event tagline cannot be empty").optional(),
+    eventName: nullableString,
+    eventTagline: nullableString,
     publishFrom: z
       .string()
       .refine((val) => dayjs(val, "YYYY-MM-DD", true).isValid(), {
@@ -118,9 +123,9 @@ export const UpdateAnnouncementSchema = z
         message: "Invalid endDate format (YYYY-MM-DD)",
       },
     ),
-    startTime: z.string().optional(),
-    endTime: z.string().optional(),
-    venue: z.string().optional(),
+    startTime: nullableString,
+    endTime: nullableString,
+    venue: nullableString,
     isHidden: booleanString,
     eventStatus: z.enum([EventStatus.ACTIVE, EventStatus.CANCELLED]).optional(),
     activeStudentsOnly: booleanString,

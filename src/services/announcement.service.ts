@@ -71,13 +71,13 @@ class AnnouncementService {
     hostelId: string,
     createdById: mongoose.Types.ObjectId,
     imageFiles: Express.Multer.File[],
-    eventName?: string,
-    eventTagline?: string,
-    startDate?: string,
-    endDate?: string,
-    startTime?: string,
-    endTime?: string,
-    venue?: string,
+    eventName?: string | null,
+    eventTagline?: string | null,
+    startDate?: string | null,
+    endDate?: string | null,
+    startTime?: string | null,
+    endTime?: string | null,
+    venue?: string | null,
     attachmentFiles?: Express.Multer.File[],
     attachmentLinks?: Array<{ url: string; name?: string }>,
     activeStudentsOnly: boolean = false,
@@ -205,15 +205,15 @@ class AnnouncementService {
     announcementId: string,
     updateData: {
       title?: string;
-      eventName?: string;
-      eventTagline?: string;
+      eventName?: string | null;
+      eventTagline?: string | null;
       publishFrom?: string;
       publishTo?: string;
-      startDate?: string;
-      endDate?: string;
-      startTime?: string;
-      endTime?: string;
-      venue?: string;
+      startDate?: string | null;
+      endDate?: string | null;
+      startTime?: string | null;
+      endTime?: string | null;
+      venue?: string | null;
       isHidden?: boolean;
       eventStatus?: EventStatus;
       activeStudentsOnly?: boolean;
@@ -240,16 +240,19 @@ class AnnouncementService {
 
       // Update fields if provided
       if (updateData.title) updateFields.title = updateData.title;
-      if (updateData.eventName) updateFields.eventName = updateData.eventName;
-      if (updateData.eventTagline)
+      if (updateData.eventName !== undefined)
+        updateFields.eventName = updateData.eventName;
+      if (updateData.eventTagline !== undefined)
         updateFields.eventTagline = updateData.eventTagline;
       if (updateData.startDate !== undefined)
         updateFields.startDate = updateData.startDate;
       if (updateData.endDate !== undefined)
         updateFields.endDate = updateData.endDate;
-      if (updateData.startTime) updateFields.startTime = updateData.startTime;
-      if (updateData.endTime) updateFields.endTime = updateData.endTime;
-      if (updateData.venue) updateFields.venue = updateData.venue;
+      if (updateData.startTime !== undefined)
+        updateFields.startTime = updateData.startTime;
+      if (updateData.endTime !== undefined)
+        updateFields.endTime = updateData.endTime;
+      if (updateData.venue !== undefined) updateFields.venue = updateData.venue;
       if (updateData.isHidden !== undefined)
         updateFields.isHidden = updateData.isHidden;
       if (updateData.eventStatus)
