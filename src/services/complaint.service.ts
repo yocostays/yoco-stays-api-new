@@ -47,7 +47,7 @@ class ComplaintService {
     subCategoryId: string,
     description: string,
     image: string,
-    audio: string
+    audio: string,
   ): Promise<string> => {
     try {
       const leaveStartDate = new Date();
@@ -79,7 +79,7 @@ class ComplaintService {
       const { assignedStaffId } = await this.getRoundRobinStaffId(
         userId,
         categoryId,
-        category.categoryType
+        category.categoryType,
       );
 
       // Create new complaint with an initial update log entry
@@ -112,7 +112,7 @@ class ComplaintService {
         const { playedIds, template, student, isPlayedNoticeCreated, log } =
           await fetchPlayerNotificationConfig(
             userId,
-            TemplateTypes.COMPLAINT_SUBMITTED
+            TemplateTypes.COMPLAINT_SUBMITTED,
           );
 
         //NOTE: Get student and hostelDetails
@@ -120,7 +120,7 @@ class ComplaintService {
           await getStudentAllocatedHostelDetails(
             student?._id,
             student?.hostelId,
-            TemplateTypes.COMPLAINT_SUBMITTED
+            TemplateTypes.COMPLAINT_SUBMITTED,
           );
 
         //NOTE: Final notice created check.
@@ -132,7 +132,7 @@ class ComplaintService {
 
         //NOTE: Retrieve complaint data for dynamic message.
         const { complaint } = await this.complaintDetailsById(
-          newComplaint?._id
+          newComplaint?._id,
         );
         const dynamicData = {
           complaintType: complaint?.categoryType,
@@ -142,7 +142,7 @@ class ComplaintService {
         //NOTE: Add details for dynamic message using the populateTemplate.
         const description = populateTemplate(
           template?.description,
-          dynamicData
+          dynamicData,
         );
 
         //NOTE: Create entry in notice
@@ -168,7 +168,7 @@ class ComplaintService {
             playedIds,
             template?.title,
             description,
-            TemplateTypes.COMPLAINT_SUBMITTED
+            TemplateTypes.COMPLAINT_SUBMITTED,
           );
         }
       }
@@ -192,7 +192,7 @@ class ComplaintService {
     endDate?: string,
     search?: string,
     floorNumber?: string,
-    roomNumber?: string
+    roomNumber?: string,
   ): Promise<{ complaint: any[]; count: number }> {
     try {
       const skip = (page - 1) * limit;
@@ -254,9 +254,10 @@ class ComplaintService {
         if (floorNumber) allocationQuery.floorNumber = Number(floorNumber);
         if (roomNumber) allocationQuery.roomNumber = Number(roomNumber);
 
-        const allocatedUsers = await StudentHostelAllocation.find(
-          allocationQuery
-        ).select("studentId");
+        const allocatedUsers =
+          await StudentHostelAllocation.find(allocationQuery).select(
+            "studentId",
+          );
         userIds = allocatedUsers.map((entry) => entry.studentId);
       }
 
@@ -311,16 +312,17 @@ class ComplaintService {
 
           const resolvedTimeFormatted =
             ele?.complainStatus === ComplainStatusTypes.RESOLVED &&
-              ele?.resolvedTime
+            ele?.resolvedTime
               ? (() => {
-                const totalMinutes = ele.resolvedTime;
-                const hours = Math.floor(totalMinutes / 60);
-                const minutes = totalMinutes % 60;
-                return hours > 0
-                  ? `${hours} hr${hours > 1 ? "s" : ""} ${minutes} min${minutes > 1 ? "s" : ""
-                  }`
-                  : `${minutes} min${minutes > 1 ? "s" : ""}`;
-              })()
+                  const totalMinutes = ele.resolvedTime;
+                  const hours = Math.floor(totalMinutes / 60);
+                  const minutes = totalMinutes % 60;
+                  return hours > 0
+                    ? `${hours} hr${hours > 1 ? "s" : ""} ${minutes} min${
+                        minutes > 1 ? "s" : ""
+                      }`
+                    : `${minutes} min${minutes > 1 ? "s" : ""}`;
+                })()
               : null;
 
           return {
@@ -358,16 +360,16 @@ class ComplaintService {
             cancelledDate: ele?.cancelledDate ?? null,
             updatedBy: ele?.updatedBy?.name ?? null,
           };
-        })
+        }),
       );
 
       if (sort === SortingTypes.ASCENDING) {
         response.sort((a, b) =>
-          (a.studentName || "").localeCompare(b.studentName || "")
+          (a.studentName || "").localeCompare(b.studentName || ""),
         );
       } else if (sort === SortingTypes.DESCENDING) {
         response.sort((a, b) =>
-          (b.studentName || "").localeCompare(a.studentName || "")
+          (b.studentName || "").localeCompare(a.studentName || ""),
         );
       }
 
@@ -382,7 +384,7 @@ class ComplaintService {
     userId: string,
     staffId: string,
     complaintId: string,
-    remark: string
+    remark: string,
   ): Promise<string> => {
     try {
       //NOTE - check the complain details
@@ -408,13 +410,13 @@ class ComplaintService {
             assignDate: getCurrentISTTime(),
             updatedAt: getCurrentISTTime(),
           },
-        }
+        },
       );
       if (complaintUpdate) {
         const { playedIds, template, student, isPlayedNoticeCreated, log } =
           await fetchPlayerNotificationConfig(
             userId,
-            TemplateTypes.COMPLAINT_ESCALATED_ASSIGNED
+            TemplateTypes.COMPLAINT_ESCALATED_ASSIGNED,
           );
 
         //NOTE: Get student and hostelDetails
@@ -422,7 +424,7 @@ class ComplaintService {
           await getStudentAllocatedHostelDetails(
             student?._id,
             student?.hostelId,
-            TemplateTypes.COMPLAINT_ESCALATED_ASSIGNED
+            TemplateTypes.COMPLAINT_ESCALATED_ASSIGNED,
           );
 
         //NOTE: Final notice created check.
@@ -434,7 +436,7 @@ class ComplaintService {
 
         //NOTE: Get complaint details
         const { complaint } = await this.complaintDetailsById(
-          complaintUpdate?._id
+          complaintUpdate?._id,
         );
 
         const dynamicData = {
@@ -445,7 +447,7 @@ class ComplaintService {
         //NOTE: Add details for dynamic message using the populateTemplate.
         const description = populateTemplate(
           template?.description,
-          dynamicData
+          dynamicData,
         );
 
         //NOTE: Create entry in notice
@@ -471,7 +473,7 @@ class ComplaintService {
             playedIds,
             template?.title,
             description,
-            TemplateTypes.COMPLAINT_ESCALATED_ASSIGNED
+            TemplateTypes.COMPLAINT_ESCALATED_ASSIGNED,
           );
         }
       }
@@ -488,7 +490,7 @@ class ComplaintService {
     complainStatus: ComplainStatusTypes,
     remark: string,
     complaintId: string,
-    attachments?: any[]
+    attachments?: any[],
   ): Promise<string> => {
     try {
       // Check the complaint details
@@ -554,7 +556,7 @@ class ComplaintService {
             },
           },
         },
-        { new: true } //NOTE: Optionally return the updated document
+        { new: true }, //NOTE: Optionally return the updated document
       );
 
       if (complaintUpdate) {
@@ -576,7 +578,7 @@ class ComplaintService {
           await getStudentAllocatedHostelDetails(
             student?._id,
             student?.hostelId,
-            templateType
+            templateType,
           );
 
         //NOTE: Final notice created check.
@@ -598,7 +600,7 @@ class ComplaintService {
         //NOTE: Add details for dynamic message using the populateTemplate.
         const description = populateTemplate(
           template?.description,
-          dynamicData
+          dynamicData,
         );
 
         //NOTE: Create entry in notice
@@ -623,7 +625,7 @@ class ComplaintService {
             playedIds,
             template?.title,
             description,
-            templateType
+            templateType,
           );
         }
       }
@@ -637,7 +639,7 @@ class ComplaintService {
   //SECTION: Method to get all user complaint
   async userComplaintsByStatus(
     userId: string,
-    status: ComplainStatusTypes
+    status: ComplainStatusTypes,
   ): Promise<{ complaints: any[] }> {
     try {
       // Define the base query object
@@ -713,7 +715,7 @@ class ComplaintService {
           // Fetch role name if roleId exists
           const roleName = log.updatedBy?.roleId
             ? (await Role.findById(log.updatedBy.roleId).select("name").lean())
-              ?.name || null
+                ?.name || null
             : null;
 
           return {
@@ -728,7 +730,7 @@ class ComplaintService {
               roleName,
             },
           };
-        })
+        }),
       );
 
       return { logs };
@@ -757,7 +759,7 @@ class ComplaintService {
       )
         throw new Error(`Complaint is already ${complaint.complainStatus}.`);
 
-      await Complaint.findByIdAndUpdate(
+      const complaintUpdate: any = await Complaint.findByIdAndUpdate(
         complaintId,
         {
           complainStatus: ComplainStatusTypes.CANCELLED,
@@ -771,8 +773,75 @@ class ComplaintService {
             },
           },
         },
-        { new: true }
+        { new: true },
       );
+
+      //NOTE: Send complaint cancel notification using new template system
+      if (complaintUpdate) {
+        try {
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await fetchPlayerNotificationConfig(
+              userId,
+              TemplateTypes.COMPLAINT_CANCELLED,
+            );
+
+          //NOTE: Get student and hostelDetails
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              TemplateTypes.COMPLAINT_CANCELLED,
+            );
+
+          // NOTE: Final notice created check.
+          const finalNoticeCreated =
+            (isPlayedNoticeCreated && isHostelNoticeCreated) ||
+            (playedIds && playedIds.length > 0);
+
+          // NOTE: Combine available logs into an array
+          const notificationLog = [log, hostelLogs].filter(Boolean);
+
+          const description =
+            template?.description ||
+            "Your complaint has been cancelled successfully.";
+
+          //NOTE: Create entry in notice
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+
+          //NOTE: Send push notification if we have player IDs (relaxed condition)
+          if (playedIds && playedIds.length > 0) {
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title || "Complaint Cancelled",
+              description,
+              TemplateTypes.COMPLAINT_CANCELLED,
+            );
+          } else {
+            console.warn(
+              "[ComplaintCancel] Push skipped - No player IDs found for user:",
+              userId,
+            );
+          }
+        } catch (notifyErr: any) {
+          // Log error but don't fail the entire cancellation operation
+          console.error(
+            `[ComplaintCancel Notification Failed] ComplaintId: ${complaintId}, Error: ${notifyErr.message}`,
+          );
+        }
+      }
 
       return UPDATE_DATA;
     } catch (error: any) {
@@ -782,7 +851,7 @@ class ComplaintService {
 
   //SECTION: Method to get complaint details by Id
   complaintDetailsById = async (
-    complaintId: string
+    complaintId: string,
   ): Promise<{ complaint: any }> => {
     try {
       const complaint = await Complaint.aggregate([
@@ -989,7 +1058,7 @@ class ComplaintService {
 
       if (complaintData.assignedStaffImage) {
         complaintData.assignedStaffImage = await getSignedUrl(
-          complaintData.assignedStaffImage
+          complaintData.assignedStaffImage,
         );
       }
 
@@ -1033,7 +1102,7 @@ class ComplaintService {
           _id: { $gt: new mongoose.Types.ObjectId(complaintId) },
           complainStatus: complaintData.complainStatus,
         },
-        { _id: 1 }
+        { _id: 1 },
       ).sort({ _id: 1 });
 
       // Fetch the previous Complaint ID
@@ -1042,7 +1111,7 @@ class ComplaintService {
           _id: { $lt: new mongoose.Types.ObjectId(complaintId) },
           complainStatus: complaintData.complainStatus,
         },
-        { _id: 1 }
+        { _id: 1 },
       ).sort({ _id: -1 });
 
       return {
@@ -1065,7 +1134,7 @@ class ComplaintService {
     limit: number,
     filter: ReportDropDownTypes,
     startDate: string,
-    endDate: string
+    endDate: string,
   ): Promise<{ complaints: any[]; count: number }> {
     try {
       let start: any | undefined, end: any | undefined;
@@ -1283,7 +1352,7 @@ class ComplaintService {
       complaintId: string;
       status: ComplainStatusTypes;
       remark: string;
-    }[]
+    }[],
   ): Promise<string> => {
     try {
       // Fetch all complaints in a single query
@@ -1305,7 +1374,7 @@ class ComplaintService {
       const bulkOperations: any[] = complaints
         .map(({ complaintId, status, remark }) => {
           const complaint = complaintRecords.find(
-            (c: any) => c._id.toString() === complaintId
+            (c: any) => c._id.toString() === complaintId,
           );
           if (!complaint) return null; // Ensuring that null values are handled
 
@@ -1317,7 +1386,7 @@ class ComplaintService {
             const createdAt = complaint.createdAt;
             resolvedTime = Math.floor(
               (currentISTTime.getTime() - new Date(createdAt).getTime()) /
-              (1000 * 60)
+                (1000 * 60),
             );
           }
 
@@ -1386,7 +1455,7 @@ class ComplaintService {
   getRoundRobinStaffId = async (
     userId: string,
     categoryId: string,
-    categoryType: ComplaintTypes
+    categoryType: ComplaintTypes,
   ): Promise<{ assignedStaffId: string | null }> => {
     try {
       // Get student room details
@@ -1418,7 +1487,7 @@ class ComplaintService {
 
       // Get role IDs for the given category type
       const roleIds = await Role.find({ categoryType, status: true }).select(
-        "_id"
+        "_id",
       );
 
       // Get staff members who belong to the correct role and category
@@ -1446,7 +1515,7 @@ class ComplaintService {
             (staffFloorNumbers.includes(floorNumber) ||
               staffRoomNumbers.includes(roomNumber))
           );
-        })
+        }),
       );
 
       if (staffs.length === 0) return { assignedStaffId: null };
@@ -1455,7 +1524,7 @@ class ComplaintService {
       if (lastComplaint?.assignedStaff) {
         const lastAssignedIndex = staffs.findIndex(
           (staff: any) =>
-            staff._id.toString() === lastComplaint.assignedStaff.toString()
+            staff._id.toString() === lastComplaint.assignedStaff.toString(),
         );
 
         const nextIndex =

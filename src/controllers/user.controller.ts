@@ -20,6 +20,8 @@ import Joi from "joi";
 import moment from "moment";
 import { allowedDomains } from "../constants/allowedDomains";
 import User from "../models/user.model";
+import { asyncHandler } from "../utils/asyncHandler";
+import { sendSuccess } from "../utils/responseHelpers";
 
 const { getStaffById } = StaffService;
 const {
@@ -128,7 +130,7 @@ const normalizeFullName = (name: string) => {
 //   return `${year}-${month}-${day}`;
 // };
 const excelDateToJSDate = (
-  input: number | string
+  input: number | string,
 ): { success: boolean; date?: string | number; error?: string } => {
   let momentDate: moment.Moment;
 
@@ -158,7 +160,7 @@ const excelDateToJSDate = (
           "D/M/YYYY",
           // moment.ISO_8601,
         ],
-        true
+        true,
       );
       if (!momentDate.isValid()) {
         return { success: false, error: "Invalid DOB format.", date: input };
@@ -224,7 +226,7 @@ class UserController {
   //SECTION Controller method to handle user creation
   async registerUserFromApp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const {
@@ -275,36 +277,36 @@ class UserController {
         const missingField = !name
           ? "Name"
           : !email
-          ? "Email"
-          : !phone
-          ? "Phone"
-          : !enrollmentNumber
-          ? "Enrollment Number"
-          : !dob
-          ? "Date of Birth"
-          : !fatherName
-          ? "Father's Name"
-          : !fatherNumber
-          ? "Father's Number"
-          : !motherName
-          ? "Mother's Name"
-          : !motherNumber
-          ? "Mother's Number"
-          : !adharNumber
-          ? "Adhar Number"
-          : !bloodGroup
-          ? "Blood Group"
-          : !courseName
-          ? "Course Name"
-          : !academicYear
-          ? "Academic Year"
-          : !guardianContactNo
-          ? "Guardian Contact Number"
-          : !category
-          ? "Category"
-          : !hostelId
-          ? "Hostel ID"
-          : "Address";
+            ? "Email"
+            : !phone
+              ? "Phone"
+              : !enrollmentNumber
+                ? "Enrollment Number"
+                : !dob
+                  ? "Date of Birth"
+                  : !fatherName
+                    ? "Father's Name"
+                    : !fatherNumber
+                      ? "Father's Number"
+                      : !motherName
+                        ? "Mother's Name"
+                        : !motherNumber
+                          ? "Mother's Number"
+                          : !adharNumber
+                            ? "Adhar Number"
+                            : !bloodGroup
+                              ? "Blood Group"
+                              : !courseName
+                                ? "Course Name"
+                                : !academicYear
+                                  ? "Academic Year"
+                                  : !guardianContactNo
+                                    ? "Guardian Contact Number"
+                                    : !category
+                                      ? "Category"
+                                      : !hostelId
+                                        ? "Hostel ID"
+                                        : "Address";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -337,7 +339,7 @@ class UserController {
         semester,
         oneSignalWebId,
         oneSignalAndoridId,
-        oneSignalIosId
+        oneSignalIosId,
       );
 
       const successResponse: HttpResponse = {
@@ -358,7 +360,7 @@ class UserController {
   //SECTION Controller method to get student by id
   async getStudentDetailsById(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { id } = req.params;
@@ -389,7 +391,7 @@ class UserController {
   //SECTION Controller method to get user with optional pagination and search
   async getAllUsersWithPagination(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const hostelId = req.body._valid?.hostelId;
@@ -420,7 +422,7 @@ class UserController {
         hostelId,
         dateRange as ReportDropDownTypes,
         sort as SortingTypes,
-        academicYear as string
+        academicYear as string,
       );
 
       const successResponse: HttpResponse = {
@@ -443,7 +445,7 @@ class UserController {
   //SECTION Controller method to get all user ,to whom hostel is not allocated
   async getUsersWithoutHostelAllocation(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const hostelId = req.body._valid?._id;
@@ -461,7 +463,7 @@ class UserController {
         parsedPage,
         parsedLimit,
         search as string,
-        hostelId
+        hostelId,
       );
 
       const successResponse: HttpResponse = {
@@ -484,7 +486,7 @@ class UserController {
   //SECTION Controller method to handle assign hostel indivisually
   async assignHostelIndivisually(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const createdById = req.body._valid._id;
@@ -517,14 +519,14 @@ class UserController {
         const missingField = !hostelId
           ? "Hostel ID"
           : !bedType
-          ? "Bed Type"
-          : !roomNumber
-          ? "RoomNumber"
-          : !bedNumber
-          ? "BedNumber"
-          : !studentId
-          ? "Student Id"
-          : "Billing Cycle";
+            ? "Bed Type"
+            : !roomNumber
+              ? "RoomNumber"
+              : !bedNumber
+                ? "BedNumber"
+                : !studentId
+                  ? "Student Id"
+                  : "Billing Cycle";
 
         const errorResponse: HttpResponse = {
           statusCode: 400,
@@ -547,7 +549,7 @@ class UserController {
         roomNumber,
         bedNumber,
         billingCycle,
-        staff._id
+        staff._id,
       );
 
       const successResponse: HttpResponse = {
@@ -566,11 +568,8 @@ class UserController {
   }
 
   //SECTION Controller method to update student by id in for app
-  async updateStudentDetailsForApp(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
+  updateStudentDetailsForApp = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
       let payload;
       let studentId = req?.body?._valid?._id;
 
@@ -618,7 +617,7 @@ class UserController {
           .messages({
             "string.email": "Invalid email format",
             "any.invalid": `Only these domains allowed: ${allowedDomains.join(
-              ", "
+              ", ",
             )}`,
             "any.required": "Email is required",
           }),
@@ -765,28 +764,17 @@ class UserController {
       delete studentData.guardianRelation;
       delete studentData.guardianAddress;
 
-      // Call the service to update student
+      // Call the service to update student (includes notification handling)
       await updateStudentInApp(studentId, studentData);
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: UPDATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      return sendSuccess(res, UPDATE_DATA);
+    },
+  );
 
   //SECTION Controller method to get student by id for app
   async retrieveStudentDetailsByIdForApp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const studentId = req.body._valid._id;
@@ -815,11 +803,8 @@ class UserController {
   }
 
   //SECTION Controller method to update student by id in for app
-  async updateStudentVechicleDetailsForApp(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
+  updateStudentVechicleDetailsForApp = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
       const studentId = req.body._valid._id;
 
       if (!mongoose.isValidObjectId(studentId)) {
@@ -833,12 +818,7 @@ class UserController {
 
           if (!vechicleType || !modelName) {
             const missingField = !vechicleType ? "Vechicle Type" : "Model Name";
-
-            const errorResponse: HttpResponse = {
-              statusCode: 400,
-              message: `${missingField} is required`,
-            };
-            return res.status(400).json(errorResponse);
+            throw new Error(`${missingField} is required`);
           }
         }
       }
@@ -846,25 +826,14 @@ class UserController {
       // Call the service to update student vechicleDetails
       await modifyVehicleInApp(studentId, vechicleDetails);
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: UPDATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      return sendSuccess(res, UPDATE_DATA);
+    },
+  );
 
   //SECTION Controller method to get student by uniqueId
   async getStudentDetailsByUniqueId(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { uniqueId } = req.body;
@@ -890,7 +859,7 @@ class UserController {
   //SECTION Controller method to upload kyc document in app
   async uploadKycDocuments(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -911,15 +880,12 @@ class UserController {
         student,
         type,
         file,
-        staffId
+        staffId,
       );
 
       const successResponse: HttpResponse = {
         statusCode: 200,
         message: FILE_UPLOADED,
-        data: {
-          [fileType]: url,
-        },
       };
       return res.status(200).json(successResponse);
     } catch (error: any) {
@@ -935,7 +901,7 @@ class UserController {
   //SECTION Controller method to upload kyc document in app
   async uploadKycDocumentsInWardenPanel(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -976,7 +942,7 @@ class UserController {
   //SECTION Controller method to get student details for admin and warden panel
   async fetchStudentDetailsByIdAndType(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -1009,7 +975,7 @@ class UserController {
   //SECTION Controller method to update student as Authorized
   async updateAuthorizedUser(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -1027,7 +993,7 @@ class UserController {
         studentId,
         isAuthorized,
         authorizRole,
-        staffId
+        staffId,
       );
 
       const successResponse: HttpResponse = {
@@ -1048,7 +1014,7 @@ class UserController {
   //SECTION Controller method to handle user creation from warden panel
   async registerUserFromWardenPanel(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     const familyDetailsSchema = Joi.object({
       fatherName: Joi.string().required().messages({
@@ -1124,7 +1090,7 @@ class UserController {
               "any.only":
                 "Vehicle type must be car, bike, bus, truck, or other",
             }),
-        })
+        }),
       )
       .optional()
       .allow(null)
@@ -1297,7 +1263,7 @@ class UserController {
         billingCycle,
         vechicleDetails,
         staffId,
-        image
+        image,
       );
 
       const successResponse: HttpResponse = {
@@ -1319,7 +1285,7 @@ class UserController {
   //SECTION Controller method to update student  indisciplinary action
   async indisciplinaryActionUpdate(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -1338,7 +1304,7 @@ class UserController {
         remark,
         isFine,
         fineAmount,
-        staffId
+        staffId,
       );
 
       const successResponse: HttpResponse = {
@@ -1359,7 +1325,7 @@ class UserController {
   //SECTION Controller method to handle user bulk upload
   async userBulkUpload(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse> | void> {
     try {
       const staffId = req.body._valid._id;
@@ -1389,7 +1355,7 @@ class UserController {
       });
       const fileUrl = await uploadFileToCloudStorage(
         file,
-        USER_BULK_UPLOAD_FILES
+        USER_BULK_UPLOAD_FILES,
       );
       const url = fileUrl && fileUrl.Key ? fileUrl?.Key : null;
       // Perform file processing after sending response
@@ -1400,7 +1366,7 @@ class UserController {
           ...item,
           Email: item?.Email,
           "Full Name of Student": normalizeFullName(
-            item["Full Name of Student"]
+            item["Full Name of Student"],
           ),
           "Father's Name": normalizeFullName(item["Father's Name"]),
           "Mother's Name": normalizeFullName(item["Mother's Name"]),
@@ -1419,10 +1385,10 @@ class UserController {
       });
 
       data.forEach((item: any) => {
-        delete item.Timestamp,
+        (delete item.Timestamp,
           (item["Aadhaar Number"] = item["Aadhaar Number"]
             ? item["Aadhaar Number"]
-            : "");
+            : ""));
       });
       await userBulkUpload(data, staffId, hostelId, universityId, url);
     } catch (error: any) {
@@ -1439,7 +1405,7 @@ class UserController {
   //SECTION Controller method to delete user vehicle details
   async deleteUserVehicleDetails(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const userId = req.body._valid._id;
@@ -1474,7 +1440,7 @@ class UserController {
   //SECTION Controller method to handle user updatation from warden panel
   async updateUserFromWardenPanel(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { id } = req.params;
@@ -1705,7 +1671,7 @@ class UserController {
           .messages({
             "string.email": "Invalid email format",
             "any.invalid": `Only these domains allowed: ${allowedDomains.join(
-              ", "
+              ", ",
             )}`,
             "any.required": "Email is required",
           }),
@@ -1847,7 +1813,7 @@ class UserController {
         floorNumber,
         roomNumber,
         bedNumber,
-        aadharNumber
+        aadharNumber,
       );
 
       const successResponse: HttpResponse = {
@@ -1867,7 +1833,7 @@ class UserController {
 
   async updateUserFromApp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const schema = Joi.object({
@@ -1888,7 +1854,7 @@ class UserController {
           .messages({
             "string.email": "Invalid email format",
             "any.invalid": `Only these domains allowed: ${allowedDomains.join(
-              ", "
+              ", ",
             )}`,
             "any.required": "Email is required",
           }),
@@ -2029,7 +1995,7 @@ class UserController {
   //SECTION Controller method to fetch user details based on the hostel and academic details
   async fetchUsersBasedOnHostelAndAcademic(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -2049,7 +2015,7 @@ class UserController {
         hostelId,
         universityId,
         floorNumber,
-        courseId
+        courseId,
       );
 
       const successResponse: HttpResponse = {
@@ -2071,7 +2037,7 @@ class UserController {
   //SECTION: Controller Method to update user status.
   async updateUserStatus(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid?._id;
@@ -2105,7 +2071,7 @@ class UserController {
   //SECTION: Controller Method to delete user status.
   async deleteUsers(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { id } = req?.params;
@@ -2130,7 +2096,7 @@ class UserController {
 
   async userDeleteRequest(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const schema = Joi.object({
@@ -2148,16 +2114,23 @@ class UserController {
       const email = value?.email;
       const user = await User.findOne({ email }).lean();
       if (!user) {
-        return res.status(404).json({ statusCode: 404, message: "User not found" });
+        return res
+          .status(404)
+          .json({ statusCode: 404, message: "User not found" });
       }
 
-      await generateOtp(user._id?.toString(), email, OtpChannel.EMAIL, OtpPurpose.ACCOUNT_DELETE);
+      await generateOtp(
+        user._id?.toString(),
+        email,
+        OtpChannel.EMAIL,
+        OtpPurpose.ACCOUNT_DELETE,
+      );
 
       const successResponse: HttpResponse = {
         statusCode: 200,
         data: {
           name: user.name,
-          userId: user.uniqueId
+          userId: user.uniqueId,
         },
         message: "OTP has been sent",
       };
@@ -2211,7 +2184,7 @@ class UserController {
 
   async userVerifyOtp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const schema = Joi.object({
@@ -2235,8 +2208,8 @@ class UserController {
 
       await OtpLogicService.verifyOtp({
         identifier,
-        purpose: OtpPurpose.ACCOUNT_DELETE, 
-        otp: String(otp)
+        purpose: OtpPurpose.ACCOUNT_DELETE,
+        otp: String(otp),
       });
 
       return res.status(200).json({
@@ -2253,7 +2226,7 @@ class UserController {
 
   async userRequestDeactivate(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const schema = Joi.object({
@@ -2287,7 +2260,7 @@ class UserController {
   //This function is used to genarte otp for phone number change and mail change
   async generateOtpForAccountChange(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const userId =
@@ -2334,7 +2307,12 @@ class UserController {
         }
 
         try {
-          await generateOtp(userId, normalizedEmail, OtpChannel.EMAIL, OtpPurpose.CHANGE_EMAIL);
+          await generateOtp(
+            userId,
+            normalizedEmail,
+            OtpChannel.EMAIL,
+            OtpPurpose.CHANGE_EMAIL,
+          );
 
           return res.status(200).json({
             statusCode: 200,
@@ -2358,8 +2336,6 @@ class UserController {
             .status(400)
             .json({ statusCode: 400, message: "Invalid phone number format" });
         }
-
-
 
         const phonePathInstance =
           (User &&
@@ -2393,7 +2369,12 @@ class UserController {
         }
 
         try {
-          await generateOtp(userId, phoneRaw, OtpChannel.SMS, OtpPurpose.CHANGE_PHONE);
+          await generateOtp(
+            userId,
+            phoneRaw,
+            OtpChannel.SMS,
+            OtpPurpose.CHANGE_PHONE,
+          );
           return res.status(200).json({
             statusCode: 200,
             message: "OTP sent to phone",
@@ -2417,7 +2398,7 @@ class UserController {
 
   async verifyOtpForAccountChange(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const userId =
@@ -2451,26 +2432,28 @@ class UserController {
         // Final check: Ensure email is not taken by someone else
         const existingUser = await User.findOne({
           email: normalizedEmail,
-          _id: { $ne: userId }
-        }).select("_id").lean();
+          _id: { $ne: userId },
+        })
+          .select("_id")
+          .lean();
 
         if (existingUser) {
           return res.status(409).json({
             statusCode: 409,
-            message: "This email is already in use by another account."
+            message: "This email is already in use by another account.",
           });
         }
 
         await OtpLogicService.verifyOtp({
           identifier: normalizedEmail,
           purpose: OtpPurpose.CHANGE_EMAIL,
-          otp: otpStr
+          otp: otpStr,
         });
 
         // Update user email
         await User.updateOne(
           { _id: new mongoose.Types.ObjectId(userId) },
-          { $set: { email: normalizedEmail } }
+          { $set: { email: normalizedEmail } },
         ).exec();
 
         return res.status(200).json({
@@ -2495,26 +2478,28 @@ class UserController {
         // Check both raw string and numeric format just in case
         const existingUser = await User.findOne({
           $or: [{ phone: phoneRaw }, { phone: phoneDigits }],
-          _id: { $ne: userId }
-        }).select("_id").lean();
+          _id: { $ne: userId },
+        })
+          .select("_id")
+          .lean();
 
         if (existingUser) {
           return res.status(409).json({
             statusCode: 409,
-            message: "This phone number is already in use by another account."
+            message: "This phone number is already in use by another account.",
           });
         }
 
         await OtpLogicService.verifyOtp({
           identifier: phoneRaw,
           purpose: OtpPurpose.CHANGE_PHONE,
-          otp: otpStr
+          otp: otpStr,
         });
 
         // Update user's phone (preserve formatting provided)
         await User.updateOne(
           { _id: new mongoose.Types.ObjectId(userId) },
-          { $set: { phone: phoneRaw } }
+          { $set: { phone: phoneRaw } },
         ).exec();
 
         return res.status(200).json({
@@ -2531,7 +2516,7 @@ class UserController {
       if (err.code === 11000) {
         return res.status(409).json({
           statusCode: 409,
-          message: "Duplicate entry. This email or phone is already in use."
+          message: "Duplicate entry. This email or phone is already in use.",
         });
       }
       return res
