@@ -10,6 +10,8 @@ import {
   ERROR_MESSAGES,
 } from "../utils/messages";
 import { ComplainStatusTypes, SortingTypes } from "../utils/enum";
+import { asyncHandler } from "../utils/asyncHandler";
+import { sendSuccess } from "../utils/responseHelpers";
 
 const { getStaffById } = StaffService;
 const { getStudentById } = UserService;
@@ -35,7 +37,7 @@ class ComplainController {
   //SECTION Controller method to handle ComplainCategory creation
   async createNewComplainInApp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const userId = req.body._valid._id;
@@ -56,8 +58,8 @@ class ComplainController {
         const missingField = !categoryId
           ? "Category"
           : !subCategoryId
-          ? "Sub Category"
-          : "Description";
+            ? "Sub Category"
+            : "Description";
         const errorResponse: HttpResponse = {
           statusCode: 400,
           message: `${missingField} is required`,
@@ -73,7 +75,7 @@ class ComplainController {
         subCategoryId,
         description,
         image,
-        audio
+        audio,
       );
 
       const successResponse: HttpResponse = {
@@ -94,7 +96,7 @@ class ComplainController {
   //SECTION Controller method to handle Complain get in warden
   async getAllComplaintByStatus(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -142,7 +144,7 @@ class ComplainController {
         endDate as string,
         search as string,
         floorNumber as string,
-        roomNumber as string
+        roomNumber as string,
       );
 
       const successResponse: HttpResponse = {
@@ -165,10 +167,9 @@ class ComplainController {
   //SECTION Controller method to assign staff in case of escalation
   async assignMaintanceStaffs(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
-      
       const userId = req.body._valid._id;
       if (!mongoose.isValidObjectId(userId)) {
         throw new Error(INVALID_ID);
@@ -181,7 +182,7 @@ class ComplainController {
         throw new Error(RECORD_NOT_FOUND("Staff"));
       }
 
-      const { staffId, complaintId, remark,usersId } = req.body;
+      const { staffId, complaintId, remark, usersId } = req.body;
 
       if (!staffId || !complaintId || !remark) {
         const missingFields = [];
@@ -218,7 +219,7 @@ class ComplainController {
   //SECTION Controller method to handle ComplainCategory creation
   async compaintStatusUpdate(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const userId = req.body._valid._id;
@@ -252,7 +253,7 @@ class ComplainController {
         complainStatus,
         remark,
         complaintId,
-        attachments
+        attachments,
       );
 
       const successResponse: HttpResponse = {
@@ -273,7 +274,7 @@ class ComplainController {
   //SECTION Controller method to handle Complain get in for user
   async getUserComplaintByStatus(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const userId = req.body._valid._id;
@@ -294,7 +295,7 @@ class ComplainController {
       // Call the service to get Complain
       const { complaints } = await userComplaintsByStatus(
         userId,
-        status as ComplainStatusTypes
+        status as ComplainStatusTypes,
       );
 
       const successResponse: HttpResponse = {
@@ -316,7 +317,7 @@ class ComplainController {
   //SECTION Controller method to handle Complain get in for user
   async getComplaintLogs(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const userId = req.body._valid._id;
@@ -354,11 +355,8 @@ class ComplainController {
   }
 
   //SECTION Controller method to handle cancel Complaint by complaintId
-  async cancelComplaintById(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
+  cancelComplaintById = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
       const userId = req.body._valid._id;
 
       if (!mongoose.isValidObjectId(userId)) {
@@ -377,25 +375,14 @@ class ComplainController {
       // Call the service to get Complaint logs
       await cancelComplaint(compaintId, userId);
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: UPDATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      return sendSuccess(res, UPDATE_DATA);
+    },
+  );
 
   //SECTION Controller method to handle get complaint by Id
   async getStudentComplaintById(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -428,7 +415,7 @@ class ComplainController {
   //SECTION Controller method to get individual Student Complaints
   async individualStudentComplaints(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -452,7 +439,7 @@ class ComplainController {
         limit,
         filter,
         startDate,
-        endDate
+        endDate,
       );
 
       const successResponse: HttpResponse = {
@@ -475,7 +462,7 @@ class ComplainController {
   //SECTION Controller method to update complain in warden panel
   async bulkUpdateComplainStatus(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;

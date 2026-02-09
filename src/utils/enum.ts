@@ -341,6 +341,12 @@ export enum TemplateTypes {
   MEAL_CANCELLED = "meal cancelled",
   MEAL_AUTO_BOOKED = "meals autobooked",
 
+  //LINK: Document
+  DOCUMENT_UPLOADED = "document uploaded",
+
+  //LINK: Vehicle
+  VEHICLE_UPDATED = "vehicle updated",
+
   //LINK: Complaint
   COMPLAINT_SUBMITTED = "complaint submitted",
   COMPLAINT_RESOLVED = "complaint resolved",
@@ -348,6 +354,7 @@ export enum TemplateTypes {
   COMPLAINT_ESCALATED_ASSIGNED = "complaint escalated assigned",
   COMPAINT_MARK_AS_LONG_TERM_WORK = "complaint marked as long term work",
   COMPLAINT_REJECTED = "complaint rejected",
+  COMPLAINT_CANCELLED = "complaint canceled",
   COMPLAINT_APPROVAL_PENDING = "complaint Approval pending",
 
   OTHER = "other",

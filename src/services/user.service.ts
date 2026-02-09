@@ -61,7 +61,6 @@ import BookMeals from "../models/bookMeal.model";
 import { allowedDomains } from "../constants/allowedDomains";
 import Token from "../models/token.model";
 
-
 const { getRoleByName } = RoleService;
 const { checkTemplateExist } = TemplateService;
 
@@ -123,7 +122,7 @@ class UserService {
     semester?: number,
     oneSignalWebId?: string,
     oneSignalAndoridId?: string,
-    oneSignalIosId?: string
+    oneSignalIosId?: string,
   ): Promise<IUser> => {
     try {
       // Step 1: Validate staff by email and phone
@@ -228,7 +227,7 @@ class UserService {
     hostelId?: string,
     dateRange?: ReportDropDownTypes,
     sort?: SortingTypes,
-    academicYear?: string
+    academicYear?: string,
   ): Promise<{
     students: any[];
     counts: {
@@ -410,7 +409,7 @@ class UserService {
             createdBy: (ele?.createdBy as any)?.name ?? null,
             createdAt: ele?.createdAt ?? null,
           };
-        })
+        }),
       );
 
       // Return the results including counts
@@ -436,7 +435,7 @@ class UserService {
     page: number,
     limit: number,
     search?: string,
-    hostelId?: string
+    hostelId?: string,
   ): Promise<{ students: any[]; count: number }> => {
     try {
       // Calculate the number of documents to skip
@@ -505,7 +504,7 @@ class UserService {
     roomNumber: number,
     bedNumber: string,
     billingCycle: BillingCycleTypes,
-    staffId: mongoose.Types.ObjectId
+    staffId: mongoose.Types.ObjectId,
   ): Promise<string> => {
     try {
       const currentDate = new Date();
@@ -546,7 +545,7 @@ class UserService {
 
       const uniqueId = await this.generateUniqueYocoId(
         hostel?.identifier,
-        hostel?._id
+        hostel?._id,
       );
 
       // Step 2: Hash the password
@@ -558,7 +557,7 @@ class UserService {
       // Generate billingCycleDetails based on the billing cycle type
       const billingDetails = createBillingCycleDetails(
         hostel.bedDetails[0]?.accommodationFee,
-        billingCycle
+        billingCycle,
       );
 
       // Assuming you have the required imports and context setup
@@ -578,7 +577,7 @@ class UserService {
             updatedAt: getCurrentISTTime(), // Update the timestamp
             updatedBy: staffId,
           },
-          { new: true } // Return the updated document
+          { new: true }, // Return the updated document
         );
 
         // Update the student table
@@ -642,7 +641,7 @@ class UserService {
           runValidators: true,
           arrayFilters: [{ "bed._id": bedNumber }],
           upsert: true,
-        }
+        },
       );
 
       return UPDATE_DATA;
@@ -655,7 +654,7 @@ class UserService {
   updateStudentInApp = async (
     studentId: mongoose.Types.ObjectId,
     // image: string,
-    studentData: any
+    studentData: any,
   ): Promise<string> => {
     try {
       const studentExists: any = await User.findById(studentId);
@@ -703,55 +702,72 @@ class UserService {
       const update = await User.findByIdAndUpdate(
         studentId,
         { $set: payload },
-        { new: true }
+        { new: true },
       );
 
-      //NOTE: Send profile update notification
+      //NOTE: Send profile update notification using new template system
       if (update) {
-        const { playedIds, template, student, isPlayedNoticeCreated, log } =
-          await this.fetchPlayerNotificationConfig(
-            studentId.toString(), // Convert ObjectId to string
-            TemplateTypes.PROFILE_UPDATED
-          );
+        try {
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await this.fetchPlayerNotificationConfig(
+              studentId.toString(),
+              TemplateTypes.PROFILE_UPDATED,
+            );
 
-        //NOTE: Get student and hostelDetails
-        const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
-          await this.getStudentAllocatedHostelDetails(
-            student?._id,
-            student?.hostelId,
-            TemplateTypes.PROFILE_UPDATED
-          );
+          //NOTE: Get student and hostelDetails
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await this.getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              TemplateTypes.PROFILE_UPDATED,
+            );
 
-        //NOTE: Final notice created check.
-        const finalNoticeCreated =
-          isPlayedNoticeCreated && isHostelNoticeCreated;
+          // Relaxed condition: Send push if we have player IDs, even if template is missing
+          const finalNoticeCreated =
+            (isPlayedNoticeCreated && isHostelNoticeCreated) ||
+            (playedIds && playedIds.length > 0);
 
-        // NOTE: Combine available logs into an array
-        const notificationLog = [log, hostelLogs].filter(Boolean);
+          // NOTE: Combine available logs into an array
+          const notificationLog = [log, hostelLogs].filter(Boolean);
 
-        //NOTE: Create entry in notice
-        await Notice.create({
-          userId: student?._id,
-          hostelId: student?.hostelId,
-          floorNumber: hostelDetail?.floorNumber,
-          bedType: hostelDetail?.bedType,
-          roomNumber: hostelDetail?.roomNumber,
-          noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
-          pushNotificationTypes: PushNotificationTypes.AUTO,
-          templateId: template?._id,
-          templateSendMessage: template?.description,
-          isNoticeCreated: finalNoticeCreated,
-          notificationLog,
-          createdAt: getCurrentISTTime(),
-        });
-        //NOTE: Proceed to send push notification only when isNoticeCreated is true.
-        if (finalNoticeCreated) {
-          //NOTE: Use the send push notification function
-          await sendPushNotificationToUser(
-            playedIds,
-            template?.title,
-            template?.description,
-            TemplateTypes.PROFILE_UPDATED
+          const description =
+            template?.description ||
+            "Your profile details have been updated successfully.";
+
+          //NOTE: Create entry in notice
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+
+          //NOTE: Send push notification if we have player IDs (relaxed condition)
+          if (playedIds && playedIds.length > 0) {
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title || "profile updated",
+              description,
+              TemplateTypes.PROFILE_UPDATED,
+            );
+          } else {
+            console.warn(
+              "[ProfileUpdate] Push skipped - No player IDs found for student:",
+              studentId.toString(),
+            );
+          }
+        } catch (notifyErr: any) {
+          // Log error but don't fail the entire update operation
+          console.error(
+            `[ProfileUpdate Notification Failed] StudentId: ${studentId.toString()}, Error: ${notifyErr.message}`,
           );
         }
       }
@@ -763,7 +779,7 @@ class UserService {
 
   //SECTION: Method to get student in app
   fetchStudentInfoById = async (
-    studentId: mongoose.Types.ObjectId
+    studentId: mongoose.Types.ObjectId,
   ): Promise<{ response: any }> => {
     try {
       // Check if the student exists
@@ -774,13 +790,12 @@ class UserService {
       const checkUser: any = await User.findOne({
         _id: studentId,
       }).select(
-        "uniqueId name email roomNumber floorNumber permanentAddress category phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails"
+        "uniqueId name email roomNumber floorNumber permanentAddress category phone bulkCountry gender medicalIssue identificationMark bulkState bulkCity image hostelId vechicleDetails indisciplinaryAction familiyDetails bloodGroup dob documents academicDetails",
       );
       // Fetch the room details for the student
       const studentRoomDetails = await StudentHostelAllocation.findOne({
         studentId: studentId,
         hostelId: checkUser.hostelId,
-
       })
         .select("roomNumber floorNumber")
         .sort({ createdAt: -1 })
@@ -798,14 +813,13 @@ class UserService {
         isVerified: true,
       }).select("name email phone image hostelId");
 
-
       const roomMatesData = await Promise.all(
         roomMates.map(async (data: any) => {
           const details = await StudentHostelAllocation.findOne({
             studentId: data._id,
             hostelId: data.hostelId,
             roomNumber: studentRoomDetails?.roomNumber,
-            floorNumber: studentRoomDetails?.floorNumber
+            floorNumber: studentRoomDetails?.floorNumber,
           })
             .select("roomNumber bedNumber")
             .sort({ createdAt: -1 })
@@ -824,7 +838,7 @@ class UserService {
             };
           }
           return null;
-        })
+        }),
       );
       const filteredRoomMatesData = roomMatesData.filter(Boolean);
       // Fetch indisciplinary actions if they exist
@@ -898,7 +912,7 @@ class UserService {
   //SECTION: Method to update student vechicle details in app
   modifyVehicleInApp = async (
     studentId: string,
-    vehicleDetails: any[]
+    vehicleDetails: any[],
   ): Promise<string> => {
     try {
       // Check if the student exists
@@ -907,7 +921,7 @@ class UserService {
       if (!studentExists) throw new Error(RECORD_NOT_FOUND("User"));
 
       // Update vehicleDetails in bulk
-      await User.findByIdAndUpdate(
+      const update = await User.findByIdAndUpdate(
         studentId,
         {
           $set: {
@@ -919,8 +933,75 @@ class UserService {
             })),
           },
         },
-        { new: true }
+        { new: true },
       );
+
+      //NOTE: Send vehicle sync notification using new template system
+      if (update) {
+        try {
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await this.fetchPlayerNotificationConfig(
+              studentId.toString(),
+              TemplateTypes.VEHICLE_UPDATED,
+            );
+
+          //NOTE: Get student and hostelDetails
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await this.getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              TemplateTypes.VEHICLE_UPDATED,
+            );
+
+          // Relaxed condition: Send push if we have player IDs, even if template is missing
+          const finalNoticeCreated =
+            (isPlayedNoticeCreated && isHostelNoticeCreated) ||
+            (playedIds && playedIds.length > 0);
+
+          // NOTE: Combine available logs into an array
+          const notificationLog = [log, hostelLogs].filter(Boolean);
+
+          const description =
+            template?.description ||
+            "Your vehicle details have been updated successfully.";
+
+          //NOTE: Create entry in notice
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+
+          //NOTE: Send push notification if we have player IDs (relaxed condition)
+          if (playedIds && playedIds.length > 0) {
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title || "Vehicle Update",
+              description,
+              TemplateTypes.VEHICLE_UPDATED,
+            );
+          } else {
+            console.warn(
+              "[VehicleSync] Push skipped - No player IDs found for student:",
+              studentId.toString(),
+            );
+          }
+        } catch (notifyErr: any) {
+          // Log error but don't fail the entire vehicle update operation
+          console.error(
+            `[VehicleSync Notification Failed] StudentId: ${studentId.toString()}, Error: ${notifyErr.message}`,
+          );
+        }
+      }
 
       return UPDATE_DATA;
     } catch (error: any) {
@@ -930,7 +1011,7 @@ class UserService {
 
   //SECTION: Method to get a student by uniqueId
   getStudentByUniqueId = async (
-    uniqueId: string
+    uniqueId: string,
   ): Promise<{ student: any }> => {
     try {
       // Run both queries in parallel
@@ -949,7 +1030,7 @@ class UserService {
     user: any,
     type: UserKycUploadTypes,
     file?: any,
-    staffId?: string
+    staffId?: string,
   ): Promise<{ fileType: UserKycUploadTypes; url: any }> => {
     try {
       const existingUrl = user?.documents && user?.documents[type];
@@ -964,7 +1045,7 @@ class UserService {
         // Upload the new file to cloud storage and get the response
         const uploadResponse = await uploadFileToCloudStorage(
           file,
-          USER_FOLDER
+          USER_FOLDER,
         );
 
         // Extract the URL (Location) from the response
@@ -981,7 +1062,72 @@ class UserService {
         if (existingUrl) {
           await deleteFromS3(
             process.env.S3_BUCKET_NAME ?? "yoco-staging",
-            existingUrl
+            existingUrl,
+          );
+        }
+
+        //NOTE: Send KYC upload notification using new template system
+        try {
+          const { playedIds, template, student, isPlayedNoticeCreated, log } =
+            await this.fetchPlayerNotificationConfig(
+              user._id.toString(),
+              TemplateTypes.DOCUMENT_UPLOADED,
+            );
+
+          //NOTE: Get student and hostelDetails
+          const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
+            await this.getStudentAllocatedHostelDetails(
+              student?._id,
+              student?.hostelId,
+              TemplateTypes.DOCUMENT_UPLOADED,
+            );
+
+          // Relaxed condition: Send push if we have player IDs, even if template is missing
+          const finalNoticeCreated =
+            (isPlayedNoticeCreated && isHostelNoticeCreated) ||
+            (playedIds && playedIds.length > 0);
+
+          // NOTE: Combine available logs into an array
+          const notificationLog = [log, hostelLogs].filter(Boolean);
+
+          const description =
+            template?.description ||
+            "Your document has been uploaded successfully.";
+
+          //NOTE: Create entry in notice
+          await Notice.create({
+            userId: student?._id,
+            hostelId: student?.hostelId,
+            floorNumber: hostelDetail?.floorNumber,
+            bedType: hostelDetail?.bedType,
+            roomNumber: hostelDetail?.roomNumber,
+            noticeTypes: NoticeTypes.PUSH_NOTIFICATION,
+            pushNotificationTypes: PushNotificationTypes.AUTO,
+            templateId: template?._id,
+            templateSendMessage: description,
+            isNoticeCreated: finalNoticeCreated,
+            notificationLog,
+            createdAt: getCurrentISTTime(),
+          });
+
+          //NOTE: Send push notification if we have player IDs (relaxed condition)
+          if (playedIds && playedIds.length > 0) {
+            await sendPushNotificationToUser(
+              playedIds,
+              template?.title || "Document Upload",
+              description,
+              TemplateTypes.DOCUMENT_UPLOADED,
+            );
+          } else {
+            console.warn(
+              "[KYCUpload] Push skipped - No player IDs found for student:",
+              user._id.toString(),
+            );
+          }
+        } catch (notifyErr: any) {
+          // Log error but don't fail the entire upload operation
+          console.error(
+            `[KYCUpload Notification Failed] StudentId: ${user._id.toString()}, Error: ${notifyErr.message}`,
           );
         }
       } else {
@@ -989,7 +1135,7 @@ class UserService {
           // Delete the existing file from S3 if it exists
           await deleteFromS3(
             process.env.S3_BUCKET_NAME ?? "yoco-staging",
-            existingUrl
+            existingUrl,
           );
         }
 
@@ -1010,7 +1156,7 @@ class UserService {
   //SECTION: Method to get student in warden or admin panel
   studentDetailsByType = async (
     studentId: mongoose.Types.ObjectId,
-    type: FetchUserTypes
+    type: FetchUserTypes,
   ): Promise<{ details: any }> => {
     try {
       // Check if the student exists
@@ -1035,7 +1181,7 @@ class UserService {
         hostelId: checkUser.hostelId._id,
       })
         .select(
-          "buildingNumber bedType roomNumber bedNumber floorNumber joiningDate billingCycle"
+          "buildingNumber bedType roomNumber bedNumber floorNumber joiningDate billingCycle",
         )
         .sort({ createdAt: -1 })
         .lean();
@@ -1083,7 +1229,7 @@ class UserService {
             studentId: { $ne: checkUser._id },
             hostelId: checkUser.hostelId?._id,
             roomNumber: userHostelDetails?.roomNumber,
-            floorNumber: userHostelDetails?.floorNumber
+            floorNumber: userHostelDetails?.floorNumber,
           }).select("studentId roomNumber bedNumber billingCycle");
 
           // Extract studentIds to batch fetch users
@@ -1098,7 +1244,7 @@ class UserService {
           const roomMatesData = await Promise.all(
             roomMates.map(async (mate: any) => {
               const user = users.find(
-                (u: any) => u._id.toString() === mate.studentId.toString()
+                (u: any) => u._id.toString() === mate.studentId.toString(),
               );
 
               if (user) {
@@ -1108,13 +1254,14 @@ class UserService {
                   email: user.email ?? null,
                   phone: user.phone ?? null,
                   image: user.image ? await getSignedUrl(user.image) : null,
-                  roomDetails: `${mate.roomNumber ?? null}/${mate.bedNumber ?? null
-                    }`,
+                  roomDetails: `${mate.roomNumber ?? null}/${
+                    mate.bedNumber ?? null
+                  }`,
                 };
               }
 
               return null;
-            })
+            }),
           );
           // Remove null values from roomMatesData
           const filteredRoomMatesData = roomMatesData.filter(Boolean);
@@ -1212,7 +1359,7 @@ class UserService {
     studentId: string,
     isAuthorized: boolean,
     authorizRole: string,
-    staffId: string
+    staffId: string,
   ): Promise<string> => {
     try {
       //update Authorized User
@@ -1226,7 +1373,7 @@ class UserService {
             updatedAt: getCurrentISTTime(),
           },
         },
-        { new: true }
+        { new: true },
       );
 
       //NOTE: Check user leave applied or not.
@@ -1234,7 +1381,7 @@ class UserService {
         const { playedIds, template, student, isPlayedNoticeCreated, log } =
           await this.fetchPlayerNotificationConfig(
             userUpdate?._id,
-            TemplateTypes.USER_ROLE_UPDATED
+            TemplateTypes.USER_ROLE_UPDATED,
           );
         let description: any = {};
 
@@ -1242,7 +1389,7 @@ class UserService {
         const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
           await this.getStudentAllocatedHostelDetails(
             studentId,
-            student?.hostelId
+            student?.hostelId,
           );
 
         //NOTE: Final notice created check.
@@ -1281,7 +1428,7 @@ class UserService {
             playedIds,
             template?.title,
             description,
-            TemplateTypes.USER_ROLE_UPDATED
+            TemplateTypes.USER_ROLE_UPDATED,
           );
         }
       }
@@ -1352,14 +1499,14 @@ class UserService {
     billingCycle: BillingCycleTypes,
     vechicleDetails: any[],
     staffId: string,
-    image?: string
+    image?: string,
   ): Promise<{ uniqueId: string }> => {
     try {
       //NOTE - get university capacity
 
       if (academicDetails.universityId) {
         const university = await College.findById(
-          academicDetails?.universityId
+          academicDetails?.universityId,
         );
 
         if (!university) throw new Error(RECORD_NOT_FOUND("University"));
@@ -1415,7 +1562,7 @@ class UserService {
 
       const uniqueId = await this.generateUniqueYocoId(
         hostel?.identifier,
-        hostel?._id
+        hostel?._id,
       );
 
       // Step 2: Hash the password
@@ -1540,7 +1687,7 @@ class UserService {
           new: true,
           runValidators: true,
           arrayFilters: [{ "bed.bedNumber": bedNumber }],
-        }
+        },
       );
 
       return { uniqueId: newUser.uniqueId };
@@ -1555,7 +1702,7 @@ class UserService {
     remark: string,
     isFine: boolean,
     fineAmount: number,
-    staffId?: string
+    staffId?: string,
   ): Promise<string> => {
     try {
       //NOTE - Check student
@@ -1591,7 +1738,7 @@ class UserService {
     staffId: string,
     hostelId: string,
     universityId: string,
-    url?: any
+    url?: any,
   ) => {
     let successArray: any[] = [];
     let errorArray: any[] = [];
@@ -1618,7 +1765,7 @@ class UserService {
           .messages({
             "string.email": "Invalid email format",
             "any.invalid": `Only these domains allowed: ${allowedDomains.join(
-              ", "
+              ", ",
             )}`,
             "any.required": "Email is required",
           }),
@@ -1948,7 +2095,7 @@ class UserService {
           } else {
             uniqueId = await this.generateUniqueYocoId(
               hostel?.identifier,
-              hostel?._id
+              hostel?._id,
             );
 
             const plainPassword = generateRandomPassword(8);
@@ -2027,7 +2174,7 @@ class UserService {
                   { "bed.bedNumber": String(bedNumber) },
                 ],
                 new: true,
-              }
+              },
             );
 
             await StudentHostelAllocation.create({
@@ -2058,7 +2205,7 @@ class UserService {
           successFileUrl = await pushToS3Bucket(
             successArray,
             process.env.S3_BUCKET_NAME!,
-            USER_BULK_UPLOAD_FILES
+            USER_BULK_UPLOAD_FILES,
           );
         }
 
@@ -2066,7 +2213,7 @@ class UserService {
           errorFileUrl = await pushToS3Bucket(
             errorArray,
             process.env.S3_BUCKET_NAME!,
-            USER_BULK_UPLOAD_FILES
+            USER_BULK_UPLOAD_FILES,
           );
         }
 
@@ -2097,7 +2244,7 @@ class UserService {
   //SECTION: Method to delete user Vehicle details
   deleteVehicle = async (
     vehicleId: string,
-    userId: string
+    userId: string,
   ): Promise<string> => {
     try {
       const result = await User.findOneAndUpdate(
@@ -2107,7 +2254,7 @@ class UserService {
             vechicleDetails: { _id: new mongoose.Types.ObjectId(vehicleId) },
           },
         },
-        { new: true }
+        { new: true },
       );
 
       if (!result) throw new Error(RECORD_NOT_FOUND("Vehicle"));
@@ -2179,7 +2326,7 @@ class UserService {
     roomNumber?: number,
     bedNumber?: string,
     aadharNumber?: string,
-    hostelId?: string
+    hostelId?: string,
   ): Promise<string> => {
     try {
       // Step 1: Validate and fetch existing student
@@ -2202,7 +2349,7 @@ class UserService {
       // Step 2: Validate university
       if (academicDetails.universityId) {
         const university = await College.findById(
-          academicDetails?.universityId
+          academicDetails?.universityId,
         );
 
         if (!university) throw new Error(RECORD_NOT_FOUND("University"));
@@ -2298,7 +2445,7 @@ class UserService {
             vechicleDetails: vechicleDetails || [],
           },
         },
-        { new: true }
+        { new: true },
       );
 
       const hostelAlloc = await StudentHostelAllocation.findOne({ studentId });
@@ -2325,7 +2472,7 @@ class UserService {
               { "bed.bedNumber": String(hostelAlloc?.bedNumber) },
             ],
             new: true,
-          }
+          },
         );
 
         await StudentHostelAllocation.findOneAndUpdate(
@@ -2337,7 +2484,7 @@ class UserService {
               bedNumber: String(bedNumber),
             },
           },
-          { new: true } // returns updated doc
+          { new: true }, // returns updated doc
         );
         await Hostel.findOneAndUpdate(
           {
@@ -2361,7 +2508,7 @@ class UserService {
               { "bed.bedNumber": String(bedNumber) },
             ],
             new: true,
-          }
+          },
         );
       }
 
@@ -2377,7 +2524,7 @@ class UserService {
     hostelId: string,
     universityId: mongoose.Types.ObjectId,
     floorNumber?: number,
-    courseId?: mongoose.Types.ObjectId
+    courseId?: mongoose.Types.ObjectId,
   ): Promise<{ users: any[] }> => {
     try {
       let studentIds: mongoose.Types.ObjectId[] = [];
@@ -2386,7 +2533,7 @@ class UserService {
       if (floorNumber !== undefined) {
         const allocatedStudents = await StudentHostelAllocation.find(
           { hostelId: new mongoose.Types.ObjectId(hostelId), floorNumber },
-          { studentId: 1 }
+          { studentId: 1 },
         ).lean();
 
         studentIds = allocatedStudents.map((s) => s.studentId);
@@ -2400,7 +2547,7 @@ class UserService {
       const matchConditions: any = {
         "academicDetails.academicYear": academicYear,
         "academicDetails.universityId": new mongoose.Types.ObjectId(
-          universityId
+          universityId,
         ),
       };
 
@@ -2440,7 +2587,7 @@ class UserService {
   //SECTION: Method to return playerId and template data
   fetchPlayerNotificationConfig = async (
     studentId: string,
-    templateTypes: TemplateTypes
+    templateTypes: TemplateTypes,
   ): Promise<{
     playedIds: any[];
     template: any;
@@ -2474,7 +2621,7 @@ class UserService {
     //NOTE: Check template exists
     const result: any = await checkTemplateExist(
       student?.hostelId,
-      templateTypes
+      templateTypes,
     );
 
     //NOTE: Check template found or not.
@@ -2496,7 +2643,7 @@ class UserService {
   getStudentAllocatedHostelDetails = async (
     userId: string,
     hotelId: string,
-    templateTypes?: TemplateTypes
+    templateTypes?: TemplateTypes,
   ): Promise<{
     hostelDetail: any;
     hostelLogs?: Pick<INotificationLog, "templateType" | "reason">;
@@ -2536,7 +2683,7 @@ class UserService {
   updateUserStatus = async (
     id: string,
     userStatus: UserGetByTypes,
-    staffId: string
+    staffId: string,
   ): Promise<string> => {
     try {
       //NOTE: Determine the user's intended status based on the input type.
@@ -2633,7 +2780,7 @@ class UserService {
         checkUser.enrollmentNumber === enrollmentNumber
       ) {
         throw new Error(
-          ALREADY_EXIST_FIELD_TWO("Email", "Phone and EnrollmentNumber")
+          ALREADY_EXIST_FIELD_TWO("Email", "Phone and EnrollmentNumber"),
         );
       } else if (checkUser.email === email) {
         throw new Error(ALREADY_EXIST_FIELD_ONE("Email"));
@@ -2650,13 +2797,13 @@ class UserService {
   //ANCHOR - generate unique YOCO Id
   generateUniqueYocoId = async (
     prefix: string,
-    hostelId: mongoose.Types.ObjectId
+    hostelId: mongoose.Types.ObjectId,
   ): Promise<string> => {
     try {
       // Find the user with the highest uniqueId for the given hostelId
       const lastUser = await User.findOne(
         { hostelId, uniqueId: { $ne: null } },
-        { uniqueId: 1 }
+        { uniqueId: 1 },
       )
         .sort({ createdAt: -1 }) // safer than string sorting
         .lean();
@@ -2669,7 +2816,7 @@ class UserService {
         // Split on the last dash to isolate the numeric part only
         const lastIdNumber = parseInt(
           lastUser.uniqueId.substring(lastUser.uniqueId.lastIndexOf("-") + 1),
-          10
+          10,
         );
         // Check if parsing was successful
         if (!isNaN(lastIdNumber)) {
@@ -2688,7 +2835,7 @@ class UserService {
   };
 
   deleteStudent = async (
-    id: string | mongoose.Types.ObjectId
+    id: string | mongoose.Types.ObjectId,
   ): Promise<string> => {
     try {
       const hostel = await StudentHostelAllocation.findOne({ studentId: id });
@@ -2722,7 +2869,7 @@ class UserService {
             { "bed.bedNumber": String(hostel?.bedNumber) },
           ],
           new: true,
-        }
+        },
       );
 
       const userExist = await User.findOneAndDelete({ _id: id });
@@ -2744,8 +2891,6 @@ class UserService {
     }
   };
 
-
-
   userRequestDeactivate = async (email: string) => {
     try {
       const user = await User.findOne({ email });
@@ -2761,7 +2906,7 @@ class UserService {
       await User.findOneAndUpdate(
         { email: email },
         { $set: { isRequestDeactivate: true } },
-        { new: true }
+        { new: true },
       );
       return "Activation request sent";
     } catch (error: any) {
