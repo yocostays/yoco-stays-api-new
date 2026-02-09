@@ -341,6 +341,12 @@ export enum TemplateTypes {
   MEAL_CANCELLED = "meal cancelled",
   MEAL_AUTO_BOOKED = "meals autobooked",
 
+  //LINK: Document
+  DOCUMENT_UPLOADED = "document uploaded",
+
+  //LINK: Vehicle
+  VEHICLE_UPDATED = "vehicle updated",
+
   //LINK: Complaint
   COMPLAINT_SUBMITTED = "complaint submitted",
   COMPLAINT_RESOLVED = "complaint resolved",
@@ -348,9 +354,12 @@ export enum TemplateTypes {
   COMPLAINT_ESCALATED_ASSIGNED = "complaint escalated assigned",
   COMPAINT_MARK_AS_LONG_TERM_WORK = "complaint marked as long term work",
   COMPLAINT_REJECTED = "complaint rejected",
+  COMPLAINT_CANCELLED = "complaint canceled",
   COMPLAINT_APPROVAL_PENDING = "complaint Approval pending",
 
   OTHER = "other",
+  ANNOUNCEMENT_CREATED = "new announcement created",
+  ANNOUNCEMENT_UPDATED = "announcement updated",
 }
 
 export enum NoticeTypes {
@@ -368,4 +377,20 @@ export enum QRPurpose {
   MESS_ATTENDANCE = "MESS_ATTENDANCE",
   LEAVE = "LEAVE",
   HOSTEL_ATTENDANCE = "HOSTEL_ATTENDANCE",
+}
+
+export enum AnnouncementStatus {
+  UPCOMING = "UPCOMING",
+  CURRENT = "CURRENT",
+  PAST = "PAST",
+}
+
+export enum EventStatus {
+  ACTIVE = "ACTIVE",
+  CANCELLED = "CANCELLED",
+}
+
+export enum AttachmentType {
+  FILE = "FILE",
+  LINK = "LINK",
 }

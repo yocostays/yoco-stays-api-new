@@ -82,7 +82,7 @@ class MessService {
     lunch: string,
     snacks: string,
     dinner: string,
-    createdById?: string
+    createdById?: string,
   ): Promise<string> => {
     try {
       const targetDate = dayjs.utc(fromDate).startOf("day");
@@ -117,7 +117,7 @@ class MessService {
       if (existingRecord) {
         await MessMenu.updateOne(
           { _id: existingRecord._id },
-          { $set: updateData }
+          { $set: updateData },
         );
       } else {
         const uniqueId = await this.generateMessMenuUniqueId();
@@ -146,7 +146,7 @@ class MessService {
     sort?: SortingTypes | string,
     startDate?: string,
     endDate?: string,
-    onlyWithWastage: boolean = false
+    onlyWithWastage: boolean = false,
   ): Promise<{ count: number; data: any[] }> => {
     try {
       // Service-Level Input Validation
@@ -295,7 +295,7 @@ class MessService {
         MessMenu,
         pipeline,
         page,
-        limit
+        limit,
       );
 
       return { count, data: data || [] };
@@ -308,7 +308,7 @@ class MessService {
   hostelMessManuById = async (id: string): Promise<{ messDetails: any }> => {
     try {
       const mess = await MessMenu.findById(id).select(
-        "-createdAt -updatedAt -createdBy -updatedBy -__v"
+        "-createdAt -updatedAt -createdBy -updatedBy -__v",
       );
 
       if (!mess) throw new Error(RECORD_NOT_FOUND("Menu"));
@@ -342,7 +342,7 @@ class MessService {
     lunch: string,
     snacks: string,
     dinner: string,
-    createdById?: string
+    createdById?: string,
   ): Promise<string> => {
     try {
       const today = new Date();
@@ -397,7 +397,7 @@ class MessService {
 
   todayHostelMenuByUserId = async (
     hostelId: string,
-    mealDate?: string | Date
+    mealDate?: string | Date,
   ): Promise<TodayMenuResponse> => {
     if (!Types.ObjectId.isValid(hostelId)) {
       throw new Error("Invalid hostelId");
@@ -426,7 +426,7 @@ class MessService {
     const baseDate = new Date(`${dateOnly}T00:00:00+05:30`);
 
     const queryDate = new Date(
-      Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate())
+      Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()),
     );
 
     const menu = await MessMenu.findOne({
@@ -455,7 +455,7 @@ class MessService {
     isBreakfastBooked?: boolean,
     isLunchBooked?: boolean,
     isDinnerBooked?: boolean,
-    isSnacksBooked?: boolean
+    isSnacksBooked?: boolean,
   ): Promise<string> => {
     try {
       const today = new Date();
@@ -477,7 +477,7 @@ class MessService {
 
         if (!menu) {
           throw new Error(
-            `Menu does not exist for the date: ${date.toDateString()}`
+            `Menu does not exist for the date: ${date.toDateString()}`,
           );
         }
 
@@ -552,14 +552,14 @@ class MessService {
               updatedAt: getCurrentISTTime(),
             });
           }
-        })
+        }),
       );
 
       if (booking) {
         const { playedIds, template, student, isPlayedNoticeCreated, log } =
           await fetchPlayerNotificationConfig(
             studentId,
-            TemplateTypes.MEAL_BOOKED
+            TemplateTypes.MEAL_BOOKED,
           );
 
         //NOTE: Get student and hostelDetails
@@ -567,7 +567,7 @@ class MessService {
           await getStudentAllocatedHostelDetails(
             student?._id,
             student?.hostelId,
-            TemplateTypes.MEAL_BOOKED
+            TemplateTypes.MEAL_BOOKED,
           );
 
         //NOTE: Final notice created check.
@@ -588,7 +588,7 @@ class MessService {
         //NOTE: Add details for dynamic message using the populateTemplate.
         const description = populateTemplate(
           template?.description,
-          dynamicData
+          dynamicData,
         );
 
         //NOTE: Create entry in notice
@@ -614,7 +614,7 @@ class MessService {
             playedIds,
             template?.title,
             description,
-            TemplateTypes.MEAL_BOOKED
+            TemplateTypes.MEAL_BOOKED,
           );
         }
       }
@@ -630,7 +630,7 @@ class MessService {
     studentId: string,
     date: Date,
     mealTypes: MealCountReportType[], // mealTypes is now an array
-    staffId: string
+    staffId: string,
   ): Promise<string> => {
     try {
       const formattedDate = new Date(date);
@@ -752,7 +752,7 @@ class MessService {
     isBreakfastBooked?: boolean,
     isLunchBooked?: boolean,
     isDinnerBooked?: boolean,
-    isSnacksBooked?: boolean
+    isSnacksBooked?: boolean,
   ): Promise<string> => {
     try {
       const today = new Date();
@@ -774,7 +774,7 @@ class MessService {
 
         if (!menuExists) {
           throw new Error(
-            `Booking does not exist for the date: ${date.toDateString()}`
+            `Booking does not exist for the date: ${date.toDateString()}`,
           );
         }
       });
@@ -844,14 +844,14 @@ class MessService {
             booking.bookingStatus = bookingStatus; // Set the updated booking status
             await booking.save();
           }
-        })
+        }),
       );
 
       if (booking) {
         const { playedIds, template, student, isPlayedNoticeCreated, log } =
           await fetchPlayerNotificationConfig(
             studentId,
-            TemplateTypes.MEAL_CANCELLED
+            TemplateTypes.MEAL_CANCELLED,
           );
 
         //NOTE: Get student and hostelDetails
@@ -859,7 +859,7 @@ class MessService {
           await getStudentAllocatedHostelDetails(
             student?._id,
             student?.hostelId,
-            TemplateTypes.MEAL_CANCELLED
+            TemplateTypes.MEAL_CANCELLED,
           );
 
         //NOTE: Final notice created check.
@@ -880,7 +880,7 @@ class MessService {
         //NOTE: Add details for dynamic message using the populateTemplate.
         const description = populateTemplate(
           template?.description,
-          dynamicData
+          dynamicData,
         );
 
         //NOTE: Create entry in notice
@@ -905,7 +905,7 @@ class MessService {
             playedIds,
             template?.title,
             description,
-            TemplateTypes.MEAL_CANCELLED
+            TemplateTypes.MEAL_CANCELLED,
           );
         }
       }
@@ -981,7 +981,7 @@ class MessService {
     json: any[], // Incoming JSON data
     hostelId: string,
     createdById?: string,
-    url?: string
+    url?: string,
   ): Promise<string> => {
     try {
       const successArray: any[] = [];
@@ -1090,7 +1090,7 @@ class MessService {
         successFileUrl = await pushToS3Bucket(
           successArray,
           process.env.S3_BUCKET_NAME as string,
-          MESS_BULK_UPLOAD_FILES
+          MESS_BULK_UPLOAD_FILES,
         );
       }
 
@@ -1098,7 +1098,7 @@ class MessService {
         errorFileUrl = await pushToS3Bucket(
           errorArray,
           process.env.S3_BUCKET_NAME as string,
-          MESS_BULK_UPLOAD_FILES
+          MESS_BULK_UPLOAD_FILES,
         );
       }
 
@@ -1142,7 +1142,7 @@ class MessService {
     isBreakfastBooked?: boolean,
     isLunchBooked?: boolean,
     isDinnerBooked?: boolean,
-    isSnacksBooked?: boolean
+    isSnacksBooked?: boolean,
   ): Promise<string> => {
     try {
       const today = new Date();
@@ -1163,7 +1163,7 @@ class MessService {
       };
 
       const allMealsCancelled = Object.values(bookingUpdateData).every(
-        (value) => !value
+        (value) => !value,
       );
 
       const bookingStatus = isFullDay
@@ -1191,7 +1191,7 @@ class MessService {
   //SECTION: Method get meal dates based on status
   fetchMealDates = async (
     date: string,
-    studentId: string
+    studentId: string,
   ): Promise<{ mealDates: any[] }> => {
     try {
       // Get the first and last dates of the month
@@ -1228,7 +1228,7 @@ class MessService {
     floorNumber?: string,
     roomNumber?: string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
   ): Promise<{ mealDetails: any[]; count: number }> => {
     try {
       // Build search parameters based on search input
@@ -1285,14 +1285,14 @@ class MessService {
           const statusValue =
             status === MealBookingStatusTypes.BOOKED
               ? [
-                MealBookingStatusTypes.BOOKED,
-                MealBookingStatusTypes.PARTIALLY_BOOKED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ]
+                  MealBookingStatusTypes.BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_BOOKED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ]
               : [
-                MealBookingStatusTypes.CANCELLED,
-                MealBookingStatusTypes.PARTIALLY_CANCELLED,
-              ];
+                  MealBookingStatusTypes.CANCELLED,
+                  MealBookingStatusTypes.PARTIALLY_CANCELLED,
+                ];
 
           searchParams.bookingStatus = { $in: statusValue };
 
@@ -1312,7 +1312,7 @@ class MessService {
         case MealBookingStatusTypes.NOT_BOOKED:
           const [allStudents, bookedStudentIds] = await Promise.all([
             User.find({ isVerified: true, ...hostelSearch }).select(
-              "name image uniqueId phone"
+              "name image uniqueId phone",
             ),
             BookMeals.distinct("studentId", {
               ...hostelSearch,
@@ -1321,10 +1321,10 @@ class MessService {
           ]);
 
           const bookedStudentIdsSet = new Set(
-            bookedStudentIds.map((id: any) => id.toString())
+            bookedStudentIds.map((id: any) => id.toString()),
           );
           const defaulters = allStudents.filter(
-            (student: any) => !bookedStudentIdsSet.has(student._id.toString())
+            (student: any) => !bookedStudentIdsSet.has(student._id.toString()),
           );
 
           const result = await Promise.all(
@@ -1348,7 +1348,7 @@ class MessService {
                 floorNumber: studentHostelData?.floorNumber ?? null,
                 roomNumber: studentHostelData?.roomNumber ?? null,
               };
-            })
+            }),
           );
 
           if (sort === SortingTypes.ASCENDING) {
@@ -1384,9 +1384,10 @@ class MessService {
         if (floorNumber) allocationQuery.floorNumber = Number(floorNumber);
         if (roomNumber) allocationQuery.roomNumber = Number(roomNumber);
 
-        const allocatedUsers = await StudentHostelAllocation.find(
-          allocationQuery
-        ).select("studentId");
+        const allocatedUsers =
+          await StudentHostelAllocation.find(allocationQuery).select(
+            "studentId",
+          );
         userIds = allocatedUsers.map((entry) => entry.studentId);
       }
 
@@ -1469,7 +1470,7 @@ class MessService {
             roomNumber: studentHostelData?.roomNumber ?? null,
             bookedOn: meal?.createdAt,
           };
-        })
+        }),
       );
 
       // Manual Sorting based on `userId.name`
@@ -1520,7 +1521,7 @@ class MessService {
           _id: { $gt: new mongoose.Types.ObjectId(bookMealId) },
           bookingStatus: meal.bookingStatus,
         },
-        { _id: 1 }
+        { _id: 1 },
       ).sort({ _id: 1 });
 
       // Fetch the previous booked meal ID
@@ -1529,7 +1530,7 @@ class MessService {
           _id: { $lt: new mongoose.Types.ObjectId(bookMealId) },
           bookingStatus: meal.bookingStatus,
         },
-        { _id: 1 }
+        { _id: 1 },
       ).sort({ _id: -1 });
 
       const nextMealId = nextMeal ? nextMeal._id.toString() : null;
@@ -1567,7 +1568,7 @@ class MessService {
     limit: number,
     durationType: ReportDropDownTypes,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
   ): Promise<{ data: any[]; count: number }> {
     try {
       const skip = (page - 1) * limit;
@@ -1634,7 +1635,7 @@ class MessService {
             mealType: mealTypes.join(", ") || null,
             bookedOn: meal?.createdAt ?? null,
           };
-        })
+        }),
       );
 
       return { data: result, count };
@@ -1645,7 +1646,7 @@ class MessService {
 
   //SECTION - get history of Meal details
   fetchGatepassInfoByMealId = async (
-    bookMealId: string
+    bookMealId: string,
   ): Promise<{ data: any }> => {
     try {
       const bookMeal: any = await BookMeals.findById(bookMealId)
@@ -1688,7 +1689,7 @@ class MessService {
     startDate?: string,
     endDate?: string,
     floorNumber?: string,
-    roomNumber?: string
+    roomNumber?: string,
   ): Promise<{ users: any; count: number }> => {
     try {
       const hostelSearch = hostelId ? { hostelId } : {};
@@ -1749,9 +1750,10 @@ class MessService {
         if (floorNumber) allocationQuery.floorNumber = Number(floorNumber);
         if (roomNumber) allocationQuery.roomNumber = Number(roomNumber);
 
-        const allocatedUsers = await StudentHostelAllocation.find(
-          allocationQuery
-        ).select("studentId");
+        const allocatedUsers =
+          await StudentHostelAllocation.find(allocationQuery).select(
+            "studentId",
+          );
         userIds = allocatedUsers.map((entry) => entry.studentId);
       }
 
@@ -1851,7 +1853,7 @@ class MessService {
             roomNumber: studentHostelData?.roomNumber ?? null,
             bookedOn: meal?.createdAt,
           };
-        })
+        }),
       );
 
       return { users: result, count };
@@ -1874,7 +1876,7 @@ class MessService {
         // Extract the numeric part of the last bookMealNumber and parse it as an integer
         const lastNumber = parseInt(
           lastBookMeal.bookMealNumber.replace("BM-", ""),
-          10
+          10,
         );
 
         // Increment the last number by 1
@@ -1926,7 +1928,7 @@ class MessService {
         snacks: string;
         dinner: string;
       };
-    }>
+    }>,
   ): Promise<{
     results: Array<{
       date: string;
@@ -2067,11 +2069,11 @@ class MessService {
         let currentMeals = existingBooking
           ? existingBooking.meals
           : {
-            breakfast: { status: MealBookingIntent.PENDING, locked: false },
-            lunch: { status: MealBookingIntent.PENDING, locked: false },
-            snacks: { status: MealBookingIntent.PENDING, locked: false },
-            dinner: { status: MealBookingIntent.PENDING, locked: false },
-          };
+              breakfast: { status: MealBookingIntent.PENDING, locked: false },
+              lunch: { status: MealBookingIntent.PENDING, locked: false },
+              snacks: { status: MealBookingIntent.PENDING, locked: false },
+              dinner: { status: MealBookingIntent.PENDING, locked: false },
+            };
 
         for (const meal of [
           "breakfast",
@@ -2171,7 +2173,7 @@ class MessService {
                 updatedAt: getCurrentISTTime(),
               },
             },
-            { session } // Transaction
+            { session }, // Transaction
           );
         } else if (menu && !dayjs(mealDate).isBefore(today)) {
           const finalMeals = {
@@ -2198,7 +2200,7 @@ class MessService {
                 updatedAt: getCurrentISTTime(),
               },
             ],
-            { session }
+            { session },
           );
 
           const num = parseInt(bookMealNumber.split("-")[1], 10) + 1;
@@ -2214,14 +2216,14 @@ class MessService {
           const { playedIds, template, student, isPlayedNoticeCreated, log } =
             await fetchPlayerNotificationConfig(
               studentId,
-              TemplateTypes.MEAL_BOOKED
+              TemplateTypes.MEAL_BOOKED,
             );
 
           const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
             await getStudentAllocatedHostelDetails(
               student?._id,
               student?.hostelId,
-              TemplateTypes.MEAL_BOOKED
+              TemplateTypes.MEAL_BOOKED,
             );
 
           const finalNoticeCreated =
@@ -2252,12 +2254,12 @@ class MessService {
               playedIds,
               template?.title || "Meal Booking",
               description,
-              TemplateTypes.MEAL_BOOKED
+              TemplateTypes.MEAL_BOOKED,
             );
           }
         } catch (notificationError: any) {
           console.error(
-            `[Bulk Meal Notification Failed] StudentId: ${studentId}, Error: ${notificationError.message}`
+            `[Bulk Meal Notification Failed] StudentId: ${studentId}, Error: ${notificationError.message}`,
           );
         }
       }
@@ -2277,7 +2279,7 @@ class MessService {
     studentId: string,
     dateStr?: string, // Made optional for full month view
     year?: number, // Year for month view
-    month?: number // Month for month view (1-12)
+    month?: number, // Month for month view (1-12)
   ): Promise<{
     results: Array<{
       date: string;
@@ -2601,7 +2603,6 @@ class MessService {
     // Current Time in IST
     const nowIST = dayjs().tz("Asia/Kolkata");
     const startTimeIST = nowIST.format();
-    console.log(`[AutoBooking] Job started at ${startTimeIST} (Asia/Kolkata)`);
 
     try {
       const targetDateIST = nowIST.add(1, "day").startOf("day");
@@ -2609,8 +2610,6 @@ class MessService {
 
       // Use UTC midnight for database queries to match how menu dates are stored
       const targetDateUTC = dayjs.utc(targetDateKey).toDate();
-
-      console.log(`[AutoBooking] Target Date (Tomorrow IST): ${targetDateKey}`);
 
       // Fetch all active hostels
       const hostels = await Hostel.find({ status: true })
@@ -2660,7 +2659,7 @@ class MessService {
 
           const studentIds = activeStudents.map((u) => u._id);
           const studentsMap = new Map(
-            activeStudents.map((u) => [u._id.toString(), u])
+            activeStudents.map((u) => [u._id.toString(), u]),
           );
 
           if (studentIds.length === 0) {
@@ -2679,7 +2678,7 @@ class MessService {
             .select("userId")
             .lean();
           const leaveStudentIds = new Set(
-            leaves.map((l) => l.userId.toString())
+            leaves.map((l) => l.userId.toString()),
           );
 
           // Fetch Existing Bookings (Manual OR Auto)
@@ -2694,7 +2693,7 @@ class MessService {
 
           const existingBookingsMap = new Map();
           existingBookings.forEach((b: any) =>
-            existingBookingsMap.set(b.studentId.toString(), b)
+            existingBookingsMap.set(b.studentId.toString(), b),
           );
 
           // Prepare Bulk Operations and collect students to notify
@@ -2816,9 +2815,11 @@ class MessService {
 
           // Send notifications after transaction commit
           if (studentsToNotify.length > 0) {
+            const uniqueStudents = [...new Set(studentsToNotify)];
+
             // Process notifications in a non-blocking way
             // Using a separate try-catch to ensure one failure doesn't stop others
-            for (const studentId of studentsToNotify) {
+            for (const studentId of uniqueStudents) {
               try {
                 const {
                   playedIds,
@@ -2828,18 +2829,21 @@ class MessService {
                   log,
                 } = await fetchPlayerNotificationConfig(
                   studentId,
-                  TemplateTypes.MEAL_AUTO_BOOKED
+                  TemplateTypes.MEAL_AUTO_BOOKED,
                 );
 
                 const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
                   await getStudentAllocatedHostelDetails(
                     student?._id,
                     student?.hostelId,
-                    TemplateTypes.MEAL_AUTO_BOOKED
+                    TemplateTypes.MEAL_AUTO_BOOKED,
                   );
 
+                // Treat notice as "created" if we have valid player IDs for a fallback push
                 const finalNoticeCreated =
-                  isPlayedNoticeCreated && isHostelNoticeCreated;
+                  (isPlayedNoticeCreated && isHostelNoticeCreated) ||
+                  (playedIds && playedIds.length > 0);
+
                 const notificationLog = [log, hostelLogs].filter(Boolean);
 
                 const description =
@@ -2861,18 +2865,23 @@ class MessService {
                   createdAt: getCurrentISTTime(),
                 });
 
-                if (finalNoticeCreated && playedIds && playedIds.length > 0) {
+                // RELAXED CONDITION: Send push even if template record is missing, as long as we have player IDs
+                if (playedIds && playedIds.length > 0) {
                   await sendPushNotificationToUser(
                     playedIds,
                     template?.title || "Mess",
                     description,
-                    TemplateTypes.MEAL_AUTO_BOOKED
+                    TemplateTypes.MEAL_AUTO_BOOKED,
+                  );
+                } else {
+                  console.warn(
+                    `[AutoBooking] Push skipped - No player IDs found for student: ${studentId}`,
                   );
                 }
               } catch (notifyErr: any) {
                 // Silently log and continue to next student
                 console.error(
-                  `[AutoBooking Notification Failed] StudentId: ${studentId}, Error: ${notifyErr.message}`
+                  `[AutoBooking Notification Failed] StudentId: ${studentId}, Error: ${notifyErr.message}`,
                 );
               }
             }
@@ -2881,7 +2890,7 @@ class MessService {
           await session.abortTransaction();
           console.error(
             `[AutoBooking] Error processing hostel ${hostel.name}:`,
-            err.message
+            err.message,
           );
         } finally {
           session.endSession();
@@ -2899,7 +2908,7 @@ class MessService {
   // SECTION: Method to get meal state analytics by date
   getMealStateAnalyticsByDate = async (
     hostelId: string,
-    date: string | Date
+    date: string | Date,
   ): Promise<any> => {
     interface MealStateAnalyticsResponse {
       date: string;
@@ -3052,7 +3061,7 @@ class MessService {
             skipped: c.breakfastSkipped,
             pending: Math.max(
               0,
-              totalStudents - c.breakfastBooked - c.breakfastSkipped
+              totalStudents - c.breakfastBooked - c.breakfastSkipped,
             ),
           },
           lunch: {
@@ -3060,7 +3069,7 @@ class MessService {
             skipped: c.lunchSkipped,
             pending: Math.max(
               0,
-              totalStudents - c.lunchBooked - c.lunchSkipped
+              totalStudents - c.lunchBooked - c.lunchSkipped,
             ),
           },
           snacks: {
@@ -3068,7 +3077,7 @@ class MessService {
             skipped: c.snacksSkipped,
             pending: Math.max(
               0,
-              totalStudents - c.snacksBooked - c.snacksSkipped
+              totalStudents - c.snacksBooked - c.snacksSkipped,
             ),
           },
           dinner: {
@@ -3076,7 +3085,7 @@ class MessService {
             skipped: c.dinnerSkipped,
             pending: Math.max(
               0,
-              totalStudents - c.dinnerBooked - c.dinnerSkipped
+              totalStudents - c.dinnerBooked - c.dinnerSkipped,
             ),
           },
         },
@@ -3109,7 +3118,7 @@ class MessService {
             createdBy: userObjectId,
           },
         },
-        { upsert: true, new: true, lean: true }
+        { upsert: true, new: true, lean: true },
       );
 
       return result;
@@ -3160,7 +3169,7 @@ class MessService {
       }).lean();
       if (!timings) {
         throw new Error(
-          "Meal timings for this hostel must be set before configuring cutoffs."
+          "Meal timings for this hostel must be set before configuring cutoffs.",
         );
       }
 
@@ -3172,7 +3181,7 @@ class MessService {
       const validateGap = (
         mealName: string,
         startTimeStr: string,
-        cutoff: { dayOffset: number; time: string }
+        cutoff: { dayOffset: number; time: string },
       ) => {
         const startMins = timeToMinutes(startTimeStr);
         const cutoffMins = cutoff.dayOffset * 1440 + timeToMinutes(cutoff.time);
@@ -3180,7 +3189,7 @@ class MessService {
         // Gap = startMins - cutoffMins
         if (startMins - cutoffMins < 120) {
           throw new Error(
-            `${mealName} cutoff must be at least 2 hours before its start time (${startTimeStr}).`
+            `${mealName} cutoff must be at least 2 hours before its start time (${startTimeStr}).`,
           );
         }
       };
@@ -3206,7 +3215,7 @@ class MessService {
             createdBy: userObjectId,
           },
         },
-        { upsert: true, new: true, lean: true }
+        { upsert: true, new: true, lean: true },
       );
 
       return result;
@@ -3247,7 +3256,7 @@ class MessService {
    * Supports filtering by student status, meal status, floor, room, and text search
    */
   fetchStudentsMealStatusByDate = async (
-    params: WardenMealReportingInput
+    params: WardenMealReportingInput,
   ): Promise<{
     students: any[];
     pagination: {
@@ -3403,7 +3412,7 @@ class MessService {
 
       const deriveStatusExpression = (
         statusField: string,
-        consumedField: string
+        consumedField: string,
       ) => {
         return {
           $switch: {
@@ -3459,19 +3468,19 @@ class MessService {
         $addFields: {
           "meals.breakfast.derivedStatus": deriveStatusExpression(
             "$meals.breakfast.status",
-            "$meals.breakfast.consumed"
+            "$meals.breakfast.consumed",
           ),
           "meals.lunch.derivedStatus": deriveStatusExpression(
             "$meals.lunch.status",
-            "$meals.lunch.consumed"
+            "$meals.lunch.consumed",
           ),
           "meals.snacks.derivedStatus": deriveStatusExpression(
             "$meals.snacks.status",
-            "$meals.snacks.consumed"
+            "$meals.snacks.consumed",
           ),
           "meals.dinner.derivedStatus": deriveStatusExpression(
             "$meals.dinner.status",
-            "$meals.dinner.consumed"
+            "$meals.dinner.consumed",
           ),
         },
       });
@@ -3505,7 +3514,7 @@ class MessService {
         const searchText = search.text.trim();
         const regex = new RegExp(
           searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-          "i"
+          "i",
         );
 
         pipeline.push({
@@ -3562,7 +3571,7 @@ class MessService {
         StudentHostelAllocation,
         pipeline,
         page,
-        limit
+        limit,
       );
 
       // Sign images for the current page
@@ -3572,7 +3581,7 @@ class MessService {
             student.image = await getSignedUrl(student.image);
           }
           return student;
-        })
+        }),
       );
 
       return {
@@ -3586,7 +3595,7 @@ class MessService {
       };
     } catch (error: any) {
       throw new Error(
-        `MealReportingService: Failed to fetch student meal status. Detail: ${error.message}`
+        `MealReportingService: Failed to fetch student meal status. Detail: ${error.message}`,
       );
     }
   };

@@ -9,8 +9,15 @@ import {
   ERROR_MESSAGES,
 } from "../utils/messages";
 import { NoticeTypes } from "../utils/enum";
+import { asyncHandler } from "../utils/asyncHandler";
+import { sendSuccess, sendError } from "../utils/responseHelpers";
 
-const { createNotice, getAllNotice } = NoticeService;
+const {
+  createNotice,
+  getAllNotice,
+  getUserNotifications,
+  markNotificationsAsRead,
+} = NoticeService;
 
 const { getStaffExistById } = StaffService;
 
@@ -22,7 +29,7 @@ class NoticeController {
   //SECTION: Controller send notification to multiple user and create new notice.
   async createNotice(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const createdById = req.body._valid?._id;
@@ -56,7 +63,7 @@ class NoticeController {
   //SECTION: Controller to get all notice.
   async getAllNotice(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const createdById = req.body._valid?._id;
@@ -93,7 +100,7 @@ class NoticeController {
         paredFloorNumber,
         paredRoomNumber,
         noticeType as NoticeTypes,
-        sort as string
+        sort as string,
       );
       const successResponse: HttpResponse = {
         statusCode: 200,
@@ -111,6 +118,28 @@ class NoticeController {
       return res.status(400).json(errorResponse);
     }
   }
+
+  //SECTION: Get user notifications
+  getUserNotifications = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.body._valid?._id;
+    if (!userId) return sendError(res, ERROR_MESSAGES.UNAUTHORIZED_ACCESS);
+
+    const { items, unreadCount } = await getUserNotifications(userId);
+
+    return sendSuccess(res, FETCH_SUCCESS, { items, unreadCount });
+  });
+
+  //SECTION: Mark all notifications as read
+  markNotificationsAsRead = asyncHandler(
+    async (req: Request, res: Response) => {
+      const userId = req.body._valid?._id;
+      if (!userId) return sendError(res, ERROR_MESSAGES.UNAUTHORIZED_ACCESS);
+
+      await markNotificationsAsRead(userId);
+
+      return sendSuccess(res, "Notifications marked as read");
+    },
+  );
 }
 
 export default new NoticeController();

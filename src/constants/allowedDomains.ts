@@ -8,6 +8,5 @@ export const allowedDomains = [
   "aol.com",
   "zoho.com",
   "raisoni.net",
-  "ghrce.raisoni.net",
-  "maildrop.cc",
+  "ghrce.raisoni.net"
 ];
