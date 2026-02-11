@@ -179,13 +179,20 @@ class AnnouncementService {
       });
 
       if (!isHidden) {
-        this.notifyStudents(
-          hostelId,
-          TemplateTypes.ANNOUNCEMENT_CREATED,
-          activeStudentsOnly,
-        ).catch((err) =>
-          console.error("Announcement Create Notif Error:", err),
+        const status = AnnouncementService.computeAnnouncementStatus(
+          announcement.publishFrom as Date,
+          announcement.publishTo as Date,
         );
+
+        if (status === AnnouncementStatus.CURRENT) {
+          this.notifyStudents(
+            hostelId,
+            TemplateTypes.ANNOUNCEMENT_CREATED,
+            activeStudentsOnly,
+          ).catch((err) =>
+            console.error("Announcement Create Notif Error:", err),
+          );
+        }
       }
 
       return { announcement };
@@ -383,13 +390,20 @@ class AnnouncementService {
       // Trigger Notification (Async, don't block response)
       // Note: We notify on update if it's currently published (not hidden)
       if (updated && !updated.isHidden) {
-        this.notifyStudents(
-          updated.hostelId.toString(),
-          TemplateTypes.ANNOUNCEMENT_UPDATED,
-          updated.activeStudentsOnly,
-        ).catch((err) =>
-          console.error("Announcement Update Notif Error:", err),
+        const status = AnnouncementService.computeAnnouncementStatus(
+          updated.publishFrom as Date,
+          updated.publishTo as Date,
         );
+
+        if (status === AnnouncementStatus.CURRENT) {
+          this.notifyStudents(
+            updated.hostelId.toString(),
+            TemplateTypes.ANNOUNCEMENT_UPDATED,
+            updated.activeStudentsOnly,
+          ).catch((err) =>
+            console.error("Announcement Update Notif Error:", err),
+          );
+        }
       }
 
       return { announcement: updated };
