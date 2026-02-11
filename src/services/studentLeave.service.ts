@@ -62,7 +62,7 @@ class StudentLeaveService {
     endDate: Date,
     days: number,
     hours: number,
-    description: string
+    description: string,
   ): Promise<IStudentLeave> => {
     try {
       const leaveStartDate = new Date(startDate);
@@ -133,14 +133,14 @@ class StudentLeaveService {
           const { playedIds, template, student, isPlayedNoticeCreated, log } =
             await fetchPlayerNotificationConfig(
               userId,
-              TemplateTypes.LEAVE_REQUEST_SUBMITTED
+              TemplateTypes.LEAVE_REQUEST_SUBMITTED,
             );
           //NOTE: Get student and hostelDetails
           const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
             await getStudentAllocatedHostelDetails(
               student?._id,
               student?.hostelId,
-              TemplateTypes.LEAVE_REQUEST_SUBMITTED
+              TemplateTypes.LEAVE_REQUEST_SUBMITTED,
             );
 
           //NOTE: Final notice created check.
@@ -185,13 +185,13 @@ class StudentLeaveService {
               playedIds,
               template?.title,
               description,
-              TemplateTypes.LEAVE_REQUEST_SUBMITTED
+              TemplateTypes.LEAVE_REQUEST_SUBMITTED,
             );
           }
         } catch (notificationError: any) {
           // Log notification error but don't fail the request since leave is created
           console.error(
-            `[Leave Notification Failed] UserId: ${userId}, Error: ${notificationError.message}`
+            `[Leave Notification Failed] UserId: ${userId}, Error: ${notificationError.message}`,
           );
         }
       }
@@ -208,7 +208,7 @@ class StudentLeaveService {
     page: number,
     limit: number,
     type: LeaveTypes,
-    status: LeaveStatusTypes
+    status: LeaveStatusTypes,
   ): Promise<{ leaves: any[]; count: number }> {
     try {
       const skip = (page - 1) * limit;
@@ -311,7 +311,7 @@ class StudentLeaveService {
     floorNumber?: string,
     roomNumber?: string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
   ): Promise<{ details: any[]; count: number }> => {
     try {
       const skip = (page - 1) * limit;
@@ -331,9 +331,10 @@ class StudentLeaveService {
         if (floorNumber) allocationQuery.floorNumber = floorNumber;
         if (roomNumber) allocationQuery.roomNumber = roomNumber;
 
-        const allocatedUsers = await StudentHostelAllocation.find(
-          allocationQuery
-        ).select("studentId");
+        const allocatedUsers =
+          await StudentHostelAllocation.find(allocationQuery).select(
+            "studentId",
+          );
         userIds = allocatedUsers.map((entry) => entry.studentId);
       }
 
@@ -480,7 +481,7 @@ class StudentLeaveService {
             updatedBy: ele?.updatedBy?.name ?? null,
             createdAt: ele?.createdAt ?? null,
           };
-        })
+        }),
       );
 
       // Manual Sorting based on `userId.name`
@@ -658,7 +659,7 @@ class StudentLeaveService {
           _id: { $gt: new mongoose.Types.ObjectId(leaveId) },
           leaveType: leave[0].leaveType,
         },
-        { _id: 1 }
+        { _id: 1 },
       ).sort({ _id: 1 });
 
       // Fetch the previous leave ID
@@ -667,7 +668,7 @@ class StudentLeaveService {
           _id: { $lt: new mongoose.Types.ObjectId(leaveId) },
           leaveType: leave[0].leaveType,
         },
-        { _id: 1 }
+        { _id: 1 },
       ).sort({ _id: -1 });
 
       const nextLeaveId = nextLeave ? nextLeave._id.toString() : null;
@@ -699,7 +700,7 @@ class StudentLeaveService {
     description: string,
     visitorName?: string,
     visitorNumber?: number,
-    categoryId?: string
+    categoryId?: string,
   ): Promise<IStudentLeave> => {
     try {
       const leaveStartDate = new Date(startDate);
@@ -770,14 +771,14 @@ class StudentLeaveService {
         const { playedIds, template, student, isPlayedNoticeCreated, log } =
           await fetchPlayerNotificationConfig(
             userId,
-            TemplateTypes.LEAVE_REQUEST_SUBMITTED
+            TemplateTypes.LEAVE_REQUEST_SUBMITTED,
           );
         //NOTE: Get student and hostelDetails
         const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
           await getStudentAllocatedHostelDetails(
             student?._id,
             student?.hostelId,
-            TemplateTypes.LEAVE_REQUEST_SUBMITTED
+            TemplateTypes.LEAVE_REQUEST_SUBMITTED,
           );
 
         //NOTE: Final notice created check.
@@ -823,7 +824,7 @@ class StudentLeaveService {
             playedIds,
             template?.title,
             description,
-            TemplateTypes.LEAVE_REQUEST_SUBMITTED
+            TemplateTypes.LEAVE_REQUEST_SUBMITTED,
           );
         }
       }
@@ -840,7 +841,7 @@ class StudentLeaveService {
     staffId: string,
     leaveId: string,
     status: LeaveStatusTypes,
-    remark: string
+    remark: string,
   ): Promise<string> => {
     try {
       // Find the specific leave by leaveId
@@ -884,7 +885,7 @@ class StudentLeaveService {
           arrayFilters: [
             { "log.approvalStatus": LeaveApproveStatusTypes.WARDEN },
           ],
-        }
+        },
       );
 
       //NOTE: Send notification when leave is approved or rejected
@@ -899,7 +900,7 @@ class StudentLeaveService {
           const { playedIds, template, student, isPlayedNoticeCreated, log } =
             await fetchPlayerNotificationConfig(
               studentLeave?.createdBy,
-              templateType
+              templateType,
             );
 
           //NOTE: Get student and hostelDetails
@@ -907,7 +908,7 @@ class StudentLeaveService {
             await getStudentAllocatedHostelDetails(
               student?._id,
               student?.hostelId,
-              templateType
+              templateType,
             );
 
           //NOTE: Final notice created check.
@@ -928,7 +929,7 @@ class StudentLeaveService {
           //NOTE: Add details for dynamic message using the populateTemplate.
           const description = populateTemplate(
             template?.description,
-            dynamicData
+            dynamicData,
           );
 
           //NOTE: Create entry in notice
@@ -954,19 +955,19 @@ class StudentLeaveService {
               playedIds,
               template?.title,
               description,
-              templateType
+              templateType,
             );
           }
         } catch (notificationError: any) {
           console.error(
-            `[Leave Approval Notification Failed] LeaveId: ${leaveId}, Error: ${notificationError.message}`
+            `[Leave Approval Notification Failed] LeaveId: ${leaveId}, Error: ${notificationError.message}`,
           );
         }
 
         // Trigger Meal Cancellation Flow
         if (status === LeaveStatusTypes.APPROVED) {
           this.cancelMealsForLeavePeriod(leave).catch((err) =>
-            console.error(`[LeaveCancellation] Hook Error: ${err.message}`)
+            console.error(`[LeaveCancellation] Hook Error: ${err.message}`),
           );
         }
       }
@@ -978,7 +979,7 @@ class StudentLeaveService {
 
   //SECTION: Method to get leave details by Id
   approvedLeaveDetailsById = async (
-    leaveId: string
+    leaveId: string,
   ): Promise<{ leave: any }> => {
     try {
       const [leave] = await StudentLeave.aggregate([
@@ -1007,7 +1008,7 @@ class StudentLeaveService {
   //SECTION: Method cancelled leave by id
   cancelLeaveById = async (
     leaveId: string,
-    userId: string
+    userId: string,
   ): Promise<string> => {
     try {
       // Find the specific leave by leaveId
@@ -1042,14 +1043,14 @@ class StudentLeaveService {
             },
           },
         },
-        { new: true }
+        { new: true },
       );
       //NOTE: Check user leave applied or not.
       if (studentLeave) {
         const { playedIds, template, student, isPlayedNoticeCreated, log } =
           await fetchPlayerNotificationConfig(
             studentLeave?.createdBy,
-            TemplateTypes.LEAVE_CANCELLED
+            TemplateTypes.LEAVE_CANCELLED,
           );
 
         //NOTE: Get student and hostelDetails
@@ -1057,7 +1058,7 @@ class StudentLeaveService {
           await getStudentAllocatedHostelDetails(
             student?._id,
             student?.hostelId,
-            TemplateTypes.LEAVE_CANCELLED
+            TemplateTypes.LEAVE_CANCELLED,
           );
 
         //NOTE: Final notice created check.
@@ -1078,7 +1079,7 @@ class StudentLeaveService {
         //NOTE: Add details for dynamic message using the populateTemplate.
         const description = populateTemplate(
           template?.description,
-          dynamicData
+          dynamicData,
         );
 
         //NOTE: Create entry in notice
@@ -1104,7 +1105,7 @@ class StudentLeaveService {
             playedIds,
             template?.title,
             description,
-            TemplateTypes.LEAVE_CANCELLED
+            TemplateTypes.LEAVE_CANCELLED,
           );
         }
       }
@@ -1123,7 +1124,7 @@ class StudentLeaveService {
     leaveStatus?: LeaveStatusTypes,
     durationType?: ReportDropDownTypes,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
   ): Promise<{ leaves: any[]; count: number }> {
     try {
       const skip = (page - 1) * limit;
@@ -1243,7 +1244,7 @@ class StudentLeaveService {
             applyDate: leave?.createdAt,
             canEdit,
           };
-        })
+        }),
       );
 
       return { leaves: response, count };
@@ -1255,7 +1256,7 @@ class StudentLeaveService {
   //SECTION: Method to bulk Update Leave Status
   bulkUpdateLeaveStatus = async (
     staffId: string,
-    leaves: { leaveId: string; status: LeaveStatusTypes; remark: string }[]
+    leaves: { leaveId: string; status: LeaveStatusTypes; remark: string }[],
   ): Promise<string> => {
     try {
       const bulkOperations = await Promise.all(
@@ -1297,7 +1298,7 @@ class StudentLeaveService {
               ],
             },
           };
-        })
+        }),
       );
 
       // Execute bulkWrite operation
@@ -1308,15 +1309,15 @@ class StudentLeaveService {
       if (result.modifiedCount > 0) {
         // Trigger Meal Cancellation for all approved leaves
         const approvedLeaves = leaves.filter(
-          (l) => l.status === LeaveStatusTypes.APPROVED
+          (l) => l.status === LeaveStatusTypes.APPROVED,
         );
         for (const item of approvedLeaves) {
           const leave = await StudentLeave.findById(item.leaveId).lean();
           if (leave) {
             this.cancelMealsForLeavePeriod(leave as any).catch((err) =>
               console.error(
-                `[LeaveCancellation] Bulk Hook Error for ${item.leaveId}: ${err.message}`
-              )
+                `[LeaveCancellation] Bulk Hook Error for ${item.leaveId}: ${err.message}`,
+              ),
             );
           }
         }
@@ -1334,7 +1335,7 @@ class StudentLeaveService {
     search?: string,
     durationType?: ReportDropDownTypes,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
   ): Promise<{ users: any[] }> {
     try {
       let start: Date, end: Date;
@@ -1344,7 +1345,7 @@ class StudentLeaveService {
         end = new Date(endDate);
       } else {
         const dateRange = getDateRange(
-          durationType ?? ReportDropDownTypes.TODAY
+          durationType ?? ReportDropDownTypes.TODAY,
         );
         start = new Date(dateRange.start);
         end = new Date(dateRange.end);
@@ -1417,7 +1418,7 @@ class StudentLeaveService {
           endDate: leave?.endDate,
           leaveType: leave?.leaveType,
           leaveStatus: leave?.leaveStatus,
-        }))
+        })),
       );
 
       return { users };
@@ -1502,19 +1503,28 @@ class StudentLeaveService {
         current = current.add(1, "day");
       }
 
-      // Fetch dependencies in bulk (General Timing and Daily Menus)
-      const [generalTimings, menus] = await Promise.all([
+      // Fetch dependencies in bulk (General Timing, Daily Menus, and Existing Bookings)
+      const [generalTimings, menus, existingBookings] = await Promise.all([
         HostelMealTiming.findOne({ hostelId, status: true }).lean(),
         MessMenu.find({
           hostelId,
           date: { $in: datesInRange.map((d) => dayjs.utc(d).toDate()) },
           status: true,
         }).lean(),
+        BookMeals.find({
+          studentId: studentIdObj,
+          date: { $in: datesInRange.map((d) => dayjs.utc(d).toDate()) },
+        }).lean(),
       ]);
 
       // Maps for quick lookup
       const menuMap = new Map();
       menus.forEach((m) => menuMap.set(dayjs(m.date).format("YYYY-MM-DD"), m));
+
+      const existingBookingMap = new Map();
+      existingBookings.forEach((eb) =>
+        existingBookingMap.set(dayjs(eb.date).format("YYYY-MM-DD"), eb),
+      );
 
       const bulkOps: any[] = [];
 
@@ -1523,6 +1533,7 @@ class StudentLeaveService {
         const targetDateUTC = dayjs.utc(dateKey).toDate();
         const dDayjs = dayjs.tz(dateKey, "Asia/Kolkata");
         const menu = menuMap.get(dateKey);
+        const existingBooking: any = existingBookingMap.get(dateKey);
 
         const timings: any = generalTimings || {
           breakfastStartTime: "07:00",
@@ -1589,15 +1600,20 @@ class StudentLeaveService {
             mealStartMoment.isBefore(endDayjs);
 
           if (isAtLeave) {
-            setUpdates[mDef.bool] = false; // Legacy Boolean flag
-            setUpdates[`meals.${mDef.name}`] = {
-              status: MealBookingIntent.SKIPPED,
-              locked: true,
-              consumed: false,
-              consumedAt: null,
-              cancelSource: MealCancelSource.LEAVE,
-            };
-            cancelledInDay++;
+            // NOTE: Only skip if meal is NOT already consumed
+            const isConsumed = !!existingBooking?.meals?.[mDef.name]?.consumed;
+
+            if (!isConsumed) {
+              setUpdates[mDef.bool] = false; // Legacy Boolean flag
+              setUpdates[`meals.${mDef.name}`] = {
+                status: MealBookingIntent.SKIPPED,
+                locked: true,
+                consumed: false,
+                consumedAt: null,
+                cancelSource: MealCancelSource.LEAVE,
+              };
+              cancelledInDay++;
+            }
           }
         }
 
@@ -1631,14 +1647,14 @@ class StudentLeaveService {
           const { playedIds, template, student, isPlayedNoticeCreated, log } =
             await fetchPlayerNotificationConfig(
               studentId,
-              TemplateTypes.MEAL_CANCELLED
+              TemplateTypes.MEAL_CANCELLED,
             );
 
           const { hostelDetail, hostelLogs, isHostelNoticeCreated } =
             await getStudentAllocatedHostelDetails(
               student?._id,
               student?.hostelId,
-              TemplateTypes.MEAL_CANCELLED
+              TemplateTypes.MEAL_CANCELLED,
             );
 
           const finalNoticeCreated =
@@ -1669,12 +1685,12 @@ class StudentLeaveService {
               playedIds,
               template?.title || "Meal Cancellation",
               description,
-              TemplateTypes.MEAL_CANCELLED
+              TemplateTypes.MEAL_CANCELLED,
             );
           }
         } catch (notificationError: any) {
           console.error(
-            `[Leave Meal Cancellation Notification Failed] StudentId: ${userId}, Error: ${notificationError.message}`
+            `[Leave Meal Cancellation Notification Failed] StudentId: ${userId}, Error: ${notificationError.message}`,
           );
         }
       }
