@@ -1,5 +1,4 @@
 import Role, { IRole } from "../models/role.model";
-import { CategoryTypes } from "../utils/enum";
 import { getCurrentISTTime } from "../utils/lib";
 import { ERROR_MESSAGES } from "../utils/messages";
 
@@ -7,22 +6,29 @@ const { RECORD_NOT_FOUND } = ERROR_MESSAGES;
 
 class RoleService {
   //SECTION: Method to create a new role
-  async createNewRole(
-    name: string,
-    categoryType: CategoryTypes,
-    staffId: string
+  async createCategoryService(
+    categoryType: string,
+    staffId: string,
   ): Promise<IRole> {
     try {
-      // Check if a role with the same name and categoryType already exists
-      const existingRole = await Role.findOne({ name, categoryType });
+      // Check if a role with this categoryType already exists
+      const query: any = { categoryType };
+
+      const existingRole = await Role.findOne(query);
       if (existingRole) {
-        throw new Error(
-          `Role with the name '${name}' already exists under category '${categoryType}'.`
-        );
+        throw new Error(`Category type already exists'${categoryType}'.`);
+      }
+
+      // Generate uniqueId
+      const lastRole = await Role.findOne().sort({ createdAt: -1 });
+      let uniqueId = "R1"; // Default start
+      if (lastRole && lastRole.uniqueId) {
+        const lastId = parseInt(lastRole.uniqueId.replace("R", ""), 10);
+        uniqueId = `R${lastId + 1}`;
       }
 
       const newRole = new Role({
-        name,
+        uniqueId,
         categoryType,
         createdBy: staffId,
         createdAt: getCurrentISTTime(),
@@ -35,10 +41,10 @@ class RoleService {
   }
 
   //SECTION: Method to get all role
-  async getAllRolesWithPagination(
+  async getAllRolesWithPaginationService(
     page: number,
     limit: number,
-    search?: string
+    search?: string,
   ): Promise<{ roles: any[]; count: number }> {
     try {
       // Calculate the number of documents to skip
@@ -63,6 +69,7 @@ class RoleService {
       //NOTE - send response
       const response = roles.map((ele) => ({
         _id: ele._id,
+        uniqueId: ele?.uniqueId ?? null,
         name: ele?.name ?? null,
         categoryType: ele?.categoryType ?? null,
         createdBy: (ele?.createdBy as any)?.name ?? null,
@@ -100,18 +107,23 @@ class RoleService {
   }
 
   //SECTION: Method to update a new role
-  async updateRoleInAdmin(
+  async updateCategoryService(
     id: string,
-    name: string,
     staffId: string,
+    name?: string,
     status?: boolean,
-    categoryType?: CategoryTypes
+    categoryType?: string,
   ): Promise<any> {
     try {
-      // Check if a role with the same name already exists
-      const existingRole = await Role.findOne({ _id: { $ne: id }, name,categoryType });
+      // Check if a role with the same name and categoryType already exists elsewhere
+      const query: any = { _id: { $ne: id } };
+      if (categoryType) query.categoryType = categoryType;
+      if (name) query.name = name;
+
+      const existingRole = await Role.findOne(query);
       if (existingRole) {
-        throw new Error(`Role with the name '${name}' already exists.`);
+        const identifier = name ? `name '${name}'` : "this configuration";
+        throw new Error(`Role with ${identifier} already exists.`);
       }
 
       //NOTE - update role
