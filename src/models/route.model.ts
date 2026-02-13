@@ -2,9 +2,11 @@ import mongoose, { Document, Schema } from "mongoose";
 
 // Define the route interface
 export interface IRoute extends Document {
+  uniqueId: string;
   title: string;
   link: string;
   icon: string;
+  platform: string;
   status: boolean;
   createdBy: mongoose.Types.ObjectId;
   updatedBy: mongoose.Types.ObjectId;
@@ -14,6 +16,11 @@ export interface IRoute extends Document {
 
 const RouteSchema: Schema = new Schema<IRoute>(
   {
+    uniqueId: {
+      type: String,
+      unique: true,
+      required: true,
+    },
     title: {
       type: String,
       required: true,
@@ -25,6 +32,12 @@ const RouteSchema: Schema = new Schema<IRoute>(
     icon: {
       type: String,
       required: true,
+    },
+    platform: {
+      type: String,
+      enum: ["web", "mobile"],
+      required: true,
+      default: "web",
     },
     status: {
       type: Boolean,
@@ -43,8 +56,12 @@ const RouteSchema: Schema = new Schema<IRoute>(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
+
+// Compound indexes to ensure unique title and link per platform
+RouteSchema.index({ platform: 1, title: 1 }, { unique: true });
+RouteSchema.index({ platform: 1, link: 1 }, { unique: true });
 
 const Route = mongoose.model<IRoute>("Route", RouteSchema);
 export default Route;

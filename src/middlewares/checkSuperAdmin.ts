@@ -3,17 +3,19 @@ import { Request, Response, NextFunction } from "express";
 export const checkSuperAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void | Response> => {
   try {
     // Check if user is authenticated
-    const userId = req.body._valid?._id ? String(req.body._valid._id) : undefined;
+    const userId = req.body._valid?._id
+      ? String(req.body._valid._id)
+      : undefined;
     const userType = req.body._valid?.userType;
 
     if (!userId) {
       return res.status(401).json({
         statusCode: 401,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
@@ -21,7 +23,7 @@ export const checkSuperAdmin = async (
     if (userType !== "staff") {
       return res.status(403).json({
         statusCode: 403,
-        message: "Access denied. Staff access required."
+        message: "Access denied. Staff access required.",
       });
     }
 
@@ -35,21 +37,31 @@ export const checkSuperAdmin = async (
     if (!staff) {
       return res.status(404).json({
         statusCode: 404,
-        message: "Staff not found"
+        message: "Staff not found",
       });
     }
 
     // Get role details
+    // Check if staff has a roleId assigned
+    if (!staff.roleId) {
+      return res.status(403).json({
+        statusCode: 403,
+        message: "Access denied. Super Admin access required.",
+      });
+    }
+
     // roleId could be an object (populated) or ObjectId, handle both cases
-    const roleId = typeof staff.roleId === 'object' && staff.roleId !== null 
-      ? String((staff.roleId as any)._id || staff.roleId) 
-      : String(staff.roleId);
+    const roleId =
+      typeof staff.roleId === "object" && staff.roleId !== null
+        ? String((staff.roleId as any)._id || staff.roleId)
+        : String(staff.roleId);
+
     const { role } = await RoleService.getRoleById(roleId);
 
     if (!role) {
-      return res.status(404).json({
-        statusCode: 404,
-        message: "Role not found"
+      return res.status(403).json({
+        statusCode: 403,
+        message: "Access denied. Super Admin access required.",
       });
     }
 
@@ -59,18 +71,17 @@ export const checkSuperAdmin = async (
     if (!isSuperAdmin) {
       return res.status(403).json({
         statusCode: 403,
-        message: "Access denied. Super Admin access required."
+        message: "Access denied. Super Admin access required.",
       });
     }
 
     // User is superadmin, proceed to next middleware/controller
     next();
-
   } catch (error: any) {
     console.error("[checkSuperAdmin] Error:", error);
     return res.status(500).json({
       statusCode: 500,
-      message: error.message || "Failed to verify admin access"
+      message: error.message || "Failed to verify admin access",
     });
   }
 };

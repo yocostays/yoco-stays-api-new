@@ -8,113 +8,106 @@ import {
   VALIDATION_MESSAGES,
   ERROR_MESSAGES,
 } from "../utils/messages";
+import { sendSuccess, sendZodError } from "../utils/responseHelpers";
+import { asyncHandler } from "../utils/asyncHandler";
+import {
+  CreateRouteSchema,
+  UpdateRouteSchema,
+} from "../utils/validators/route.validator";
 
-const { createNewRoutes, allRoutesDetails,deleteRouteById } = RoutesService;
+const { createNewRoutes, allRoutesDetails, deleteRouteById, updateRouteById } =
+  RoutesService;
 
 const { getStaffById } = StaffService;
 
-const { CREATE_DATA, FETCH_SUCCESS, DELETE_DATA } = SUCCESS_MESSAGES;
-const { REQUIRED_FIELD, INVALID_ID } = VALIDATION_MESSAGES;
-const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
+const { CREATE_DATA, FETCH_SUCCESS, DELETE_DATA, UPDATE_DATA } =
+  SUCCESS_MESSAGES;
+const { INVALID_ID } = VALIDATION_MESSAGES;
+const { RECORD_NOT_FOUND, SERVER_ERROR } = ERROR_MESSAGES;
 
 class RoutesController {
   //SECTION Controller method to handle routes creation
-  async createNewRoutes(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const { title, link, icon } = req.body;
+  createNewRoutes = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      const createdById = req.body._valid?._id;
 
-      if (!title || !link || !icon) {
-        const missingField = !title ? "title" : !link ? "link" : "icon";
-        const errorResponse: HttpResponse = {
-          statusCode: 400,
-          message: REQUIRED_FIELD(missingField),
-        };
-        return res.status(400).json(errorResponse);
+      if (createdById) {
+        // Call the service to retrieve staff
+        const { staff } = await getStaffById(createdById);
+        if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
       }
 
-      // Call the service to create a new routes
-      await createNewRoutes(title, link, icon);
+      // Validate input using Zod
+      const parseResult = CreateRouteSchema.safeParse(req.body);
+      if (!parseResult.success) return sendZodError(res, parseResult) as any;
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: CREATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      const { title, link, icon, platform } = parseResult.data;
+
+      // Call the service to create a new routes
+      await createNewRoutes(title, link, icon, platform, createdById);
+
+      return sendSuccess(res, CREATE_DATA, undefined, 201);
+    },
+  );
 
   //SECTION Controller method to handle get all routes
-  async getAllRoutes(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const staffId = req.body._valid._id;
+  getAllRoutes = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      const { platform, page, limit } = req.query;
 
-      if (!mongoose.isValidObjectId(staffId)) throw new Error(INVALID_ID);
+      const pageNumber = page ? parseInt(page as string, 10) : 1;
+      const limitNumber = limit ? parseInt(limit as string, 10) : 10;
 
-      // Call the service to retrieve staff
-      const { staff } = await getStaffById(staffId);
+      // Call the service to retrieve routes
+      const result = await allRoutesDetails(
+        platform as string,
+        pageNumber,
+        limitNumber,
+      );
 
+      return sendSuccess(res, FETCH_SUCCESS, result, 200);
+    },
+  );
+
+  //SECTION Controller method to update route by id
+  updateRouteById = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      const { id } = req.params;
+      const updatedById = req.body._valid?._id;
+
+      if (
+        !mongoose.isValidObjectId(id) ||
+        !mongoose.isValidObjectId(updatedById)
+      ) {
+        throw new Error(INVALID_ID);
+      }
+
+      const { staff } = await getStaffById(updatedById);
       if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
 
-      // Call the service to create a new routes
-      const { count, routes } = await allRoutesDetails();
+      // Validate input using Zod
+      const parseResult = UpdateRouteSchema.safeParse(req.body);
+      if (!parseResult.success) return sendZodError(res, parseResult) as any;
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: FETCH_SUCCESS,
-        count,
-        data: routes,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      await updateRouteById(id, updatedById, req.body);
+
+      return sendSuccess(res, UPDATE_DATA);
+    },
+  );
 
   //SECTION Controller method to delete route by id
-  async deleteRouteById(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
+  deleteRouteById = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
       const { id } = req.params;
 
       if (!mongoose.isValidObjectId(id)) throw new Error(INVALID_ID);
 
-      // Call the service to delete roles
+      // Call the service to delete routes
       await deleteRouteById(id);
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: DELETE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      return sendSuccess(res, DELETE_DATA);
+    },
+  );
 }
 
 export default new RoutesController();

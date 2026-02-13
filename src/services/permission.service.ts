@@ -9,7 +9,7 @@ class PermissionService {
   createPermission = async (
     roleId: string,
     permission: any[],
-    staffId: string
+    staffId: string,
   ): Promise<string> => {
     try {
       const permissionEntries = permission.map((ele) => ({
@@ -32,27 +32,37 @@ class PermissionService {
   };
 
   //SECTION: Method to fetch permission of staff
-  fetchPermissions = async (roleId: string): Promise<{ permission: any[] }> => {
+  fetchPermissions = async (
+    roleId: string,
+  ): Promise<{ web: any[]; mobile: any[] }> => {
     try {
       const permissions: any = await Permission.find({
         roleId,
         status: true,
-      }).populate({ path: "routeId", select: "title link icon" });
+      }).populate({ path: "routeId", select: "title link icon platform" });
 
-      if (!permissions || permissions.length === 0) return { permission: [] };
+      if (!permissions || permissions.length === 0)
+        return { web: [], mobile: [] };
 
       const data = permissions.map((item: any) => ({
         _id: item.routeId?._id,
         title: item.routeId?.title,
         link: item.routeId?.link,
         icon: item.routeId?.icon,
+        platform: item.routeId?.platform,
         add: item?.add,
         view: item?.view,
         edit: item?.edit,
         delete: item?.delete,
       }));
 
-      return { permission: data };
+      // Split permissions into web and mobile
+      const webPermissions = data.filter((p: any) => p.platform === "web");
+      const mobilePermissions = data.filter(
+        (p: any) => p.platform === "mobile",
+      );
+
+      return { web: webPermissions, mobile: mobilePermissions };
     } catch (error: any) {
       throw new Error(error.message);
     }

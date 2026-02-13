@@ -23,7 +23,12 @@ roleRouter.post(
   createCategory,
 );
 
-roleRouter.get("/", validateToken, getAllCategoryWithPagination);
+roleRouter.get(
+  "/",
+  validateToken,
+  checkSuperAdmin,
+  getAllCategoryWithPagination,
+);
 
 roleRouter.get("/:id", validateToken, getRoleById);
 roleRouter.patch(
