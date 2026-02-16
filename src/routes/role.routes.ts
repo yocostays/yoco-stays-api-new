@@ -1,29 +1,53 @@
 import { Router } from "express";
 import RoleController from "../controllers/role.controller";
+import validateToken from "../middlewares/validateToken";
+import { checkSuperAdmin } from "../middlewares/checkSuperAdmin";
+
 const {
-  createNewRole,
-  getAllRolesWithPagination,
+  createCategory,
+  getAllCategoryWithPagination,
   getRoleById,
-  updateRoleDetails,
+  updateCategory,
   deleteRoleById,
   getRoleByName,
   getAllRolesWithoutSuperAdmin,
-  getAllRolesForWardenPanel
+  getAllRolesForWardenPanel,
 } = RoleController;
-import validateToken from "../middlewares/validateToken";
 
 const roleRouter = Router();
 
-roleRouter.post("/create", validateToken, createNewRole);
-roleRouter.get("/", validateToken, getAllRolesWithPagination);
+roleRouter.post(
+  "/create-category",
+  validateToken,
+  checkSuperAdmin,
+  createCategory,
+);
+
+roleRouter.get(
+  "/",
+  validateToken,
+  checkSuperAdmin,
+  getAllCategoryWithPagination,
+);
+
 roleRouter.get("/:id", validateToken, getRoleById);
-roleRouter.patch("/update/:id", validateToken, updateRoleDetails);
-roleRouter.delete("/delete/:id", validateToken, deleteRoleById);
+roleRouter.patch(
+  "/update-category/:id",
+  validateToken,
+  checkSuperAdmin,
+  updateCategory,
+);
+roleRouter.delete(
+  "/delete/:id",
+  validateToken,
+  checkSuperAdmin,
+  deleteRoleById,
+);
 roleRouter.post("/get-by-name", validateToken, getRoleByName);
 roleRouter.post(
   "/exclude-superadmin",
   validateToken,
-  getAllRolesWithoutSuperAdmin
+  getAllRolesWithoutSuperAdmin,
 );
 roleRouter.post("/warden-access", validateToken, getAllRolesForWardenPanel);
 

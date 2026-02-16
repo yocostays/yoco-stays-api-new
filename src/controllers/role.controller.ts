@@ -8,12 +8,18 @@ import {
   VALIDATION_MESSAGES,
   ERROR_MESSAGES,
 } from "../utils/messages";
+import { sendSuccess, sendZodError } from "../utils/responseHelpers";
+import {
+  CreateRoleSchema,
+  UpdateRoleSchema,
+} from "../utils/validators/role.validator";
+import { asyncHandler } from "../utils/asyncHandler";
 
 const {
-  createNewRole,
-  getAllRolesWithPagination,
+  createCategoryService,
+  getAllRolesWithPaginationService,
   getRoleById,
-  updateRoleInAdmin,
+  updateCategoryService,
   deleteRoleById,
   getRoleByName,
   rolesWithoutSuperAdminAndStudent,
@@ -28,15 +34,10 @@ const { REQUIRED_FIELD, INVALID_ID } = VALIDATION_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 
 class RoleController {
-  //SECTION Controller method to handle role creation
-  async createNewRole(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
+  //SECTION Controller method to handle category creation
+  createCategory = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
       const createdById = req.body._valid?._id;
-      if (createdById && !mongoose.isValidObjectId(createdById))
-        throw new Error(INVALID_ID);
 
       if (createdById) {
         // Call the service to retrieve staff
@@ -44,74 +45,73 @@ class RoleController {
         if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
       }
 
-      const { name, categoryType } = req.body;
+      const { categoryType } = req.body;
 
-      if (!name) {
-        const errorResponse: HttpResponse = {
-          statusCode: 400,
-          message: REQUIRED_FIELD(name),
-        };
-        return res.status(400).json(errorResponse);
-      }
+      // Validate input using Zod
+      const parseResult = CreateRoleSchema.safeParse(req.body);
+      if (!parseResult.success) return sendZodError(res, parseResult) as any;
 
       // Call the service to create a new role
-      await createNewRole(name,categoryType, createdById);
+      await createCategoryService(categoryType, createdById);
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: CREATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      return sendSuccess(res, CREATE_DATA);
+    },
+  );
 
-  //SECTION Controller method to get roles with optional pagination and search
-  async getAllRolesWithPagination(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const { page, limit, search, categoryType } = req.query;
+  //SECTION Controller method to get category with optional pagination and search
+  getAllCategoryWithPagination = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      const { page, limit, search } = req.query;
 
       // Convert page and limit to integers
-      const parsedPage = parseInt(page as string);
-      const parsedLimit = parseInt(limit as string);
+      const parsedPage = parseInt(page as string) || 1;
+      const parsedLimit = parseInt(limit as string) || 10;
 
       // Call the service to retrieve roles
-      const { roles, count } = await getAllRolesWithPagination(
+      const { roles, count } = await getAllRolesWithPaginationService(
         parsedPage,
         parsedLimit,
-        search as string
+        search as string,
       );
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: FETCH_SUCCESS,
-        count,
-        data: roles,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      return sendSuccess(res, FETCH_SUCCESS, roles, 200, count);
+    },
+  );
+
+  //SECTION Controller method to update category by id
+  updateCategory = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      const { id } = req.params;
+      const updatedById = req.body._valid?._id;
+
+      if (
+        !mongoose.isValidObjectId(updatedById) ||
+        !mongoose.isValidObjectId(id)
+      ) {
+        throw new Error(INVALID_ID);
+      }
+
+      // Call the service to retrieve staff
+      const { staff } = await getStaffById(updatedById);
+      if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
+
+      const { name, status, categoryType } = req.body;
+
+      // Validate input using Zod
+      const parseResult = UpdateRoleSchema.safeParse(req.body);
+      if (!parseResult.success) return sendZodError(res, parseResult) as any;
+
+      // Call the service to update a new role
+      await updateCategoryService(id, updatedById, name, status, categoryType);
+
+      return sendSuccess(res, UPDATE_DATA);
+    },
+  );
 
   //SECTION Controller method to get role by id
   async getRoleById(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { id } = req.params;
@@ -139,61 +139,10 @@ class RoleController {
     }
   }
 
-  //SECTION Controller method to update role by id
-  async updateRoleDetails(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const { id } = req.params;
-
-      const updatedById = req.body._valid._id;
-      if (
-        !mongoose.isValidObjectId(updatedById) ||
-        !mongoose.isValidObjectId(id)
-      ) {
-        throw new Error(INVALID_ID);
-      }
-
-      // Call the service to retrieve staff
-      const { staff } = await getStaffById(updatedById);
-
-      if (!staff) {
-        throw new Error(RECORD_NOT_FOUND("Staff"));
-      }
-
-      const { name, status, categoryType } = req.body;
-
-      if (!name) {
-        const errorResponse: HttpResponse = {
-          statusCode: 400,
-          message: REQUIRED_FIELD(name),
-        };
-        return res.status(400).json(errorResponse);
-      }
-
-      // Call the service to update a new role
-      await updateRoleInAdmin(id, name, updatedById, status, categoryType);
-
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: UPDATE_DATA,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
-
   //SECTION Controller method to delete role by id
   async deleteRoleById(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { id } = req.params;
@@ -223,7 +172,7 @@ class RoleController {
   //SECTION Controller method to get role by name
   async getRoleByName(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { name } = req.body;
@@ -250,7 +199,7 @@ class RoleController {
   //SECTION Controller method to get roles without super admin
   async getAllRolesWithoutSuperAdmin(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       // Call the service to retrieve roles
@@ -275,7 +224,7 @@ class RoleController {
   //SECTION: Controller method to get roles for warden panel
   async getAllRolesForWardenPanel(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       // Call the service to retrieve roles

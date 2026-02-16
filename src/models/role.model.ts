@@ -1,9 +1,9 @@
 import mongoose, { Document, Schema } from "mongoose";
-import { ComplaintTypes } from "../utils/enum";
 
 // Define the Role interface
 export interface IRole extends Document {
-  categoryType: ComplaintTypes;
+  categoryType: string;
+  uniqueId: string;
   name: string;
   status: boolean;
   createdBy: mongoose.Types.ObjectId;
@@ -16,35 +16,40 @@ const RoleSchema: Schema = new Schema<IRole>(
   {
     categoryType: {
       type: String,
-      enum: Object.values(ComplaintTypes),
-      required: false,
-      default: ComplaintTypes.NOT_SELECTED,
-      index: true, 
+      required: true,
+      unique: true,
+      index: true,
+    },
+    uniqueId: {
+      type: String,
+      unique: true,
+      required: true,
     },
     name: {
       type: String,
-      required: true,
-      trim: true,
+      required: false,
       unique: true,
+      sparse: true,
+      trim: true,
     },
     status: {
       type: Boolean,
-      default: true, 
+      default: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
-      ref: "Staff", 
+      ref: "Staff",
       required: false,
-      default:null,
+      default: null,
     },
     updatedBy: {
       type: Schema.Types.ObjectId,
-      ref: "Staff", 
+      ref: "Staff",
       required: false,
-      default:null,
+      default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Role = mongoose.model<IRole>("Role", RoleSchema);

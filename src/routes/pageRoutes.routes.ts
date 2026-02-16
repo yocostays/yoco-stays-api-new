@@ -1,12 +1,32 @@
 import { Router } from "express";
 import RoutesController from "../controllers/routes.controller";
-const { createNewRoutes, getAllRoutes, deleteRouteById } = RoutesController;
 import validateToken from "../middlewares/validateToken";
+import { checkSuperAdmin } from "../middlewares/checkSuperAdmin";
+
+const { createNewRoutes, getAllRoutes, deleteRouteById, updateRouteById } =
+  RoutesController;
 
 const pageRoutesRouter = Router();
 
-pageRoutesRouter.post("/create", createNewRoutes);
-pageRoutesRouter.get("/", validateToken, getAllRoutes);
-pageRoutesRouter.delete("/delete/:id", validateToken, deleteRouteById);
+//Create a new route(module)
+pageRoutesRouter.post(
+  "/create",
+  validateToken,
+  checkSuperAdmin,
+  createNewRoutes,
+);
+pageRoutesRouter.get("/", validateToken, checkSuperAdmin, getAllRoutes);
+pageRoutesRouter.patch(
+  "/update/:id",
+  validateToken,
+  checkSuperAdmin,
+  updateRouteById,
+);
+pageRoutesRouter.delete(
+  "/delete/:id",
+  validateToken,
+  checkSuperAdmin,
+  deleteRouteById,
+);
 
 export default pageRoutesRouter;
