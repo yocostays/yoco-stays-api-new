@@ -31,7 +31,6 @@ const RouteSchema: Schema = new Schema<IRoute>(
     },
     icon: {
       type: String,
-      required: true,
     },
     platform: {
       type: String,
