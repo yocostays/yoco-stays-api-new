@@ -53,17 +53,8 @@ class RoutesController {
   //SECTION Controller method to handle get all routes
   getAllRoutes = asyncHandler(
     async (req: Request, res: Response): Promise<Response> => {
-      const { platform, page, limit } = req.query;
-
-      const pageNumber = page ? parseInt(page as string, 10) : 1;
-      const limitNumber = limit ? parseInt(limit as string, 10) : 10;
-
       // Call the service to retrieve routes
-      const result = await allRoutesDetails(
-        platform as string,
-        pageNumber,
-        limitNumber,
-      );
+      const result = await allRoutesDetails();
 
       return sendSuccess(res, FETCH_SUCCESS, result, 200);
     },

@@ -57,18 +57,9 @@ class RoutesService {
   //SECTION: Method to get all routes
   allRoutesDetails = async (
     platform?: string,
-    page: number = 1,
-    limit: number = 10,
   ): Promise<{
     web: any[];
     mobile: any[];
-    pagination: {
-      totalCount: number;
-      totalPages: number;
-      currentPage: number;
-      startIndex: number;
-      endIndex: number;
-    };
   }> => {
     const formatRoute = (item: any) => ({
       _id: item._id,
@@ -92,12 +83,7 @@ class RoutesService {
 
     pipeline.push({ $sort: { platform: -1, createdAt: -1 } });
 
-    const { data, count } = await paginateAggregate(
-      Route,
-      pipeline,
-      page,
-      limit,
-    );
+    const data = await Route.aggregate(pipeline);
 
     const formattedData = data.map(formatRoute);
     const webRoutes = formattedData.filter((r: any) => r.platform === "web");
@@ -105,20 +91,9 @@ class RoutesService {
       (r: any) => r.platform === "mobile",
     );
 
-    const totalPages = Math.ceil(count / limit);
-    const startIndex = (page - 1) * limit;
-    const endIndex = Math.min(startIndex + limit, count);
-
     return {
       web: webRoutes,
       mobile: mobileRoutes,
-      pagination: {
-        totalCount: count,
-        totalPages,
-        currentPage: page,
-        startIndex: startIndex + 1,
-        endIndex,
-      },
     };
   };
 
