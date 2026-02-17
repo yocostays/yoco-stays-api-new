@@ -12,7 +12,7 @@ class RoutesService {
   createNewRoutes = async (
     title: string,
     link: string,
-    icon: string,
+    icon: string | undefined,
     platform: string,
     staffId: string,
   ): Promise<IRoute> => {

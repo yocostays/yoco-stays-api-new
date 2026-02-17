@@ -9,10 +9,7 @@ export const CreateRouteSchema = z.object({
     .string({ message: "Link is required" })
     .trim()
     .min(1, "Link cannot be empty"),
-  icon: z
-    .string({ message: "Icon is required" })
-    .trim()
-    .min(1, "Icon cannot be empty"),
+  icon: z.string().optional(),
   platform: z.enum(["web", "mobile"], {
     message: "Platform must be 'web' or 'mobile'",
   }),

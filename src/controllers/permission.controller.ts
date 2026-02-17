@@ -1,60 +1,112 @@
+import mongoose from "mongoose";
 import { Request, Response } from "express";
 import PermissionService from "../services/permission.service";
 import StaffService from "../services/staff.service";
-import { asyncHandler } from "../utils/asyncHandler";
-import { sendSuccess, sendZodError } from "../utils/responseHelpers";
-import { SUCCESS_MESSAGES, ERROR_MESSAGES } from "../utils/messages";
-import { CreatePermissionSchema } from "../utils/validators/permission.validator";
+import { HttpResponse } from "../utils/httpResponse";
+import {
+  SUCCESS_MESSAGES,
+  VALIDATION_MESSAGES,
+  ERROR_MESSAGES,
+} from "../utils/messages";
 
 const { createPermission, fetchPermissions } = PermissionService;
 const { getStaffById } = StaffService;
 
 const { CREATE_DATA, FETCH_SUCCESS } = SUCCESS_MESSAGES;
-const { RECORD_NOT_FOUND } = ERROR_MESSAGES;
+const { INVALID_ID } = VALIDATION_MESSAGES;
+const { SERVER_ERROR, INVALID_ROUTE_ID, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 
 class PermissionController {
   //SECTION Controller method to handle permission creation by role id
-  addPermissionToRole = asyncHandler(
-    async (req: Request, res: Response): Promise<Response> => {
-      // Validate input using Zod
-      const parseResult = CreatePermissionSchema.safeParse(req.body);
-      if (!parseResult.success) return sendZodError(res, parseResult) as any;
-
+  async addPermissionToRole(
+    req: Request,
+    res: Response,
+  ): Promise<Response<HttpResponse>> {
+    try {
       const staffId = req.body._valid._id;
-      const { roleId, web, mobile } = parseResult.data;
+      const { roleId, permission, web, mobile } = req.body;
+
+      if (
+        !mongoose.isValidObjectId(staffId) ||
+        !mongoose.isValidObjectId(roleId)
+      )
+        throw new Error(INVALID_ID);
 
       // Call the service to retrieve staff
       const { staff } = await getStaffById(staffId);
 
       if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
 
-      // Merge web and mobile permissions
-      const permission = [...web, ...mobile];
+      // Merge web and mobile permissions if they exist, otherwise use permission array
+      const mergedPermission = permission || [
+        ...(web || []),
+        ...(mobile || []),
+      ];
+
+      if (!mergedPermission || mergedPermission.length === 0) {
+        throw new Error("No permissions provided.");
+      }
+
+      // Check if any route id is incorrect
+      const invalidPermission = mergedPermission.find(
+        (ele: any) => !mongoose.isValidObjectId(ele.routeId || ele._id),
+      );
+
+      if (invalidPermission) throw new Error(INVALID_ROUTE_ID);
 
       // Call the service to create a new permission
-      await createPermission(roleId, permission, staffId);
+      await createPermission(roleId, mergedPermission, staffId);
 
-      return sendSuccess(res, CREATE_DATA);
-    },
-  );
+      const successResponse: HttpResponse = {
+        statusCode: 200,
+        message: CREATE_DATA,
+      };
+      return res.status(200).json(successResponse);
+    } catch (error: any) {
+      const errorMessage = error.message ?? SERVER_ERROR;
+      const errorResponse: HttpResponse = {
+        statusCode: 400,
+        message: errorMessage,
+      };
+      return res.status(400).json(errorResponse);
+    }
+  }
 
   //SECTION Controller method to handle get permission by staff role Id
-  fetchPermissionByStaffRoleId = asyncHandler(
-    async (req: Request, res: Response): Promise<Response> => {
+  async fetchPermissionByStaffRoleId(
+    req: Request,
+    res: Response,
+  ): Promise<Response<HttpResponse>> {
+    try {
       const staffId = req.body._valid._id;
-      const { roleId } = req.body.validatedData || {};
+
+      if (!mongoose.isValidObjectId(staffId)) throw new Error(INVALID_ID);
 
       // Call the service to retrieve staff
       const { staff } = await getStaffById(staffId);
 
       if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
+
+      const { roleId } = req.body;
 
       // Call the service to fetch a permissions
       const { web, mobile } = await fetchPermissions(roleId ?? staff?.roleId);
 
-      return sendSuccess(res, FETCH_SUCCESS, { web, mobile }, 200);
-    },
-  );
+      const successResponse: HttpResponse = {
+        statusCode: 200,
+        message: FETCH_SUCCESS,
+        data: { web, mobile },
+      };
+      return res.status(200).json(successResponse);
+    } catch (error: any) {
+      const errorMessage = error.message ?? SERVER_ERROR;
+      const errorResponse: HttpResponse = {
+        statusCode: 400,
+        message: errorMessage,
+      };
+      return res.status(400).json(errorResponse);
+    }
+  }
 }
 
 export default new PermissionController();

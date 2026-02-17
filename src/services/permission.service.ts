@@ -12,9 +12,24 @@ class PermissionService {
     staffId: string,
   ): Promise<string> => {
     try {
-      const permissionEntries = permission.map((ele) => ({
+      // NOTE: Remove duplicates based on routeIdentifier to prevent duplicate key errors
+      // Supports both 'routeId' and '_id' from the frontend
+      const uniquePermissions = Array.from(
+        new Map(
+          permission.map((p) => {
+            const routeIdentifier = p.routeId || p._id;
+            return [routeIdentifier, { ...p, routeId: routeIdentifier }];
+          }),
+        ).values(),
+      ).filter((p) => p.routeId); // Ensure we have a routeId
+
+      const permissionEntries = uniquePermissions.map((ele) => ({
         roleId,
-        ...ele,
+        routeId: ele.routeId,
+        add: ele.add ?? false,
+        view: ele.view ?? false,
+        edit: ele.edit ?? false,
+        delete: ele.delete ?? false,
         createdBy: staffId,
         updatedBy: staffId,
         createdAt: getCurrentISTTime(),
