@@ -1,27 +1,23 @@
+import { PipelineStage } from "mongoose";
 import Role, { IRole } from "../models/role.model";
+import { ConflictError } from "../utils/errors";
 import { getCurrentISTTime } from "../utils/lib";
 import { ERROR_MESSAGES } from "../utils/messages";
+import { paginateAggregate } from "../utils/pagination";
 
-const { RECORD_NOT_FOUND } = ERROR_MESSAGES;
+const { RECORD_NOT_FOUND, DUPLICATE_RECORD } = ERROR_MESSAGES;
 
 class RoleService {
   //SECTION: Method to create a new role
-  async createCategoryService(
+  async createRoleService(
+    name: string,
     categoryType: string,
     staffId: string,
   ): Promise<IRole> {
     try {
-      // Check if a role with this categoryType already exists
-      const query: any = { categoryType };
-
-      const existingRole = await Role.findOne(query);
-      if (existingRole) {
-        throw new Error(`Category type already exists'${categoryType}'.`);
-      }
-
       // Generate uniqueId
       const lastRole = await Role.findOne().sort({ createdAt: -1 });
-      let uniqueId = "R1"; // Default start
+      let uniqueId = "R01";
       if (lastRole && lastRole.uniqueId) {
         const lastId = parseInt(lastRole.uniqueId.replace("R", ""), 10);
         uniqueId = `R${lastId + 1}`;
@@ -29,6 +25,7 @@ class RoleService {
 
       const newRole = new Role({
         uniqueId,
+        name,
         categoryType,
         createdBy: staffId,
         createdAt: getCurrentISTTime(),
@@ -36,47 +33,68 @@ class RoleService {
 
       return await newRole.save();
     } catch (error: any) {
+      if (error.code === 11000) {
+        const field = Object.keys(error.keyPattern)[0];
+        if (field === "uniqueId") {
+          // Retry if uniqueId collides (rare but possible in concurrent requests)
+          return await this.createRoleService(name, categoryType, staffId);
+        }
+        throw new ConflictError(
+          `Role '${name}' already exists in category '${categoryType}'.`,
+        );
+      }
       throw new Error(error.message);
     }
   }
 
-  //SECTION: Method to get all role
-  async getAllRolesWithPaginationService(
+  //SECTION: Method to get all roles with pagination
+  async getAllRolesService(
     page: number,
     limit: number,
-    search?: string,
   ): Promise<{ roles: any[]; count: number }> {
     try {
-      // Calculate the number of documents to skip
-      const skip = (page - 1) * limit;
+      const pipeline: PipelineStage[] = [];
 
-      // Build the query for searching roles
-      const query: { name?: { $regex: RegExp } } = {};
-      if (search) {
-        query.name = { $regex: new RegExp(`\\b${search}\\b`, "i") };
-      }
+      // Populate createdBy
+      pipeline.push(
+        {
+          $lookup: {
+            from: "staffs",
+            localField: "createdBy",
+            foreignField: "_id",
+            as: "createdBy",
+          },
+        },
+        {
+          $unwind: {
+            path: "$createdBy",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+      );
 
-      // Run both queries in parallel
-      const [roles, count] = await Promise.all([
-        Role.find(query)
-          .populate([{ path: "createdBy", select: "name" }])
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit),
-        Role.countDocuments(query),
-      ]);
+      // Sort
+      pipeline.push({ $sort: { createdAt: -1 } });
 
-      //NOTE - send response
-      const response = roles.map((ele) => ({
-        _id: ele._id,
-        uniqueId: ele?.uniqueId ?? null,
-        name: ele?.name ?? null,
-        categoryType: ele?.categoryType ?? null,
-        createdBy: (ele?.createdBy as any)?.name ?? null,
-        createdAt: ele?.createdAt ?? null,
-      }));
+      // Project
+      pipeline.push({
+        $project: {
+          _id: 1,
+          uniqueId: 1,
+          name: 1,
+          categoryType: 1,
+          status: 1,
+          createdBy: "$createdBy.name",
+          createdAt: 1,
+        },
+      });
 
-      return { roles: response, count };
+      const result = await paginateAggregate<any>(Role, pipeline, page, limit);
+
+      return {
+        roles: result.data,
+        count: result.count,
+      };
     } catch (error: any) {
       throw new Error(error.message);
     }

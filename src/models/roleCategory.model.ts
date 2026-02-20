@@ -1,32 +1,21 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-// Define the Role interface
-export interface IRole extends Document {
+// Define the RoleCategory interface
+export interface IRoleCategory extends Document {
   categoryType: string;
-  uniqueId: string;
-  name: string;
   status: boolean;
   createdBy: mongoose.Types.ObjectId;
-  updatedBy: mongoose.Types.ObjectId;
+  updatedBy: mongoose.Types.ObjectId | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-const RoleSchema: Schema = new Schema<IRole>(
+const RoleCategorySchema: Schema = new Schema<IRoleCategory>(
   {
     categoryType: {
       type: String,
       required: true,
-      index: true,
-    },
-    uniqueId: {
-      type: String,
       unique: true,
-      required: true,
-    },
-    name: {
-      type: String,
-      required: true,
       trim: true,
     },
     status: {
@@ -49,11 +38,14 @@ const RoleSchema: Schema = new Schema<IRole>(
   { timestamps: true },
 );
 
-// Compound unique index for categoryType and name with case-insensitive collation
-RoleSchema.index(
-  { categoryType: 1, name: 1 },
+// Create unique index on categoryType with case-insensitive collation to avoid duplicates at database level
+RoleCategorySchema.index(
+  { categoryType: 1 },
   { unique: true, collation: { locale: "en", strength: 2 } },
 );
 
-const Role = mongoose.model<IRole>("Role", RoleSchema);
-export default Role;
+const RoleCategory = mongoose.model<IRoleCategory>(
+  "RoleCategory",
+  RoleCategorySchema,
+);
+export default RoleCategory;

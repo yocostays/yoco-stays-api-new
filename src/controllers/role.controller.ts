@@ -1,23 +1,26 @@
-import mongoose from "mongoose";
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import RoleService from "../services/role.service";
+import RoleCategoryService from "../services/roleCategory.service";
 import StaffService from "../services/staff.service";
+import { asyncHandler } from "../utils/asyncHandler";
+import { NotFoundError } from "../utils/errors";
 import { HttpResponse } from "../utils/httpResponse";
 import {
+  ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   VALIDATION_MESSAGES,
-  ERROR_MESSAGES,
 } from "../utils/messages";
 import { sendSuccess, sendZodError } from "../utils/responseHelpers";
+import { CreateRoleSchema } from "../utils/validators/role.validator";
 import {
-  CreateRoleSchema,
-  UpdateRoleSchema,
-} from "../utils/validators/role.validator";
-import { asyncHandler } from "../utils/asyncHandler";
+  CreateRoleCategorySchema,
+  UpdateRoleCategorySchema,
+} from "../utils/validators/roleCategory.validator";
 
 const {
-  createCategoryService,
-  getAllRolesWithPaginationService,
+  createRoleService,
+  getAllRolesService,
   getRoleById,
   updateCategoryService,
   deleteRoleById,
@@ -25,6 +28,12 @@ const {
   rolesWithoutSuperAdminAndStudent,
   getAllRolesForWardenPanel,
 } = RoleService;
+
+const {
+  createCategoryService: createRoleCategoryService,
+  getAllCategoriesService,
+  updateCategoryService: updateRoleCategoryService,
+} = RoleCategoryService;
 
 const { getStaffById } = StaffService;
 
@@ -34,6 +43,8 @@ const { REQUIRED_FIELD, INVALID_ID } = VALIDATION_MESSAGES;
 const { SERVER_ERROR, RECORD_NOT_FOUND } = ERROR_MESSAGES;
 
 class RoleController {
+  // ------------------------controller methods for role categories------------------------
+
   //SECTION Controller method to handle category creation
   createCategory = asyncHandler(
     async (req: Request, res: Response): Promise<Response> => {
@@ -48,33 +59,23 @@ class RoleController {
       const { categoryType } = req.body;
 
       // Validate input using Zod
-      const parseResult = CreateRoleSchema.safeParse(req.body);
+      const parseResult = CreateRoleCategorySchema.safeParse(req.body);
       if (!parseResult.success) return sendZodError(res, parseResult) as any;
 
-      // Call the service to create a new role
-      await createCategoryService(categoryType, createdById);
+      // Call the service to create a new role category
+      await createRoleCategoryService(categoryType, createdById);
 
       return sendSuccess(res, CREATE_DATA);
     },
   );
 
-  //SECTION Controller method to get category with optional pagination and search
-  getAllCategoryWithPagination = asyncHandler(
+  //SECTION Controller method to get all role categories
+  getAllCategories = asyncHandler(
     async (req: Request, res: Response): Promise<Response> => {
-      const { page, limit, search } = req.query;
+      // Call the service to retrieve categories
+      const { categories, count } = await getAllCategoriesService();
 
-      // Convert page and limit to integers
-      const parsedPage = parseInt(page as string) || 1;
-      const parsedLimit = parseInt(limit as string) || 10;
-
-      // Call the service to retrieve roles
-      const { roles, count } = await getAllRolesWithPaginationService(
-        parsedPage,
-        parsedLimit,
-        search as string,
-      );
-
-      return sendSuccess(res, FETCH_SUCCESS, roles, 200, count);
+      return sendSuccess(res, FETCH_SUCCESS, categories, 200, count);
     },
   );
 
@@ -93,20 +94,65 @@ class RoleController {
 
       // Call the service to retrieve staff
       const { staff } = await getStaffById(updatedById);
-      if (!staff) throw new Error(RECORD_NOT_FOUND("Staff"));
+      if (!staff) throw new NotFoundError(RECORD_NOT_FOUND("Staff"));
 
-      const { name, status, categoryType } = req.body;
+      const { categoryType, status } = req.body;
 
       // Validate input using Zod
-      const parseResult = UpdateRoleSchema.safeParse(req.body);
+      const parseResult = UpdateRoleCategorySchema.safeParse(req.body);
       if (!parseResult.success) return sendZodError(res, parseResult) as any;
 
-      // Call the service to update a new role
-      await updateCategoryService(id, updatedById, name, status, categoryType);
+      // Call the service to update a role category
+      await updateRoleCategoryService(id, updatedById, categoryType, status);
 
       return sendSuccess(res, UPDATE_DATA);
     },
   );
+
+  // ---------------------------------------------------------------------------------------------------
+
+  // ------------------------controller methods for roles-----------------------------------------------
+
+  //SECTION: Controller method to handle role creation
+  createRole = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      const createdById = req.body._valid?._id;
+
+      if (createdById) {
+        // Call the service to retrieve staff
+        const { staff } = await getStaffById(createdById);
+        if (!staff) throw new NotFoundError(RECORD_NOT_FOUND("Staff"));
+      }
+
+      const { name, categoryType } = req.body;
+
+      // Validate input using Zod
+      const parseResult = CreateRoleSchema.safeParse(req.body);
+      if (!parseResult.success) return sendZodError(res, parseResult) as any;
+
+      // Call the service to create a new role
+      await createRoleService(name, categoryType, createdById);
+
+      return sendSuccess(res, CREATE_DATA);
+    },
+  );
+
+  //SECTION: Controller method to get all roles with pagination
+  getAllRoles = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      const { page, limit, search } = req.body;
+
+      // Call the service to retrieve roles
+      const { roles, count } = await getAllRolesService(
+        Number(page) || 1,
+        Number(limit) || 10,
+      );
+
+      return sendSuccess(res, FETCH_SUCCESS, roles, 200, count);
+    },
+  );
+
+  // ---------------------------------------------------------------------------------------------------
 
   //SECTION Controller method to get role by id
   async getRoleById(
