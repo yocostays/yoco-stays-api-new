@@ -140,12 +140,17 @@ class RoleController {
   //SECTION: Controller method to get all roles with pagination
   getAllRoles = asyncHandler(
     async (req: Request, res: Response): Promise<Response> => {
-      const { page, limit, search } = req.body;
+      const { pagination, filters, search } = req.body;
+
+      // Extract values with defaults
+      const page = Number(pagination?.page) || 1;
+      const limit = Number(pagination?.limit) || 10;
 
       // Call the service to retrieve roles
       const { roles, count } = await getAllRolesService(
-        Number(page) || 1,
-        Number(limit) || 10,
+        { page, limit },
+        filters || {},
+        search || {},
       );
 
       return sendSuccess(res, FETCH_SUCCESS, roles, 200, count);

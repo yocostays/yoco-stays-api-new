@@ -49,11 +49,34 @@ class RoleService {
 
   //SECTION: Method to get all roles with pagination
   async getAllRolesService(
-    page: number,
-    limit: number,
+    pagination: { page: number; limit: number },
+    filters: { categoryType?: string; status?: boolean },
+    search: { text?: string },
   ): Promise<{ roles: any[]; count: number }> {
     try {
       const pipeline: PipelineStage[] = [];
+
+      // Add match stage for search and filters
+      const matchStage: any = {};
+
+      if (search?.text) {
+        matchStage.$or = [
+          { name: { $regex: search.text, $options: "i" } },
+          { categoryType: { $regex: search.text, $options: "i" } },
+        ];
+      }
+
+      if (filters?.categoryType) {
+        matchStage.categoryType = { $regex: `^${filters.categoryType}$`, $options: "i" };
+      }
+
+      if (filters?.status !== undefined) {
+        matchStage.status = filters.status;
+      }
+
+      if (Object.keys(matchStage).length > 0) {
+        pipeline.push({ $match: matchStage });
+      }
 
       // Populate createdBy
       pipeline.push(
@@ -89,6 +112,7 @@ class RoleService {
         },
       });
 
+      const { page, limit } = pagination;
       const result = await paginateAggregate<any>(Role, pipeline, page, limit);
 
       return {
