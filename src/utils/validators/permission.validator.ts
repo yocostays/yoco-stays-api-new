@@ -16,6 +16,7 @@ export const CreatePermissionSchema = z.object({
   roleId: z
     .string({ message: "Role ID is required" })
     .regex(/^[0-9a-fA-F]{24}$/, "Invalid Role ID format"),
+  permission: z.array(PermissionItemSchema).optional().default([]),
   web: z.array(PermissionItemSchema).optional().default([]),
   mobile: z.array(PermissionItemSchema).optional().default([]),
 });
