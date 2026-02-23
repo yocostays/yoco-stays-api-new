@@ -1,0 +1,81 @@
+import mongoose, { Document, Schema } from "mongoose";
+
+// Define the custom permission interface
+export interface ICustomPermission extends Document {
+  hostelId: mongoose.Types.ObjectId;
+  roleId: mongoose.Types.ObjectId;
+  routeId: mongoose.Types.ObjectId;
+  add: boolean;
+  view: boolean;
+  edit: boolean;
+  delete: boolean;
+  status: boolean;
+  createdBy: mongoose.Types.ObjectId;
+  updatedBy: mongoose.Types.ObjectId;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const CustomPermissionSchema: Schema = new Schema<ICustomPermission>(
+  {
+    hostelId: {
+      type: Schema.Types.ObjectId,
+      ref: "Hostel",
+      required: true,
+    },
+    roleId: {
+      type: Schema.Types.ObjectId,
+      ref: "Role",
+      required: true,
+    },
+    routeId: {
+      type: Schema.Types.ObjectId,
+      ref: "Route",
+      required: true,
+    },
+    add: {
+      type: Boolean,
+      default: false,
+    },
+    view: {
+      type: Boolean,
+      default: false,
+    },
+    edit: {
+      type: Boolean,
+      default: false,
+    },
+    delete: {
+      type: Boolean,
+      default: false,
+    },
+    status: {
+      type: Boolean,
+      default: true,
+    },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Staff",
+      required: true,
+    },
+    updatedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Staff",
+      required: false,
+      default: null,
+    },
+  },
+  { timestamps: true },
+);
+
+// Compound unique index for hostelId, roleId and routeId
+CustomPermissionSchema.index(
+  { hostelId: 1, roleId: 1, routeId: 1 },
+  { unique: true },
+);
+
+const CustomPermission = mongoose.model<ICustomPermission>(
+  "CustomPermission",
+  CustomPermissionSchema,
+);
+export default CustomPermission;

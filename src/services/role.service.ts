@@ -1,5 +1,6 @@
-import { PipelineStage } from "mongoose";
+import mongoose, { PipelineStage } from "mongoose";
 import Role, { IRole } from "../models/role.model";
+import Staff from "../models/staff.model";
 import { ConflictError } from "../utils/errors";
 import { getCurrentISTTime } from "../utils/lib";
 import { ERROR_MESSAGES } from "../utils/messages";
@@ -67,7 +68,10 @@ class RoleService {
       }
 
       if (filters?.categoryType) {
-        matchStage.categoryType = { $regex: `^${filters.categoryType}$`, $options: "i" };
+        matchStage.categoryType = {
+          $regex: `^${filters.categoryType}$`,
+          $options: "i",
+        };
       }
 
       if (filters?.status !== undefined) {
@@ -252,6 +256,52 @@ class RoleService {
         }));
 
       return { roles: sortedRoles };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  // --------------------This API is used for CUSTOM PERNISSIONs--------------------
+
+  //SECTION: Method to get unique roles by hostelId
+  async getRolesByHostelService(hostelId: string): Promise<any[]> {
+    try {
+      const pipeline: PipelineStage[] = [
+        {
+          $match: {
+            hostelIds: new mongoose.Types.ObjectId(hostelId),
+            status: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "roles",
+            localField: "roleId",
+            foreignField: "_id",
+            as: "role",
+          },
+        },
+        { $unwind: "$role" },
+        {
+          $group: {
+            _id: "$role._id",
+            uniqueId: { $first: "$role.uniqueId" },
+            name: { $first: "$role.name" },
+            categoryType: { $first: "$role.categoryType" },
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            uniqueId: 1,
+            name: 1,
+            categoryType: 1,
+          },
+        },
+        { $sort: { name: 1 } },
+      ];
+
+      return await Staff.aggregate(pipeline);
     } catch (error: any) {
       throw new Error(error.message);
     }

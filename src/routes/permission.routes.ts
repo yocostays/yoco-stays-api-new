@@ -1,7 +1,12 @@
 import { Router } from "express";
 import PermissionController from "../controllers/permission.controller";
-const { addPermissionToRole, fetchPermissionByStaffRoleId } =
-  PermissionController;
+const {
+  addPermissionToRole,
+  fetchPermissionByStaffRoleId,
+  getRolesHostelWise,
+  addCustomPermissionToRole,
+  fetchCustomPermissionByHostelAndRole,
+} = PermissionController;
 import validateToken from "../middlewares/validateToken";
 import { checkSuperAdmin } from "../middlewares/checkSuperAdmin";
 
@@ -16,6 +21,26 @@ permissionRouter.post(
   validateToken,
   checkSuperAdmin,
   addPermissionToRole,
+);
+
+// --------------------This API is used for CUSTOM PERNISSIONs--------------------
+
+//fetch roles hostel wise
+permissionRouter.post("/hostel-roles", validateToken, getRolesHostelWise);
+
+//create custom permission (hostel wise)
+permissionRouter.post(
+  "/create-custom",
+  validateToken,
+  checkSuperAdmin,
+  addCustomPermissionToRole,
+);
+
+//fetch custom permission (hostel wise)
+permissionRouter.post(
+  "/fetch-custom",
+  validateToken,
+  fetchCustomPermissionByHostelAndRole,
 );
 
 export default permissionRouter;
