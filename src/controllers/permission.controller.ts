@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { PipelineStage } from "mongoose";
 import { Request, Response } from "express";
 import PermissionService from "../services/permission.service";
 import StaffService from "../services/staff.service";
@@ -21,6 +21,7 @@ const {
   fetchPermissions,
   fetchCustomPermissionsService,
   saveCustomPermissionService,
+  getUserPermissionsWeb,
 } = PermissionService;
 const { getStaffById } = StaffService;
 const { getRolesByHostelService } = RoleService;
@@ -169,6 +170,49 @@ class PermissionController {
       );
 
       return sendSuccess(res, FETCH_SUCCESS, { web, mobile });
+    },
+  );
+
+  //SECTION Controller method to handle user permission fetching for web (after login)
+  fetchUserPermissionsWeb = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      // Extract userId from session (_valid)
+      const userId = req.body?._valid?._id;
+
+      if (!userId || !mongoose.isValidObjectId(userId)) {
+        throw new BadRequestError("Invalid session or user ID.");
+      }
+
+      // Fetch full staff details from DB to get role and hostel info
+      const { staff } = await getStaffById(userId);
+
+      if (!staff) {
+        throw new NotFoundError(RECORD_NOT_FOUND("Staff"));
+      }
+
+      const roleId = staff.roleId?._id || staff.roleId;
+
+      // Extract first hostelId if multiple exist
+      const hostelId =
+        Array.isArray(staff.hostelIds) && staff.hostelIds.length > 0
+          ? staff.hostelIds[0]._id || staff.hostelIds[0]
+          : null;
+
+      if (!roleId) {
+        throw new BadRequestError("User role not assigned.");
+      }
+
+      if (!hostelId) {
+        throw new BadRequestError("No assigned hostel found for this user.");
+      }
+
+      // Call the service with derived IDs
+      const permissions = await getUserPermissionsWeb(
+        hostelId.toString(),
+        roleId.toString(),
+      );
+
+      return sendSuccess(res, FETCH_SUCCESS, permissions);
     },
   );
 }

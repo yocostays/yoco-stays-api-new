@@ -6,6 +6,7 @@ const {
   getRolesHostelWise,
   addCustomPermissionToRole,
   fetchCustomPermissionByHostelAndRole,
+  fetchUserPermissionsWeb,
 } = PermissionController;
 import validateToken from "../middlewares/validateToken";
 import { checkSuperAdmin } from "../middlewares/checkSuperAdmin";
@@ -41,6 +42,13 @@ permissionRouter.post(
   "/fetch-custom",
   validateToken,
   fetchCustomPermissionByHostelAndRole,
+);
+
+//fetch user permissions for web (after login)
+permissionRouter.get(
+  "/fetch-user-permissions",
+  validateToken,
+  fetchUserPermissionsWeb,
 );
 
 export default permissionRouter;
