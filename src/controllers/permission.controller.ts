@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import PermissionService from "../services/permission.service";
 import StaffService from "../services/staff.service";
 import RoleService from "../services/role.service";
+import UserService from "../services/user.service";
 import { asyncHandler } from "../utils/asyncHandler";
 import { sendSuccess, sendZodError } from "../utils/responseHelpers";
 import {
@@ -15,6 +16,7 @@ import {
   ERROR_MESSAGES,
   VALIDATION_MESSAGES,
 } from "../utils/messages";
+import { AccountType } from "../utils/enum";
 
 const {
   createPermission,
@@ -22,9 +24,11 @@ const {
   fetchCustomPermissionsService,
   saveCustomPermissionService,
   getUserPermissionsWeb,
+  getUserPermissionsMobile,
 } = PermissionService;
 const { getStaffById } = StaffService;
 const { getRolesByHostelService } = RoleService;
+const { getStudentById } = UserService;
 
 const { CREATE_DATA, FETCH_SUCCESS } = SUCCESS_MESSAGES;
 const { RECORD_NOT_FOUND } = ERROR_MESSAGES;
@@ -213,6 +217,61 @@ class PermissionController {
       );
 
       return sendSuccess(res, FETCH_SUCCESS, permissions);
+    },
+  );
+
+  //SECTION Controller method to handle user permission fetching for mobile (after login)
+  fetchUserPermissionsMobile = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      // Extract userId and userType from session (_valid)
+      const userId = req.body?._valid?._id;
+      const userType = req.body?._valid?.userType;
+
+      if (!userId || !mongoose.isValidObjectId(userId)) {
+        throw new BadRequestError("Invalid session or user ID.");
+      }
+
+      let roleId: any;
+      let roleName: string | null = null;
+      let hostelId: any;
+
+      if (userType === AccountType.STUDENT) {
+        // Fetch student details
+        const { student } = await getStudentById(userId);
+        if (!student) throw new NotFoundError(RECORD_NOT_FOUND("Student"));
+
+        roleId = student.roleId?._id || student.roleId;
+        roleName = student.roleId?.name || null;
+        hostelId = student.hostelId?._id || student.hostelId;
+      } else {
+        // Default to Staff fetch
+        const { staff } = await getStaffById(userId);
+        if (!staff) throw new NotFoundError(RECORD_NOT_FOUND("Staff"));
+
+        roleId = staff.roleId?._id || staff.roleId;
+        roleName = staff.roleId?.name || null;
+        // Extract first hostelId if multiple exist
+        hostelId =
+          Array.isArray(staff.hostelIds) && staff.hostelIds.length > 0
+            ? staff.hostelIds[0]._id || staff.hostelIds[0]
+            : null;
+      }
+
+      if (!roleId) {
+        throw new BadRequestError("User role not assigned.");
+      }
+
+      if (!hostelId) {
+        throw new BadRequestError("No assigned hostel found for this user.");
+      }
+
+      // Call the service with derived IDs
+      const permissions = await getUserPermissionsMobile(
+        hostelId.toString(),
+        roleId.toString(),
+      );
+
+      return sendSuccess(res, FETCH_SUCCESS, { roleName, permissions });
     },
   );
 }

@@ -179,6 +179,7 @@ class UserService {
         .populate([
           { path: "academicDetails.universityId", select: "name" },
           { path: "academicDetails.courseId", select: "name" },
+          { path: "roleId", select: "name" },
         ])
         .select("-password -createdBy -updatedBy -createdAt -updatedAt -__v")
         .lean();

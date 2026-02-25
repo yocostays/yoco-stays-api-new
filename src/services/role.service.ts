@@ -220,6 +220,7 @@ class RoleService {
       const response = role.map((ele) => ({
         _id: ele._id,
         name: ele?.name ?? null,
+        categoryType: ele?.categoryType ?? null,
       }));
 
       return { roles: response };
@@ -271,6 +272,23 @@ class RoleService {
           $match: {
             hostelIds: new mongoose.Types.ObjectId(hostelId),
             status: true,
+          },
+        },
+        {
+          $project: { roleId: 1 },
+        },
+        {
+          $unionWith: {
+            coll: "users",
+            pipeline: [
+              {
+                $match: {
+                  hostelId: new mongoose.Types.ObjectId(hostelId),
+                  status: true,
+                },
+              },
+              { $project: { roleId: 1 } },
+            ],
           },
         },
         {

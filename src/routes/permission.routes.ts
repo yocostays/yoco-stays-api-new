@@ -7,6 +7,7 @@ const {
   addCustomPermissionToRole,
   fetchCustomPermissionByHostelAndRole,
   fetchUserPermissionsWeb,
+  fetchUserPermissionsMobile,
 } = PermissionController;
 import validateToken from "../middlewares/validateToken";
 import { checkSuperAdmin } from "../middlewares/checkSuperAdmin";
@@ -49,6 +50,13 @@ permissionRouter.get(
   "/fetch-user-permissions",
   validateToken,
   fetchUserPermissionsWeb,
+);
+
+//fetch user permissions for mobile (after login)
+permissionRouter.get(
+  "/fetch-user-permissions-mobile",
+  validateToken,
+  fetchUserPermissionsMobile,
 );
 
 export default permissionRouter;

@@ -399,6 +399,92 @@ class PermissionService {
       throw new Error(error.message);
     }
   }
+
+  //SECTION: Method to get user permissions for MOBILE after login
+  async getUserPermissionsMobile(
+    hostelId: string,
+    roleId: string,
+  ): Promise<any[]> {
+    try {
+      const hostel_id = new mongoose.Types.ObjectId(hostelId);
+      const role_id = new mongoose.Types.ObjectId(roleId);
+
+      const pipeline: PipelineStage[] = [
+        { $match: { platform: "mobile", status: true } },
+        {
+          $lookup: {
+            from: "custompermissions",
+            let: { route_id: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$routeId", "$$route_id"] },
+                      { $eq: ["$roleId", role_id] },
+                      { $eq: ["$hostelId", hostel_id] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: "custom",
+          },
+        },
+        { $unwind: { path: "$custom", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "permissions",
+            let: { route_id: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$routeId", "$$route_id"] },
+                      { $eq: ["$roleId", role_id] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: "general",
+          },
+        },
+        { $unwind: { path: "$general", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            link: 1,
+            icon: 1,
+            // Prioritize Custom > General > Default False
+            view: {
+              $ifNull: ["$custom.view", { $ifNull: ["$general.view", false] }],
+            },
+            add: {
+              $ifNull: ["$custom.add", { $ifNull: ["$general.add", false] }],
+            },
+            edit: {
+              $ifNull: ["$custom.edit", { $ifNull: ["$general.edit", false] }],
+            },
+            delete: {
+              $ifNull: [
+                "$custom.delete",
+                { $ifNull: ["$general.delete", false] },
+              ],
+            },
+          },
+        },
+        { $match: { view: true } }, // Final filter to only return accessible routes
+        { $sort: { title: 1 } },
+      ];
+
+      return await Route.aggregate(pipeline);
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
 }
 
 export default new PermissionService();
