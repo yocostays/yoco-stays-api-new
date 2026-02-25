@@ -122,7 +122,7 @@ class AuthController {
       }
 
       // Call the service to create a new user
-      const { student, token } = await studentLogin(
+      const { student, token, roleName, permissions } = await studentLogin(
         uniqueId,
         password,
         rememberMe,
@@ -137,6 +137,8 @@ class AuthController {
         image: student?.image ? await getSignedUrl(student?.image) : null,
         phone: student?.phone ?? null,
         hostel: student?.hostelId?.name ?? null,
+        roleName: roleName,
+        permissions: permissions,
       };
 
       const successResponse: HttpResponse = {

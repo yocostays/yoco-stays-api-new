@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import nodemailer from "nodemailer";
+import bcrypt from "bcryptjs";
 import Staff from "../models/staff.model";
 import User from "../models/user.model";
 import Token from "../models/token.model";
@@ -17,6 +18,7 @@ import {
   uploadFileToCloudStorage,
 } from "../utils/awsUploadService";
 import OtpLogicService from "./otp.service";
+import PermissionService from "./permission.service";
 import { OtpPurpose, OtpChannel } from "../utils/validators/otp.schema";
 
 const { USER_LOGOUT_SUCCESS, PASSWORD_RESET_SUCCESS } = SUCCESS_MESSAGES;
@@ -102,12 +104,20 @@ class AuthService {
     rememberMe: boolean,
     loginType: LoginType,
     subscriptionId: string,
-  ): Promise<{ student: any; token: string }> => {
+  ): Promise<{
+    student: any;
+    token: string;
+    roleName: string | null;
+    permissions: any[];
+  }> => {
     try {
-      // Step 1: Get student based on the user name
+      // Step 1: Get student based on the unique id
       const student = await User.findOne({ uniqueId })
-        .select("name hostelId image phone email password")
-        .populate([{ path: "hostelId", select: "name" }])
+        .select("name hostelId image phone email password roleId")
+        .populate([
+          { path: "hostelId", select: "name" },
+          { path: "roleId", select: "name" },
+        ])
         .lean();
 
       if (!student) throw new Error(RECORD_NOT_FOUND("Student"));
@@ -122,7 +132,7 @@ class AuthService {
       if (!isPasswordValid) throw new Error(INVALID_PASSWORD);
 
       // Step 3: Set token expiration based on rememberMe
-      const tokenExpiry = rememberMe ? "180d" : "48h"; // '6m' = 6 months, '48h' = 48 hours
+      const tokenExpiry = rememberMe ? "180d" : "48h"; // '180d' = 6 months, '48h' = 48 hours
 
       // Step 4: Generate a JWT token
       const tokenString = generateToken(
@@ -138,25 +148,6 @@ class AuthService {
       // Step 5: Generate expiry time using the utility function
       const expiryTime = generateExpiryTime(rememberMe ? 4320 : 48); // 4320 hours for 6 months, 48 hours otherwise
 
-      const existingToken = await Token.findOne({ userId: student._id });
-
-      if (existingToken) {
-        // Update existing token
-        existingToken.token = tokenString;
-        existingToken.expiryTime = expiryTime;
-        await existingToken.save();
-      } else {
-        // Create a new token
-        const newToken = new Token({
-          accountType: AccountType.STUDENT,
-          userId: student._id,
-          token: tokenString,
-          expiryTime: expiryTime,
-          status: true,
-        });
-        await newToken.save();
-      }
-
       const updateData: any = { lastLogin: getCurrentISTTime() };
       switch (loginType) {
         case LoginType.WEB:
@@ -170,10 +161,54 @@ class AuthService {
           break;
       }
 
-      await User.findByIdAndUpdate(student._id, { $set: updateData });
+      // Fetch permissions for the student
+      const hostelId = student.hostelId?._id || student.hostelId;
+      const roleId = student.roleId?._id || student.roleId;
+      const roleName = (student.roleId as any)?.name || null;
 
-      // Step 6: Return student details and token
-      return { student, token: tokenString };
+      let permissions: any[] = [];
+      if (hostelId && roleId) {
+        permissions = await PermissionService.getUserPermissionsMobile(
+          hostelId.toString(),
+          roleId.toString(),
+        );
+      }
+
+      // Step 6: Run token upsert, user update, and optional rehash in parallel
+      const parallelOps: Promise<any>[] = [
+        Token.findOneAndUpdate(
+          { userId: student._id },
+          {
+            $set: {
+              token: tokenString,
+              expiryTime: expiryTime,
+              accountType: AccountType.STUDENT,
+              status: true,
+            },
+          },
+          { upsert: true, new: true },
+        ),
+        User.findByIdAndUpdate(student._id, { $set: updateData }),
+      ];
+
+      // Rehash on login: silently migrate old high-cost hashes to current cost
+      const currentRounds = bcrypt.getRounds(student.password);
+      if (currentRounds > 10) {
+        const newHash = hashPassword(password); // uses 10 rounds now
+        parallelOps.push(
+          newHash.then((hashed) =>
+            User.updateOne(
+              { _id: student._id },
+              { $set: { password: hashed } },
+            ),
+          ),
+        );
+      }
+
+      await Promise.all(parallelOps);
+
+      // Step 7: Return student details, token, and permissions
+      return { student, token: tokenString, roleName, permissions };
     } catch (error: any) {
       throw new Error(`Login failed: ${error.message}`);
     }

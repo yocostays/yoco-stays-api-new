@@ -32,7 +32,6 @@ const {
 
 const authRouter = Router();
 
-authRouter.post("/signin", staffLoginWithUserNameAndPwd);
 // ========== Mobile App Routes (Staff & Student) ==========
 // Staff (mobile) login
 authRouter.post("/signin", staffLoginWithUserNameAndPwd);

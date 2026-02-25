@@ -36,8 +36,10 @@ const TokenSchema: Schema = new Schema<IToken>(
       default: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
+
+TokenSchema.index({ userId: 1 }, { unique: true });
 
 const Token = mongoose.model<IToken>("Token", TokenSchema);
 export default Token;

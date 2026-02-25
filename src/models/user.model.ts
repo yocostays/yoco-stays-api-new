@@ -72,7 +72,7 @@ export interface IAcademicDetails extends Document {
 // Define the user interface
 export interface IUser extends Document {
   uniqueId: string;
-  bulkCountry:string | null;
+  bulkCountry: string | null;
   bulkState: string | null;
   bulkCity: string | null;
   roleId: mongoose.Types.ObjectId;
@@ -113,7 +113,7 @@ export interface IUser extends Document {
   isLeft: boolean;
   leftDate: Date;
   status: boolean;
-  isRequestDeactivate:boolean;
+  isRequestDeactivate: boolean;
   createdBy: mongoose.Types.ObjectId;
   updatedBy: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -169,7 +169,7 @@ const KycDocumentDetails: Schema<IKycDocumentDetails> =
     aadhaarNumber: {
       type: String,
       required: false,
-      default: null
+      default: null,
     },
     aadhaarCard: {
       type: String,
@@ -231,7 +231,7 @@ const FamilyDetailsSchema: Schema<IFamiliyDetails> =
     fatherNumber: {
       type: Number,
       required: false,
-      default: null
+      default: null,
     },
     fatherEmail: {
       type: String,
@@ -344,7 +344,7 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
       type: String,
       // enum: Object.values(BloodGroupType),
       required: false,
-      default:null
+      default: null,
     },
     divyang: {
       type: Boolean,
@@ -374,7 +374,7 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     country: { type: CountrySchema, required: false, default: null },
     bulkCountry: {
       type: String,
-      requried: false
+      requried: false,
     },
     state: {
       type: StateSchema,
@@ -383,7 +383,7 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     },
     bulkState: {
       type: String,
-      requried: false
+      requried: false,
     },
     city: {
       type: CitySchema,
@@ -392,7 +392,7 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
     },
     bulkCity: {
       type: String,
-      requried: false
+      requried: false,
     },
     category: {
       type: String,
@@ -495,9 +495,9 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
       type: Boolean,
       default: true,
     },
-    isRequestDeactivate:{
-      type:Boolean,
-      default:false
+    isRequestDeactivate: {
+      type: Boolean,
+      default: false,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
@@ -510,32 +510,41 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 UserSchema.index(
   { enrollmentNumber: 1 },
-  
+
   {
     unique: true,
     partialFilterExpression: {
-      enrollmentNumber: { $exists: true, $nin: ["", null] }
-    }
-  }
+      enrollmentNumber: { $exists: true, $nin: ["", null] },
+    },
+  },
 );
 
 UserSchema.index(
   { phone: 1 },
-  
+
   {
     unique: true,
     partialFilterExpression: {
-      phone: { $exists: true, $nin: ["", null] }
-    }
-  }
+      phone: { $exists: true, $nin: ["", null] },
+    },
+  },
 );
 
 UserSchema.index({ name: 1, uniqueId: 1, status: 1, isLeft: 1 });
+UserSchema.index(
+  { uniqueId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      uniqueId: { $exists: true, $nin: ["", null] },
+    },
+  },
+);
 UserSchema.index({ status: 1, isLeft: 1 });
 
 const User = mongoose.model<IUser>("User", UserSchema);
