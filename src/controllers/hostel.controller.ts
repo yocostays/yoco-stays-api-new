@@ -3,6 +3,8 @@ import { Request, Response } from "express";
 import HostelService from "../services/hostel.service";
 import StaffService from "../services/staff.service";
 import { HttpResponse } from "../utils/httpResponse";
+import { asyncHandler } from "../utils/asyncHandler";
+import { sendSuccess } from "../utils/responseHelpers";
 import {
   SUCCESS_MESSAGES,
   ERROR_MESSAGES,
@@ -54,7 +56,7 @@ class HostelController {
   //SECTION Controller method to handle hostel creation
   async createHostelInAdmin(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const createdById = req.body._valid._id;
@@ -105,7 +107,7 @@ class HostelController {
       ];
 
       const missingKeys = requiredKeys.filter(
-        (key) => !payloadKeys.includes(key) || !req.body[key]
+        (key) => !payloadKeys.includes(key) || !req.body[key],
       );
 
       if (missingKeys.length > 0) {
@@ -133,7 +135,7 @@ class HostelController {
         emergencyNumbers,
         securityDetails,
         status,
-        createdById
+        createdById,
       );
 
       const successResponse: HttpResponse = {
@@ -154,7 +156,7 @@ class HostelController {
   //SECTION Controller method to handle hostel get for web without token
   async getHostelwithoutToken(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       // Call the service to create a new user
@@ -177,45 +179,24 @@ class HostelController {
   }
 
   //SECTION Controller method to get hostel with optional pagination and search
-  async getAllHostelWithPagination(
-    req: Request,
-    res: Response
-  ): Promise<Response<HttpResponse>> {
-    try {
-      const { page, limit, search } = req.query;
+  getAllHostelWithPagination = asyncHandler(
+    async (req: Request, res: Response): Promise<Response> => {
+      const { page = 1, limit = 10, search } = req.body;
 
-      // Convert page and limit to integers
-      const parsedPage = parseInt(page as string);
-      const parsedLimit = parseInt(limit as string);
-
-      // Call the service to retrieve all hostel
       const { hostels, count } = await hostelWithPagination(
-        parsedPage,
-        parsedLimit,
-        search as string
+        Number(page),
+        Number(limit),
+        search || undefined,
       );
 
-      const successResponse: HttpResponse = {
-        statusCode: 200,
-        message: FETCH_SUCCESS,
-        count,
-        data: hostels,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      return sendSuccess(res, FETCH_SUCCESS, hostels, 200, count);
+    },
+  );
 
   //SECTION Controller method to get hostel by id with bed details not room details
   async getHosteldetailsById(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { id } = req.params;
@@ -246,7 +227,7 @@ class HostelController {
   //SECTION Controller method to delete hostel by id
   async deleteHostelById(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { id } = req.params;
@@ -286,7 +267,7 @@ class HostelController {
   //SECTION Controller method to update hostel by id
   async updateHostelDetailsById(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { id } = req.params;
@@ -340,7 +321,7 @@ class HostelController {
         emergencyNumbers,
         securityDetails,
         status,
-        staff._id
+        staff._id,
       );
 
       const successResponse: HttpResponse = {
@@ -361,7 +342,7 @@ class HostelController {
   //SECTION Controller method to add or update hostel room details by id
   async addOrUpdateRoomMappingDetails(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const updatedById = req.body._valid._id;
@@ -410,7 +391,7 @@ class HostelController {
   //SECTION Controller method to fetch Mappped Room Details
   async fetchMapppedRoomDetails(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { hostelId } = req.body;
@@ -452,7 +433,7 @@ class HostelController {
   //SECTION Controller method to handle hostel get for app
   async fetchHostelDetailsForApp(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const userId = req.body._valid._id;
@@ -479,7 +460,7 @@ class HostelController {
   //SECTION Controller method to handle fetch Bed Types By HostelId
   async fetchBedTypesByHostelId(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -514,7 +495,7 @@ class HostelController {
   //SECTION Controller method to handle fetch floor by room and bed type
   async fetchFloorByBedTypeAndHostelId(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -537,7 +518,7 @@ class HostelController {
       // Call the service to get floor details
       const { floorNumbers } = await fetchFloorByBedTypeAndHostelId(
         hostelId,
-        bedType
+        bedType,
       );
 
       const successResponse: HttpResponse = {
@@ -559,7 +540,7 @@ class HostelController {
   //SECTION Controller method to fetch room details by hostel id and bed type
   async getRoomsByBedType(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const hostelIdForToken = req.body._valid?.hostelId;
@@ -600,7 +581,7 @@ class HostelController {
   //SECTION Controller method to handle get Vacant Rooms By BedType
   async getVacantRoomsByBedType(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { hostelId, bedType, roomNumber } = req.body;
@@ -609,7 +590,7 @@ class HostelController {
       const { details } = await vacantRoomsByBedType(
         hostelId,
         bedType,
-        roomNumber
+        roomNumber,
       );
 
       const successResponse: HttpResponse = {
@@ -631,7 +612,7 @@ class HostelController {
   //SECTION Controller method to handle to upload legal documents
   async uploadLegalDocuments(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -669,7 +650,7 @@ class HostelController {
 
   async retrivedUploadLegalDocuments(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -709,7 +690,7 @@ class HostelController {
   //SECTION Controller method to handle to upload legal documents
   async updateMessDetails(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -742,7 +723,7 @@ class HostelController {
         specialDietary,
         dietaryOptions,
         diningTimeSlot,
-        staffId
+        staffId,
       );
 
       const successResponse: HttpResponse = {
@@ -762,7 +743,7 @@ class HostelController {
 
   async fetchHostelMessDetails(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -802,7 +783,7 @@ class HostelController {
   //SECTION Controller method to fetch room details by hostel id and bed type
   async fetchUserDetailsOfRoom(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const { hostelId, bedType, roomNumber } = req.body;
@@ -825,7 +806,7 @@ class HostelController {
       const { users } = await fetchUserDetailsOfRoom(
         hostelId,
         bedType,
-        roomNumber
+        roomNumber,
       );
 
       const successResponse: HttpResponse = {
@@ -847,7 +828,7 @@ class HostelController {
   //SECTION Controller method to handle fetch payment type By HostelId
   async fetchPaymentOptionsByHostel(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -882,7 +863,7 @@ class HostelController {
   //SECTION Controller method to fetch room details by muliple floor numbers
   async fetchRoomsByMulipleFloorNumbers(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const hostelIdForToken = req.body._valid?.hostelId;
@@ -904,7 +885,7 @@ class HostelController {
       // Call the service to retrieve room details by hostel id
       const { rooms } = await roomsByMultipleFloorNumbers(
         hostelId,
-        floorNumbers
+        floorNumbers,
       );
 
       const successResponse: HttpResponse = {
@@ -926,7 +907,7 @@ class HostelController {
   //SECTION: Controller method to upload room mapping in bulk.
   async uploadRoomMappingInBulk(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse> | void> {
     try {
       const createdById = req.body._valid._id;
@@ -946,7 +927,7 @@ class HostelController {
 
       const fileUrl = await uploadFileToCloudStorage(
         file,
-        HOSTEL_ROOM_MAP_BULK_UPLOAD_FILES
+        HOSTEL_ROOM_MAP_BULK_UPLOAD_FILES,
       );
       const url = fileUrl && fileUrl.Key ? fileUrl?.Key : null;
 
@@ -956,7 +937,7 @@ class HostelController {
         jsonData,
         hostelId,
         createdById,
-        url as string
+        url as string,
       );
     } catch (error: any) {
       const errorMessage = error.message ?? SERVER_ERROR;
@@ -969,16 +950,15 @@ class HostelController {
     }
   }
 
-   async fetchFloorsRooms(
+  async fetchFloorsRooms(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse> | void> {
     try {
-
       const { hostelId } = req.body?._valid;
-     
-     const {floorRooms} = await fetchFloorRooms(hostelId)
-      res.json({floorRooms})
+
+      const { floorRooms } = await fetchFloorRooms(hostelId);
+      res.json({ floorRooms });
     } catch (error: any) {
       const errorMessage = error.message ?? SERVER_ERROR;
       const errorResponse: HttpResponse = {

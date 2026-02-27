@@ -9,6 +9,7 @@ import Hostel, {
   IBedNumberDetails,
 } from "../models/hostel.model";
 import User from "../models/user.model";
+import Staff from "../models/staff.model";
 import College from "../models/university.model";
 import { excelDateToJSDate, getCurrentISTTime } from "../utils/lib";
 import { uploadRoomMappingSchema } from "../utils/validators/hostel.validator";
@@ -76,7 +77,7 @@ class HostelService {
     emergencyNumbers: IEmergencyNumber,
     securityDetails: any,
     status: boolean,
-    createdBy: mongoose.Types.ObjectId
+    createdBy: mongoose.Types.ObjectId,
   ): Promise<IHostel> => {
     try {
       const existingHostel = await Hostel.findOne({ identifier });
@@ -127,12 +128,12 @@ class HostelService {
           if (imageUrl?.url && imageUrl?.url.includes("base64")) {
             const uploadImage = await uploadFileInS3Bucket(
               imageUrl.url,
-              HOSTEL_IMAGES
+              HOSTEL_IMAGES,
             );
             if (uploadImage !== false) return { url: uploadImage.Key };
             else throw new Error(IMAGE_UPLOAD_ERROR);
           }
-        })
+        }),
       );
       // Calculate total capacity from bedDetails
       const totalCapacity = bedDetails.reduce((total, bedDetail) => {
@@ -196,7 +197,7 @@ class HostelService {
       await initializeHostelTemplates(
         savedHostel._id as mongoose.Types.ObjectId,
         savedHostel.name,
-        savedHostel.identifier
+        savedHostel.identifier,
       );
 
       return savedHostel;
@@ -224,52 +225,80 @@ class HostelService {
   hostelWithPagination = async (
     page: number,
     limit: number,
-    search?: string
+    search?: string,
   ): Promise<{ hostels: any[]; count: number }> => {
     try {
-      // Calculate the number of documents to skip
       const skip = (page - 1) * limit;
 
-      // Build search parameters based on search input
       const searchParams = search
         ? {
-          $or: [{ name: { $regex: `^${search}`, $options: "i" } }],
-        }
+            $or: [{ name: { $regex: `^${search}`, $options: "i" } }],
+          }
         : {};
 
-      // Run both queries in parallel
+      const filterQuery = { $and: [{ ...searchParams }] };
+
       const [count, hostels] = await Promise.all([
-        Hostel.countDocuments({
-          $and: [{ ...searchParams }],
-        }),
-        Hostel.find({
-          $and: [{ ...searchParams }],
-        })
-          .populate([{ path: "createdBy", select: "name" }])
+        Hostel.countDocuments(filterQuery),
+        Hostel.find(filterQuery)
+          .populate([
+            { path: "createdBy", select: "name" },
+            { path: "universityId", select: "location.city" },
+          ])
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
-          .select("-bedDetails"),
+          .select("-bedDetails")
+          .lean(),
       ]);
 
-      // Map the result to return necessary fields
-      const result = hostels.map((ele) => ({
-        _id: ele._id,
-        name: ele.name ?? null,
-        identifier: ele.identifier ?? null,
-        buildingNumber: ele.buildingNumber ?? null,
-        totalCapacity: ele?.totalCapacity ?? 0,
-        address: ele.address ?? null,
-        description: ele.description ?? null,
-        securityFee: ele?.securityFee ?? null,
-        status: ele?.status,
-        isRoomMapped: !!ele?.roomMapping,
-        isMessDetailsAdded: !!ele?.messDetails,
-        isLegalDocumentsAdded: !!ele?.legalDocuments,
-        isAgreementRequired: ele?.isAgreementRequired,
-        createdBy: (ele?.createdBy as any)?.name ?? null,
-        createdAt: ele?.createdAt ?? null,
-      }));
+      const hostelIds = hostels.map((h) => h._id as mongoose.Types.ObjectId);
+
+      const [studentCounts, staffCounts] = await Promise.all([
+        User.aggregate([
+          { $match: { hostelId: { $in: hostelIds } } },
+          { $group: { _id: "$hostelId", count: { $sum: 1 } } },
+        ]),
+        Staff.aggregate([
+          { $match: { hostelIds: { $in: hostelIds } } },
+          { $unwind: "$hostelIds" },
+          { $match: { hostelIds: { $in: hostelIds } } },
+          { $group: { _id: "$hostelIds", count: { $sum: 1 } } },
+        ]),
+      ]);
+
+      const studentCountMap = new Map(
+        studentCounts.map((s: any) => [s._id.toString(), s.count]),
+      );
+      const staffCountMap = new Map(
+        staffCounts.map((s: any) => [s._id.toString(), s.count]),
+      );
+
+      const result = hostels.map((ele: any) => {
+        const hostelIdStr = ele._id.toString();
+        const university = ele.universityId as any;
+
+        return {
+          _id: ele._id,
+          name: ele.name ?? null,
+          identifier: ele.identifier ?? null,
+          buildingNumber: ele.buildingNumber ?? null,
+          totalCapacity: ele.totalCapacity ?? 0,
+          address: ele.address ?? null,
+          city: university?.location?.city?.name ?? null,
+          description: ele.description ?? null,
+          securityFee: ele.securityFee ?? null,
+          status: ele.status ?? null,
+          studentCount: studentCountMap.get(hostelIdStr) ?? 0,
+          staffCount: staffCountMap.get(hostelIdStr) ?? 0,
+          isRoomMapped: !!ele.roomMapping,
+          isMessDetailsAdded: !!ele.messDetails,
+          isLegalDocumentsAdded: !!ele.legalDocuments,
+          isAgreementRequired: ele.isAgreementRequired,
+          createdBy: ele.createdBy?.name ?? null,
+          createdAt: ele.createdAt ?? null,
+        };
+      });
 
       return { hostels: result, count };
     } catch (error: any) {
@@ -284,7 +313,7 @@ class HostelService {
         .populate("universityId", "name")
         .populate("amenitieIds", "name")
         .select(
-          "-messDetails -createdAt -updatedAt -createdBy -updatedBy -__v -bedDetails.createdAt -bedDetails.updatedAt -roomMapping"
+          "-messDetails -createdAt -updatedAt -createdBy -updatedBy -__v -bedDetails.createdAt -bedDetails.updatedAt -roomMapping",
         );
 
       if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
@@ -295,7 +324,7 @@ class HostelService {
             const signedUrl = await getSignedUrl(imageUrl.url);
             return { _id: imageUrl._id, url: signedUrl };
           }
-        })
+        }),
       );
       const response = {
         _id: hostel._id,
@@ -325,7 +354,7 @@ class HostelService {
   deleteHostelById = async (
     id: string,
     status: boolean,
-    staffId: string
+    staffId: string,
   ): Promise<{ message: string }> => {
     try {
       const currentTime = getCurrentISTTime();
@@ -351,7 +380,7 @@ class HostelService {
               updatedBy: staffId,
               updatedAt: currentTime,
             },
-          }
+          },
         );
       }
       return {
@@ -382,7 +411,7 @@ class HostelService {
     emergencyNumbers: IEmergencyNumber,
     securityDetails: any,
     status: boolean,
-    updatedBy?: mongoose.Types.ObjectId
+    updatedBy?: mongoose.Types.ObjectId,
   ): Promise<string> => {
     try {
       // 1. Check if the hostel with the specified ID exists
@@ -438,7 +467,7 @@ class HostelService {
       // 3. Update bed details by either updating existing ones or adding new ones
       const updatedBedDetails = bedDetails.map((bed) => {
         const existingBedDetail = existingHostel.bedDetails.find(
-          (detail: any) => detail._id.equals(bed._id)
+          (detail: any) => detail._id.equals(bed._id),
         );
 
         if (existingBedDetail) {
@@ -471,7 +500,7 @@ class HostelService {
         for (const data of image) {
           // Check if the imageUrl exists in the existingHostel's image
           const existImage = (existingHostel.image as any[]).find((item: any) =>
-            item._id.equals(data._id)
+            item._id.equals(data._id),
           );
 
           if (existImage) {
@@ -479,7 +508,7 @@ class HostelService {
               // If the image exists and there is base64 data, upload and update the image
               const uploadImage = await uploadFileInS3Bucket(
                 data.url,
-                HOSTEL_IMAGES
+                HOSTEL_IMAGES,
               );
 
               if (uploadImage !== false) {
@@ -497,7 +526,7 @@ class HostelService {
             if (data && data.url.includes("base64")) {
               const uploadImage = await uploadFileInS3Bucket(
                 data.url,
-                HOSTEL_IMAGES
+                HOSTEL_IMAGES,
               );
 
               if (uploadImage !== false) {
@@ -547,7 +576,7 @@ class HostelService {
   roomMappingAddorUpdate = async (
     hostelId: mongoose.Types.ObjectId,
     roomDetails: any[],
-    staffId: mongoose.Types.ObjectId
+    staffId: mongoose.Types.ObjectId,
   ): Promise<string> => {
     try {
       //Check if the hostel with the specified ID exists
@@ -597,7 +626,7 @@ class HostelService {
 
   //SECTION: Method to get hostel mapped rrom
   retrieveMapppedRoom = async (
-    hostelId: mongoose.Types.ObjectId
+    hostelId: mongoose.Types.ObjectId,
   ): Promise<{
     rooms: any[];
     counts: {
@@ -609,7 +638,7 @@ class HostelService {
   }> => {
     try {
       const hostel = await Hostel.findById(hostelId).select(
-        "roomMapping totalCapacity totalFloor totalRoom totalBed"
+        "roomMapping totalCapacity totalFloor totalRoom totalBed",
       );
 
       if (!hostel) throw new Error(RECORD_NOT_FOUND("Hostel"));
@@ -669,7 +698,7 @@ class HostelService {
             studentId: data._id,
             hostelId: data.hostelId,
             floorNumber: details?.floorNumber,
-            roomNumber: details?.roomNumber
+            roomNumber: details?.roomNumber,
           })
             .select("roomNumber bedNumber")
             .sort({ createdAt: -1 })
@@ -681,7 +710,7 @@ class HostelService {
             };
           }
           return null;
-        })
+        }),
       );
       const filteredRoomMatesData = roomMatesData.filter(Boolean);
       const hostel = {
@@ -710,7 +739,7 @@ class HostelService {
   bedTypesByHostelId = async (hostelId: string): Promise<{ bedTypes: any }> => {
     try {
       const data: any = await Hostel.findById(hostelId).select(
-        "-createdAt -updatedAt -createdBy -updatedBy -__v"
+        "-createdAt -updatedAt -createdBy -updatedBy -__v",
       );
 
       if (!data) {
@@ -735,7 +764,7 @@ class HostelService {
   getRoomsByBedType = async (
     hostelId: string,
     floorNumber?: number,
-    bedType?: BedTypes
+    bedType?: BedTypes,
   ): Promise<{ rooms: any[] }> => {
     try {
       const matchConditions: any[] = [];
@@ -787,7 +816,7 @@ class HostelService {
   //SECTION: Method to get floor details by hostel id and bed type
   fetchFloorByBedTypeAndHostelId = async (
     hostelId: string,
-    bedType?: BedTypes
+    bedType?: BedTypes,
   ): Promise<{ floorNumbers: { _id: string; floorNumber: number }[] }> => {
     try {
       const matchConditions: any = {
@@ -804,12 +833,12 @@ class HostelService {
           $project: {
             roomMapping: bedType
               ? {
-                $filter: {
-                  input: "$roomMapping",
-                  as: "room",
-                  cond: { $eq: ["$$room.bedType", bedType] },
-                },
-              }
+                  $filter: {
+                    input: "$roomMapping",
+                    as: "room",
+                    cond: { $eq: ["$$room.bedType", bedType] },
+                  },
+                }
               : "$roomMapping",
           },
         },
@@ -835,7 +864,7 @@ class HostelService {
   vacantRoomsByBedType = async (
     hostelId: string,
     bedType: BedTypes,
-    roomNumber: number
+    roomNumber: number,
   ): Promise<{ details: string }> => {
     try {
       const [result] = await Hostel.aggregate([
@@ -891,7 +920,7 @@ class HostelService {
       refundPolicy: string;
       allocationRule: string;
     },
-    staffId: string
+    staffId: string,
   ): Promise<string> => {
     try {
       // Fetch hostel details and check if `isAgreementRequired` is true
@@ -909,7 +938,7 @@ class HostelService {
           if (file && file.includes("base64")) {
             const uploadedFile = await uploadFileInS3Bucket(
               file,
-              LEGAL_DOCUMENTS
+              LEGAL_DOCUMENTS,
             );
             if (uploadedFile !== false) {
               return { [key]: uploadedFile.Key };
@@ -922,17 +951,17 @@ class HostelService {
               return { [key]: existingLegalDocuments[key] };
             } else {
               throw new Error(
-                `${key} is invalid or not in base64 format, and no existing value found.`
+                `${key} is invalid or not in base64 format, and no existing value found.`,
               );
             }
           }
-        })
+        }),
       );
 
       // Merge uploaded file keys into a single object
       const uploadedDetails = uploadedDocuments.reduce(
         (acc, curr) => ({ ...acc, ...curr }),
-        {}
+        {},
       );
 
       // Update hostel with new legal documents
@@ -948,7 +977,7 @@ class HostelService {
 
   //SECTION: Method to retrived Upload Legal Documents
   retrievedUploadLegalDocuments = async (
-    hostelId: string
+    hostelId: string,
   ): Promise<{ details: any }> => {
     try {
       // Fetch hostel details and check if `isAgreementRequired` is true
@@ -989,13 +1018,13 @@ class HostelService {
             }
           }
           return { [key]: null }; // Handle null or invalid URLs
-        })
+        }),
       );
 
       // Merge signed URLs into a single object
       const signedDocumentDetails = signedLegalDocuments.reduce(
         (acc, curr) => ({ ...acc, ...curr }),
-        {}
+        {},
       );
 
       return {
@@ -1017,7 +1046,7 @@ class HostelService {
     specialDietary: boolean,
     dietaryOptions: DietaryOptionsTypes[],
     diningTimeSlot: any[],
-    staffId: string
+    staffId: string,
   ): Promise<string> => {
     try {
       // Update the messDetails in the hostel document
@@ -1036,7 +1065,7 @@ class HostelService {
             updatedAt: getCurrentISTTime(),
           },
         },
-        { new: true }
+        { new: true },
       );
 
       // Check if hostel exists
@@ -1073,7 +1102,7 @@ class HostelService {
   fetchUserDetailsOfRoom = async (
     hostelId: string,
     bedType?: BedTypes,
-    roomNumber?: number
+    roomNumber?: number,
   ): Promise<{
     users: { _id: string; name: string | null; image: string | null }[];
   }> => {
@@ -1089,9 +1118,8 @@ class HostelService {
       }
 
       // Fetch students allocated to the specified room
-      const validity = await StudentHostelAllocation.find(searchParams).select(
-        "studentId"
-      );
+      const validity =
+        await StudentHostelAllocation.find(searchParams).select("studentId");
 
       if (!validity.length) {
         return { users: [] };
@@ -1108,20 +1136,20 @@ class HostelService {
           _id: ele._id,
           name: ele.name ?? null,
           image: ele.image ? await getSignedUrl(ele.image) : null,
-        }))
+        })),
       );
 
       return { users };
     } catch (error: any) {
       throw new Error(
-        `Failed to fetch user details for the room: ${error.message}`
+        `Failed to fetch user details for the room: ${error.message}`,
       );
     }
   };
 
   //SECTION: Method to fetch Payment Options By Hostel
   fetchPaymentOptionsByHostel = async (
-    hostelId: string
+    hostelId: string,
   ): Promise<{ paymentTypes: any[] }> => {
     try {
       const result = await Hostel.aggregate([
@@ -1150,7 +1178,7 @@ class HostelService {
   //SECTION: Method to get rooms By Muliple Floor Numbers
   roomsByMultipleFloorNumbers = async (
     hostelId: string,
-    floorNumbers: number[]
+    floorNumbers: number[],
   ): Promise<{ rooms: any[] }> => {
     try {
       const result = await Hostel.aggregate([
@@ -1186,7 +1214,7 @@ class HostelService {
     json: any[],
     hostelId: string,
     createdById?: string,
-    url?: string
+    url?: string,
   ): Promise<string> => {
     try {
       const successArray: any[] = [];
@@ -1207,7 +1235,7 @@ class HostelService {
       });
 
       const existingRoomNumbers = new Set<number>(
-        existingHostel.roomMapping?.map((room: any) => room.roomNumber) || []
+        existingHostel.roomMapping?.map((room: any) => room.roomNumber) || [],
       );
 
       const bedTypeMap: Record<string, number> = {
@@ -1331,7 +1359,7 @@ class HostelService {
                 }),
               },
             },
-            { new: true }
+            { new: true },
           );
 
           // Process remaining batches with $push
@@ -1359,7 +1387,7 @@ class HostelService {
                   }),
                 },
               },
-              { new: true }
+              { new: true },
             );
           }
         }
@@ -1373,7 +1401,7 @@ class HostelService {
         successFileUrl = await pushToS3Bucket(
           successArray,
           process.env.S3_BUCKET_NAME!,
-          HOSTEL_ROOM_MAP_BULK_UPLOAD_FILES
+          HOSTEL_ROOM_MAP_BULK_UPLOAD_FILES,
         );
       }
 
@@ -1381,7 +1409,7 @@ class HostelService {
         errorFileUrl = await pushToS3Bucket(
           errorArray,
           process.env.S3_BUCKET_NAME!,
-          HOSTEL_ROOM_MAP_BULK_UPLOAD_FILES
+          HOSTEL_ROOM_MAP_BULK_UPLOAD_FILES,
         );
       }
 
@@ -1400,7 +1428,7 @@ class HostelService {
   };
 
   fetchFloorRooms = async (
-    hostelId: string
+    hostelId: string,
   ): Promise<{ floorRooms: any[] }> => {
     try {
       const result = await Hostel.aggregate([
