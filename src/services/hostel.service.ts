@@ -226,6 +226,7 @@ class HostelService {
     page: number,
     limit: number,
     search?: string,
+    status?: boolean,
   ): Promise<{ hostels: any[]; count: number }> => {
     try {
       const skip = (page - 1) * limit;
@@ -236,7 +237,10 @@ class HostelService {
           }
         : {};
 
-      const filterQuery = { $and: [{ ...searchParams }] };
+      const conditions: any[] = [{ ...searchParams }];
+      if (typeof status === "boolean") conditions.push({ status });
+
+      const filterQuery = { $and: conditions };
 
       const [count, hostels] = await Promise.all([
         Hostel.countDocuments(filterQuery),

@@ -181,12 +181,22 @@ class HostelController {
   //SECTION Controller method to get hostel with optional pagination and search
   getAllHostelWithPagination = asyncHandler(
     async (req: Request, res: Response): Promise<Response> => {
-      const { page = 1, limit = 10, search } = req.body;
+      const { filters = {}, search = {}, pagination = {} } = req.body;
+
+      const page = Number(pagination?.page) || 1;
+      const limit = Number(pagination?.limit) || 10;
+      const searchText = search?.text ?? undefined;
+
+      // ACTIVE = status true, INACTIVE = status false
+      let statusFilter: boolean | undefined;
+      if (filters?.status === "ACTIVE") statusFilter = true;
+      else if (filters?.status === "INACTIVE") statusFilter = false;
 
       const { hostels, count } = await hostelWithPagination(
-        Number(page),
-        Number(limit),
-        search || undefined,
+        page,
+        limit,
+        searchText,
+        statusFilter,
       );
 
       return sendSuccess(res, FETCH_SUCCESS, hostels, 200, count);
