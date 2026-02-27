@@ -1,5 +1,6 @@
 import { Router } from "express";
 import validateToken from "../middlewares/validateToken";
+import { checkSuperAdmin } from "../middlewares/checkSuperAdmin";
 import UserReportController from "../controllers/userReport.controller";
 
 const {
@@ -8,6 +9,7 @@ const {
   graphReportExport,
   exportStudentDetailsByIdAndType,
   exportStudentDetails,
+  fetchUsersByCategory,
 } = UserReportController;
 
 const userReportRouter = Router();
@@ -18,8 +20,16 @@ userReportRouter.get("/export", validateToken, graphReportExport);
 userReportRouter.post(
   "/export-details",
   validateToken,
-  exportStudentDetailsByIdAndType
+  exportStudentDetailsByIdAndType,
 );
 userReportRouter.post("/export-all", validateToken, exportStudentDetails);
+
+//fetch users by category (student, staff, etc.) for reporting purposes
+userReportRouter.post(
+  "/fetch-by-category",
+  validateToken,
+  checkSuperAdmin,
+  fetchUsersByCategory,
+);
 
 export default userReportRouter;

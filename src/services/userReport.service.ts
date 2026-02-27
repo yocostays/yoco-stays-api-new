@@ -6,6 +6,7 @@ import moment from "moment";
 import { ExportTypes, ReportDropDownTypes } from "../utils/enum";
 import { getDateRange } from "../utils/lib";
 import { ERROR_MESSAGES } from "../utils/messages";
+import { paginateAggregate } from "../utils/pagination";
 
 const { RECORD_NOT_FOUND } = ERROR_MESSAGES;
 
@@ -99,7 +100,7 @@ class UserReportService {
   //SECTION: Method to get stuent and staff count report
   totalStudentAndStaffCount = async (
     hostelId: string,
-    dateRange?: ReportDropDownTypes
+    dateRange?: ReportDropDownTypes,
   ): Promise<{ report: any }> => {
     try {
       const searchHostel: any = {};
@@ -160,7 +161,7 @@ class UserReportService {
   exportStudentDetails = async (
     hostelId: string,
     type: ExportTypes,
-    studentIds?: string[]
+    studentIds?: string[],
   ): Promise<{ result: any[] }> => {
     try {
       // Build query based on the type
@@ -181,7 +182,7 @@ class UserReportService {
 
       if (!student || student.length === 0) {
         throw new Error(
-          RECORD_NOT_FOUND(type === ExportTypes.ALL ? "Students" : "Student")
+          RECORD_NOT_FOUND(type === ExportTypes.ALL ? "Students" : "Student"),
         );
       }
 
@@ -189,10 +190,14 @@ class UserReportService {
         const flattenedVehicleDetails: any = {};
 
         student?.vechicleDetails?.forEach((vehicle: any, index: number) => {
-          flattenedVehicleDetails[`vehicleDetails.${index}.vehicleType`] = vehicle?.vechicleType ?? null;
-          flattenedVehicleDetails[`vehicleDetails.${index}.engineType`] = vehicle?.engineType ?? null;
-          flattenedVehicleDetails[`vehicleDetails.${index}.vehicleNumber`] = vehicle?.vechicleNumber ?? null;
-          flattenedVehicleDetails[`vehicleDetails.${index}.modelName`] = vehicle?.modelName ?? null;
+          flattenedVehicleDetails[`vehicleDetails.${index}.vehicleType`] =
+            vehicle?.vechicleType ?? null;
+          flattenedVehicleDetails[`vehicleDetails.${index}.engineType`] =
+            vehicle?.engineType ?? null;
+          flattenedVehicleDetails[`vehicleDetails.${index}.vehicleNumber`] =
+            vehicle?.vechicleNumber ?? null;
+          flattenedVehicleDetails[`vehicleDetails.${index}.modelName`] =
+            vehicle?.modelName ?? null;
         });
         return {
           // Flatten and format top-level fields
@@ -260,11 +265,141 @@ class UserReportService {
 
           // Flattened vehicle details
           ...flattenedVehicleDetails,
-        }
-
+        };
       });
 
       return { result };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  };
+
+  //SECTION: Method to get users by category and hostel with pagination, filters and search
+  fetchUsersByCategoryAndHostel = async (
+    hostelId: string,
+    category: "staff" | "student" | "parent",
+    pagination: { page: number; limit: number } = { page: 1, limit: 10 },
+    filters?: { status?: string },
+    search?: { text?: string },
+  ): Promise<{ data: any[]; totalCount: number }> => {
+    try {
+      const { page, limit } = pagination;
+      const hostelObjectId = hostelId
+        ? new mongoose.Types.ObjectId(hostelId)
+        : null;
+
+      const getPipeline = (modelType: "staff" | "student") => {
+        const pipeline: mongoose.PipelineStage[] = [];
+
+        // Base match for filters
+        const match: any = {};
+        if (hostelObjectId) {
+          if (modelType === "staff") {
+            match.hostelIds = { $in: [hostelObjectId] };
+          } else {
+            match.hostelId = hostelObjectId;
+          }
+        }
+
+        if (filters?.status) {
+          match.status = filters.status.toUpperCase() === "ACTIVE";
+        }
+
+        // Match stage
+        pipeline.push({ $match: match });
+
+        // Convert phone to string for regex search
+        pipeline.push({
+          $addFields: {
+            phoneStr: { $toString: "$phone" },
+          },
+        });
+
+        // Search logic (applied after addFields)
+        if (search?.text) {
+          const searchText = search.text;
+          pipeline.push({
+            $match: {
+              $or: [
+                { name: { $regex: searchText, $options: "i" } },
+                { email: { $regex: searchText, $options: "i" } },
+                { phoneStr: { $regex: searchText, $options: "i" } },
+              ],
+            },
+          });
+        }
+
+        // Lookup Role
+        pipeline.push({
+          $lookup: {
+            from: "roles",
+            localField: "roleId",
+            foreignField: "_id",
+            as: "roleInfo",
+          },
+        });
+
+        // Unwind Role
+        pipeline.push({
+          $unwind: { path: "$roleInfo", preserveNullAndEmptyArrays: true },
+        });
+
+        // Project fields
+        pipeline.push({
+          $project: {
+            _id: 1,
+            name: 1,
+            email: 1,
+            phone: 1,
+            status: 1,
+            uniqueId: 1,
+            userName: 1,
+            accountType: { $literal: modelType },
+            roleName: "$roleInfo.name",
+            roleCategory: "$roleInfo.categoryType",
+            createdAt: 1,
+          },
+        });
+
+        return pipeline;
+      };
+
+      let finalPipeline: mongoose.PipelineStage[] = [];
+
+      if (category === "staff") {
+        finalPipeline = getPipeline("staff");
+      } else if (category === "student") {
+        finalPipeline = getPipeline("student");
+      } else {
+        // category === "user" -> Union both
+        const staffPipeline = getPipeline("staff");
+        const studentPipeline = getPipeline("student");
+
+        // Use Staff as base and union with Students
+        finalPipeline = [
+          ...staffPipeline,
+          {
+            $unionWith: {
+              coll: "users",
+              pipeline: studentPipeline,
+            },
+          } as any,
+        ];
+      }
+
+      // Add sorting by creation date
+      finalPipeline.push({ $sort: { createdAt: -1 } });
+
+      // Use pagination utility
+      const model = category === "student" ? User : Staff;
+      const { data, count } = await paginateAggregate(
+        model,
+        finalPipeline,
+        Number(page),
+        Number(limit),
+      );
+
+      return { data, totalCount: count };
     } catch (error: any) {
       throw new Error(error.message);
     }

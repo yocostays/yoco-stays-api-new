@@ -11,9 +11,16 @@ import {
   ERROR_MESSAGES,
 } from "../utils/messages";
 import { generateCsvString } from "../utils/generateCsvString";
+import { sendSuccess } from "../utils/responseHelpers";
+import { asyncHandler } from "../utils/asyncHandler";
+import { NotFoundError } from "../utils/errors";
 
-const { userCountReport, totalStudentAndStaffCount, exportStudentDetails } =
-  UserReportService;
+const {
+  userCountReport,
+  totalStudentAndStaffCount,
+  exportStudentDetails,
+  fetchUsersByCategoryAndHostel,
+} = UserReportService;
 const { studentDetailsByType } = UserService;
 
 const { getStaffById } = StaffService;
@@ -26,7 +33,7 @@ class UserReportController {
   //SECTION Controller method to handle get user count report
   async getUserCountReport(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -61,7 +68,7 @@ class UserReportController {
   //SECTION Controller method to handle total staff and user count report per hostel(Graph)
   async totalStudentAndStaffCount(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse>> {
     try {
       const staffId = req.body._valid._id;
@@ -98,7 +105,7 @@ class UserReportController {
   //SECTION Controller method to handle graph Report Export
   async graphReportExport(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse> | void> {
     try {
       const staffId = req.body._valid._id;
@@ -127,7 +134,7 @@ class UserReportController {
       // Set response headers for CSV download
       res.setHeader(
         "Content-Disposition",
-        "attachment; filename=studentReport.csv"
+        "attachment; filename=studentReport.csv",
       );
       res.setHeader("Content-Type", "text/csv");
 
@@ -146,7 +153,7 @@ class UserReportController {
   //SECTION Controller method to export student details for admin and warden panel (PDF)
   async exportStudentDetailsByIdAndType(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse> | void> {
     try {
       const staffId = req.body._valid._id;
@@ -171,7 +178,7 @@ class UserReportController {
       // Set response headers for PDF download
       res.setHeader(
         "Content-Disposition",
-        'attachment; filename="student-details.pdf"'
+        'attachment; filename="student-details.pdf"',
       );
       res.setHeader("Content-Type", "application/pdf");
 
@@ -203,7 +210,7 @@ class UserReportController {
   //SECTION Controller method to export all stdent details
   async exportStudentDetails(
     req: Request,
-    res: Response
+    res: Response,
   ): Promise<Response<HttpResponse> | void> {
     try {
       const staffId = req.body._valid._id;
@@ -214,11 +221,7 @@ class UserReportController {
       const { studentIds, type } = req.body;
 
       // Call the service to retrieve student details based on hostelId, studentIds, and type
-      const { result } = await exportStudentDetails(
-        hostelId,
-        type,
-        studentIds
-      );
+      const { result } = await exportStudentDetails(hostelId, type, studentIds);
 
       if (!result || result.length === 0) {
         throw new Error(RECORD_NOT_FOUND("Students"));
@@ -235,7 +238,7 @@ class UserReportController {
       // Set response headers for CSV download
       res.setHeader(
         "Content-Disposition",
-        "attachment; filename=studentReport.csv"
+        "attachment; filename=studentReport.csv",
       );
       res.setHeader("Content-Type", "text/csv");
 
@@ -250,6 +253,40 @@ class UserReportController {
       return res.status(400).json(errorResponse);
     }
   }
+
+  //SECTION Controller method to fetch users by category (staff/student/parent) and hostel
+  fetchUsersByCategory = asyncHandler(
+    async (req: Request, res: Response): Promise<Response<HttpResponse>> => {
+      const staffId = req.body._valid._id;
+      const { hostelId, category, filters, search, pagination } = req.body;
+
+      if (!staffId || !hostelId || !category) {
+        throw new Error(
+          "Missing required fields: hostelId, and category are required.",
+        );
+      }
+      if (!mongoose.isValidObjectId(staffId))
+        throw new NotFoundError(INVALID_ID);
+      if (!mongoose.isValidObjectId(hostelId))
+        throw new NotFoundError("Invalid hostel ID");
+
+      // Validate category
+      if (!["staff", "student"].includes(category)) {
+        throw new Error("Invalid category. Must be staff, student.");
+      }
+
+      // Call the service to get users
+      const { data, totalCount } = await fetchUsersByCategoryAndHostel(
+        hostelId,
+        category,
+        pagination,
+        filters,
+        search,
+      );
+
+      return sendSuccess(res, FETCH_SUCCESS, { list: data }, 200, totalCount);
+    },
+  );
 }
 
 export default new UserReportController();
