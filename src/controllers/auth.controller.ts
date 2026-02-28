@@ -53,23 +53,19 @@ const { SERVER_ERROR, RECORD_NOT_FOUND, USER_NOT_ACTIVE } = ERROR_MESSAGES;
 
 class AuthController {
   //SECTION Controller method to handle staff login
-  async staffLoginWithUserNameAndPwd(
-    req: Request,
-    res: Response,
-  ): Promise<Response<HttpResponse>> {
-    try {
+  staffLoginWithUserNameAndPwd = asyncHandler(
+    async (req: Request, res: Response) => {
       const { userName, password } = req.body;
 
       if (!userName || !password) {
-        const missingField = !userName ? "Username" : "Password";
-        const errorResponse: HttpResponse = {
-          statusCode: 400,
-          message: `${missingField} is required`,
-        };
-        return res.status(400).json(errorResponse);
+        return sendError(
+          res,
+          `${!userName ? "Username" : "Password"} is required`,
+          400,
+        );
       }
 
-      // Call the service to create a new user
+      // Call the service to login staff
       const { staff, token } = await staffLoginWithUserNameAndPwd(
         userName,
         password,
@@ -86,22 +82,14 @@ class AuthController {
         isHostelAssigned: staff?.hostelIds.length > 0,
       };
 
-      const successResponse: HttpResponse = {
+      return res.status(200).json({
         statusCode: 200,
         message: USER_LOGIN_SUCCESS,
         auth: token,
         data: result,
-      };
-      return res.status(200).json(successResponse);
-    } catch (error: any) {
-      const errorMessage = error.message ?? SERVER_ERROR;
-      const errorResponse: HttpResponse = {
-        statusCode: 400,
-        message: errorMessage,
-      };
-      return res.status(400).json(errorResponse);
-    }
-  }
+      });
+    },
+  );
 
   //SECTION: Controller method to handle student login
   async studentLoginWithIdAndPwd(

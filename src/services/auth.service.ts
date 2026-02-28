@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import nodemailer from "nodemailer";
+import bcrypt from "bcryptjs";
 import Staff from "../models/staff.model";
 import User from "../models/user.model";
 import Token from "../models/token.model";
@@ -51,6 +52,7 @@ class AuthService {
 
       // Step 2: Compare the password with the hashed password
       const isPasswordValid = await comparePassword(password, staff.password);
+
       if (!isPasswordValid) {
         throw new Error(INVALID_PASSWORD);
       }
@@ -67,26 +69,37 @@ class AuthService {
         { expiresIn: "48h" },
       );
 
-      // Step 4: Generate expiry time using the utility function
-      const expiryTime = generateExpiryTime(48); // Set for 24 hours // 24 hours from now
-      const existingToken = await Token.findOne({ userId: staff._id });
+      // Step 4: Parallelize token upsert and bcrypt rehash migration
+      const expiryTime = generateExpiryTime(48);
 
-      if (existingToken) {
-        // Update existing token
-        existingToken.token = tokenString;
-        existingToken.expiryTime = expiryTime;
-        await existingToken.save();
-      } else {
-        // Create a new token
-        const newToken = new Token({
-          accountType: AccountType.STAFF,
-          userId: staff._id,
-          token: tokenString,
-          expiryTime: expiryTime,
-          status: true,
-        });
-        await newToken.save();
+      // Token upsert is fast and required for the response
+      const tokenPromise = Token.findOneAndUpdate(
+        { userId: staff._id },
+        {
+          $set: {
+            token: tokenString,
+            expiryTime: expiryTime,
+            accountType: AccountType.STAFF,
+            status: true,
+          },
+        },
+        { upsert: true, new: true },
+      );
+
+      // Rehash on login: migrate old high-cost hashes (>10 rounds) to current cost
+      const currentRounds = bcrypt.getRounds(staff.password);
+      if (currentRounds > 10) {
+        // Background rehash: explicitly use 10 rounds for performance
+        hashPassword(password, 10)
+          .then((hashed) =>
+            Staff.updateOne({ _id: staff._id }, { $set: { password: hashed } }),
+          )
+          .catch((err) =>
+            console.error("Background rehash failed for staff:", err),
+          );
       }
+
+      await tokenPromise;
 
       // Step 5: Return staff details and token
       return { staff, token: tokenString };
