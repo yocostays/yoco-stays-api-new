@@ -388,9 +388,7 @@ class HostelService {
         );
       }
       return {
-        message: status
-          ? COLLEGE_AND_RELATED_ENTITIES_ACTIVATED("Hostel")
-          : DELETE_DATA,
+        message: status ? UPDATE_DATA : UPDATE_DATA,
       };
     } catch (error: any) {
       throw new Error(error.message);

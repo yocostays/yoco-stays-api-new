@@ -195,7 +195,7 @@ class HostelController {
       const { hostels, count } = await hostelWithPagination(
         page,
         limit,
-        searchText,
+        searchText.trim(),
         statusFilter,
       );
 
