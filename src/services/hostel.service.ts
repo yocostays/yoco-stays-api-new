@@ -267,15 +267,41 @@ class HostelService {
           { $match: { hostelIds: { $in: hostelIds } } },
           { $unwind: "$hostelIds" },
           { $match: { hostelIds: { $in: hostelIds } } },
-          { $group: { _id: "$hostelIds", count: { $sum: 1 } } },
+          {
+            $group: {
+              _id: "$hostelIds",
+              count: { $sum: 1 },
+              names: {
+                $push: {
+                  $cond: {
+                    if: process.env.WARDEN_ROLE_ID
+                      ? {
+                          $eq: [
+                            "$roleId",
+                            new mongoose.Types.ObjectId(
+                              process.env.WARDEN_ROLE_ID,
+                            ),
+                          ],
+                        }
+                      : false,
+                    then: "$name",
+                    else: "$$REMOVE",
+                  },
+                },
+              },
+            },
+          },
         ]),
       ]);
 
       const studentCountMap = new Map(
         studentCounts.map((s: any) => [s._id.toString(), s.count]),
       );
-      const staffCountMap = new Map(
-        staffCounts.map((s: any) => [s._id.toString(), s.count]),
+      const staffMap = new Map(
+        staffCounts.map((s: any) => [
+          s._id.toString(),
+          { count: s.count, names: s.names },
+        ]),
       );
 
       const result = hostels.map((ele: any) => {
@@ -284,6 +310,7 @@ class HostelService {
 
         return {
           _id: ele._id,
+          hostelCode: ele.hostelCode ?? null,
           name: ele.name ?? null,
           identifier: ele.identifier ?? null,
           buildingNumber: ele.buildingNumber ?? null,
@@ -294,7 +321,8 @@ class HostelService {
           securityFee: ele.securityFee ?? null,
           status: ele.status ?? null,
           studentCount: studentCountMap.get(hostelIdStr) ?? 0,
-          staffCount: staffCountMap.get(hostelIdStr) ?? 0,
+          staffCount: staffMap.get(hostelIdStr)?.count ?? 0,
+          staffNames: staffMap.get(hostelIdStr)?.names ?? [],
           isRoomMapped: !!ele.roomMapping,
           isMessDetailsAdded: !!ele.messDetails,
           isLegalDocumentsAdded: !!ele.legalDocuments,

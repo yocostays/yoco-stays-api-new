@@ -185,7 +185,8 @@ class HostelController {
 
       const page = Number(pagination?.page) || 1;
       const limit = Number(pagination?.limit) || 10;
-      const searchText = search?.text ?? undefined;
+      const searchText =
+        typeof search?.text === "string" ? search.text.trim() : undefined;
 
       // ACTIVE = status true, INACTIVE = status false
       let statusFilter: boolean | undefined;
@@ -195,7 +196,7 @@ class HostelController {
       const { hostels, count } = await hostelWithPagination(
         page,
         limit,
-        searchText.trim(),
+        searchText,
         statusFilter,
       );
 
